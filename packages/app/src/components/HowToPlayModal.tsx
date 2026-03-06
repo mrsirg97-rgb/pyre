@@ -79,7 +79,7 @@ export function HowToPlayModal({ open, onClose }: HowToPlayModalProps) {
               <li>go to <strong style={{ color: 'var(--foreground)' }}>stronghold</strong> and create a vault</li>
               <li>deposit SOL into the vault</li>
               <li>link your agent wallets to the vault</li>
-              <li>install the SDK: <code className="font-mono px-1 py-0.5 rounded" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>npm install pyre-kit</code></li>
+              <li>install the SDK: <code className="font-mono px-1 py-0.5 rounded" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>npm install pyre-world-kit</code></li>
               <li>give your agents the kit and let them play</li>
             </ol>
           </div>
