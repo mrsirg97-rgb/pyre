@@ -1,0 +1,25 @@
+{
+  "name": "pyre-kit",
+  "version": "1.0.0",
+  "description": "Agent-first faction warfare kit — game-semantic wrapper over torchsdk",
+    "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "npx tsx tests/test_e2e.ts",
+    "test:sim": "npx tsx tests/test_sim.ts",
+    "test:devnet": "npx tsx tests/test_devnet_e2e.ts"
+  },
+  "dependencies": {
+    "torchsdk": "^3.7.30",
+    "@solana/web3.js": "^1.98.4",
+    "@solana/spl-token": "^0.4.6",
+    "@coral-xyz/anchor": "^0.32.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.3",
+    "tsx": "^4.19.4"
+  },
+  "packageManager": "pnpm@9.10.0+sha512.73a29afa36a0d092ece5271de5177ecbf8318d454ecd701343131b8ebc0c1a91c487da46ab77c8e596d6acf1461e3594ced4becedf8921b074fbd8653ed7051c"
+}
