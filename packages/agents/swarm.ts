@@ -29,7 +29,6 @@ import {
   defect,
   rally,
   getFactions,
-  getFaction,
   getComms,
   getMembers,
   getFactionLeaderboard,
@@ -42,7 +41,6 @@ import {
   requestWarLoan,
   repayWarLoan,
   getWarLoan,
-  getWarChest,
   getAllWarLoans,
   // Permissionless
   siege,
@@ -296,10 +294,34 @@ async function maybeRetryLLM() {
   } catch { /* still down */ }
 }
 
+interface FactionIntel {
+  symbol: string
+  members: { address: string, percentage: number }[]
+  totalMembers: number
+  recentComms: { sender: string, memo: string }[]
+}
+
+async function fetchFactionIntel(
+  connection: Connection,
+  faction: FactionInfo,
+): Promise<FactionIntel> {
+  const [membersResult, commsResult] = await Promise.all([
+    getMembers(connection, faction.mint, 10).catch(() => ({ members: [], total_members: 0 })),
+    getComms(connection, faction.mint, 5).catch(() => ({ comms: [], total: 0 })),
+  ])
+  return {
+    symbol: faction.symbol,
+    members: membersResult.members.map(m => ({ address: m.address, percentage: m.percentage })),
+    totalMembers: membersResult.total_members,
+    recentComms: commsResult.comms.map(c => ({ sender: c.sender, memo: c.memo })),
+  }
+}
+
 function buildAgentPrompt(
   agent: AgentState,
   factions: FactionInfo[],
   leaderboardSnippet: string,
+  intelSnippet: string,
 ): string {
   const holdingsList = [...agent.holdings.entries()]
     .map(([mint, bal]) => {
@@ -330,6 +352,7 @@ WORLD STATE:
 - Active factions: ${factionList}
 - Can rally (haven't yet): ${canRally}
 ${leaderboardSnippet}
+${intelSnippet}
 
 ACTIONS AVAILABLE:
 - JOIN <SYMBOL> "<message>" — buy into a faction (costs ${minSol}-${maxSol} SOL)
@@ -429,7 +452,36 @@ async function llmDecide(
     leaderboardSnippet = '(leaderboard unavailable)'
   }
 
-  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet)
+  // Fetch intel on a few factions the agent might care about
+  let intelSnippet = ''
+  try {
+    // Prioritize factions the agent holds, plus a random one for discovery
+    const heldMints = [...agent.holdings.keys()]
+    const heldFactions = factions.filter(f => heldMints.includes(f.mint))
+    const otherFactions = factions.filter(f => !heldMints.includes(f.mint))
+    const toScout = [
+      ...heldFactions.slice(0, 2),
+      ...(otherFactions.length > 0 ? [pick(otherFactions)] : []),
+    ]
+
+    if (toScout.length > 0) {
+      const intels = await Promise.all(toScout.map(f => fetchFactionIntel(connection, f)))
+      const lines = intels.map(intel => {
+        const memberInfo = intel.totalMembers > 0
+          ? `${intel.totalMembers} members, top holder: ${intel.members[0]?.percentage.toFixed(1)}%`
+          : 'no members'
+        const commsInfo = intel.recentComms.length > 0
+          ? intel.recentComms.slice(0, 3).map(c => `"${c.memo}"`).join(', ')
+          : 'no recent comms'
+        return `  [${intel.symbol}] ${memberInfo} | recent comms: ${commsInfo}`
+      })
+      intelSnippet = 'FACTION INTEL:\n' + lines.join('\n')
+    }
+  } catch {
+    // intel fetch failed, proceed without it
+  }
+
+  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet)
   const raw = await ollamaGenerate(prompt)
   if (!raw) return null
 
