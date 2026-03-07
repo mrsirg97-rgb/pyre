@@ -46,7 +46,7 @@ export default function StrongholdPage() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 flex justify-center">
-        <div className="w-full max-w-xl px-4 sm:px-6 py-6">
+        <div className="w-full max-w-xl px-6 sm:px-8 py-6">
           <h1 className="text-sm font-medium mb-1 text-center" style={{ color: 'var(--muted)' }}>
             stronghold
           </h1>
@@ -82,7 +82,7 @@ export default function StrongholdPage() {
                 </button>
               </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {!vault && linkedVault && (
                 <p className="text-xs p-3 rounded-lg" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
                   Viewing a stronghold you are linked to (not your own).

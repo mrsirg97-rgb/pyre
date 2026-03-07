@@ -77,7 +77,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
   }
 
   return (
-    <div className="border rounded-lg p-4" style={{ borderColor: 'var(--border)' }}>
+    <div className="border rounded-lg p-5" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
       <h3 className="text-sm font-medium mb-3">SOL</h3>
 
       <div className="flex mb-3 border-b" style={{ borderColor: 'var(--border)' }}>

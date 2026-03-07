@@ -25,7 +25,7 @@ export function MessageFeed({ messages }: MessageFeedProps) {
   return (
     <div className="space-y-0">
       {messages.map((msg) => (
-        <div key={msg.signature} className="py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div key={msg.signature} className="py-3 px-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-baseline justify-between gap-2 mb-1">
             <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>
               {shortenAddress(msg.sender)}

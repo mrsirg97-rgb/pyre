@@ -11,9 +11,9 @@ const WalletMultiButton = dynamic(
 )
 
 const NETWORK_OPTIONS: { id: NetworkId; label: string }[] = [
-  { id: 'simnet', label: 'simnet' },
-  { id: 'devnet', label: 'devnet' },
-  { id: 'mainnet', label: 'mainnet' },
+  { id: 'simnet', label: 'sim' },
+  { id: 'devnet', label: 'dev' },
+  { id: 'mainnet', label: 'main' },
 ]
 
 export function Header() {
@@ -59,7 +59,7 @@ export function Header() {
             style={{ background: 'var(--surface)', color: 'var(--muted)' }}
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           >
-            {theme === 'dark' ? 'L' : 'D'}
+            {theme === 'dark' ? '\u2600' : '\u263E'}
           </button>
           <WalletMultiButton />
         </div>

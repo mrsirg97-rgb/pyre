@@ -13,7 +13,7 @@ export function StrongholdDashboard({ vault }: StrongholdDashboardProps) {
   const isAuthority = publicKey?.toString() === vault.authority
 
   return (
-    <div className="border rounded-lg p-4" style={{ borderColor: 'var(--border)' }}>
+    <div className="border rounded-lg p-5" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium">Stronghold</h3>
         {isAuthority && (

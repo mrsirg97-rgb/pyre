@@ -20,7 +20,7 @@ export function FactionCard({ faction }: FactionCardProps) {
   return (
     <Link
       href={`/faction/${faction.mint}`}
-      className="block py-3 border-b transition-colors"
+      className="block py-3 px-3 border-b transition-colors"
       style={{ borderColor: 'var(--border)' }}
     >
       <div className="flex items-baseline justify-between gap-2 mb-1">

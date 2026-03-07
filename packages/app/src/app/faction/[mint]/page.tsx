@@ -97,7 +97,7 @@ export default function FactionPage() {
                     {members.map((m) => (
                       <div
                         key={m.address}
-                        className="flex items-center justify-between py-2 border-b text-xs"
+                        className="flex items-center justify-between py-2 px-3 border-b text-xs"
                         style={{ borderColor: 'var(--border)' }}
                       >
                         <span className="font-mono" style={{ color: 'var(--foreground)' }}>

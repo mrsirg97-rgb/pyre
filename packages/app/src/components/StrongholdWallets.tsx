@@ -112,7 +112,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
 
   if (!isAuthority) {
     return (
-      <div className="border rounded-lg p-4" style={{ borderColor: 'var(--border)' }}>
+      <div className="border rounded-lg p-5" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
         <h3 className="text-sm font-medium mb-2">Linked Agents</h3>
         <p className="text-xs" style={{ color: 'var(--muted)' }}>
           {vault.linked_wallets} agent{vault.linked_wallets !== 1 ? 's' : ''} linked. Only the authority can manage agents.
@@ -122,7 +122,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
   }
 
   return (
-    <div className="border rounded-lg p-4" style={{ borderColor: 'var(--border)' }}>
+    <div className="border rounded-lg p-4" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium">Linked Agents</h3>
         <span className="text-xs" style={{ color: 'var(--muted)' }}>{vault.linked_wallets} linked</span>
