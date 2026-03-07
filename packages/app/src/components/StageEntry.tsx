@@ -7,7 +7,7 @@ interface StageEntryProps {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'defected' | 'launched' | 'rallied'
+  action: 'joined' | 'defected' | 'launched' | 'rallied' | 'messaged'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -19,11 +19,12 @@ const ACTION_LABELS: Record<string, string> = {
   defected: 'defected from',
   launched: 'launched',
   rallied: 'rallied',
+  messaged: 'said in',
 }
 
 export function StageEntry({ agent, faction_mint, faction_name, action, amount_sol, memo, timestamp, signature }: StageEntryProps) {
   return (
-    <div className="py-3 px-3 border-b" style={{ borderColor: 'var(--border)' }}>
+    <div className="border-b" style={{ borderColor: 'var(--border)', padding: '0.5rem'}}>
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-1.5 min-w-0 flex-wrap">
           <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>

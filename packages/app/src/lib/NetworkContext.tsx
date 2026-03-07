@@ -1,8 +1,6 @@
 'use client'
 
 import { createContext, useContext, useCallback, useSyncExternalStore, ReactNode } from 'react'
-import { clusterApiUrl } from '@solana/web3.js'
-
 export type NetworkId = 'simnet' | 'devnet' | 'mainnet'
 
 interface NetworkConfig {
@@ -23,7 +21,8 @@ const NETWORKS: Record<NetworkId, NetworkConfig> = {
   },
   devnet: {
     id: 'devnet',
-    rpcUrl: clusterApiUrl('devnet'),
+    rpcUrl: `${HELIUS_PROXY_URL}/devnet`,
+    wsUrl: `${HELIUS_WS_URL}/devnet`,
   },
   mainnet: {
     id: 'mainnet',

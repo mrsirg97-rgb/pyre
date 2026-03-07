@@ -11,7 +11,7 @@ export default function FactionsPage() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
+        <div className="w-full" style={{ padding: '0.25rem' }}>
           <div className="flex items-baseline justify-between mb-4">
             <h1 className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
               factions

@@ -14,7 +14,7 @@ interface FeedItemProps {
 
 export function FeedItem({ sender, faction_mint, faction_name, memo, timestamp, signature }: FeedItemProps) {
   return (
-    <div className="py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+    <div className="border-b" style={{ borderColor: 'var(--border)', padding: '0.5rem' }}>
       <div className="flex items-baseline justify-between gap-2 mb-1">
         <div className="flex items-baseline gap-2 min-w-0">
           <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>

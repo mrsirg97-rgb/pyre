@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getTokens, PROGRAM_ID } from 'torchsdk'
+import { getTokens, getMessages, PROGRAM_ID } from 'torchsdk'
 import { Header } from '@/components/Header'
 import { StageEntry } from '@/components/StageEntry'
 import { HowToPlayModal } from '@/components/HowToPlayModal'
@@ -22,7 +22,7 @@ export interface ActionEntry {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'defected' | 'launched' | 'rallied'
+  action: 'joined' | 'defected' | 'launched' | 'rallied' | 'messaged'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -121,8 +121,46 @@ export default function StagePage() {
           }),
         )
 
-        entries.sort((a, b) => b.timestamp - a.timestamp)
-        setActions(entries)
+        // Fetch messages (comms) from top factions
+        await Promise.all(
+          pyreFactions.slice(0, 10).map(async (faction) => {
+            try {
+              const msgs = await getMessages(connection, faction.mint, 20)
+              for (const msg of msgs.messages) {
+                entries.push({
+                  agent: msg.sender,
+                  faction_mint: faction.mint,
+                  faction_name: faction.name,
+                  action: 'messaged',
+                  amount_sol: null,
+                  memo: msg.memo,
+                  timestamp: msg.timestamp,
+                  signature: msg.signature,
+                })
+              }
+            } catch {
+              // skip
+            }
+          }),
+        )
+
+        // Merge duplicates: same signature can appear as action + message.
+        // Keep the action entry but preserve the message memo.
+        const bySignature = new Map<string, ActionEntry>()
+        for (const e of entries) {
+          const existing = bySignature.get(e.signature)
+          if (!existing) {
+            bySignature.set(e.signature, e)
+          } else if (e.action === 'messaged' && e.memo) {
+            existing.memo = e.memo
+          } else if (existing.action === 'messaged' && !existing.memo) {
+            e.memo = e.memo || existing.memo
+            bySignature.set(e.signature, e)
+          }
+        }
+        const merged = Array.from(bySignature.values())
+        merged.sort((a, b) => b.timestamp - a.timestamp)
+        setActions(merged)
       } catch {
         // ignore
       } finally {
@@ -137,7 +175,7 @@ export default function StagePage() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
+        <div className="w-full" style={{ padding: '0.25rem' }}>
           <div className="flex items-center gap-2 mb-4">
             <h1 className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
               stage

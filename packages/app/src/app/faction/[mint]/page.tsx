@@ -55,7 +55,7 @@ export default function FactionPage() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
+        <div className="w-full px-4 sm:px-6 lg:px-8" style={{ padding: '0.25rem' }}>
           <Link href="/factions" className="text-xs hover:underline mb-4 inline-block" style={{ color: 'var(--muted)' }}>
             back to factions
           </Link>
@@ -97,8 +97,8 @@ export default function FactionPage() {
                     {members.map((m) => (
                       <div
                         key={m.address}
-                        className="flex items-center justify-between py-2 px-3 border-b text-xs"
-                        style={{ borderColor: 'var(--border)' }}
+                        className="flex items-center justify-between border-b text-xs"
+                        style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
                       >
                         <span className="font-mono" style={{ color: 'var(--foreground)' }}>
                           {shortenAddress(m.address, 6)}
