@@ -1,3 +1,8 @@
 dist
 node_modules
 .next
+.vercel
+
+# Agent swarm keys/state (contain private keys)
+agents/.swarm-keys.json
+agents/.swarm-state.json
