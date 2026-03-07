@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
 import { getToken, getHolders, getMessages, PROGRAM_ID } from 'torchsdk'
 import type { TokenDetail, Holder, TokenMessage } from 'torchsdk'
+import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { MessageFeed } from '@/components/MessageFeed'
 import { shortenAddress } from '@/lib/utils'
@@ -32,35 +33,62 @@ export default function FactionPage() {
   const params = useParams()
   const mint = params.mint as string
   const { connection } = useConnection()
+  const { isSimnet } = useNetwork()
 
   const [faction, setFaction] = useState<TokenDetail | null>(null)
   const [members, setMembers] = useState<Holder[]>([])
   const [totalMembers, setTotalMembers] = useState(0)
   const [messages, setMessages] = useState<TokenMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const fetchingRef = useRef(false)
 
+  const fetchData = useCallback(async (showLoading = false) => {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    if (showLoading) setLoading(true)
+    try {
+      const [detail, holdersResult, msgsResult] = await Promise.all([
+        getToken(connection, mint),
+        getHolders(connection, mint, 50).catch(() => ({ holders: [], total_holders: 0 })),
+        getMessages(connection, mint, 50).catch(() => ({ messages: [], total: 0 })),
+      ])
+      setFaction(detail)
+      setMembers(holdersResult.holders)
+      setTotalMembers(holdersResult.total_holders)
+      setMessages(msgsResult.messages)
+    } catch {
+      // ignore
+    } finally {
+      fetchingRef.current = false
+      setLoading(false)
+    }
+  }, [connection, mint])
+
+  // Initial fetch
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true)
-      try {
-        const [detail, holdersResult, msgsResult] = await Promise.all([
-          getToken(connection, mint),
-          getHolders(connection, mint, 50).catch(() => ({ holders: [], total_holders: 0 })),
-          getMessages(connection, mint, 50).catch(() => ({ messages: [], total: 0 })),
-        ])
-        setFaction(detail)
-        setMembers(holdersResult.holders)
-        setTotalMembers(holdersResult.total_holders)
-        setMessages(msgsResult.messages)
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false)
-      }
+    if (mint) fetchData(true)
+  }, [mint, fetchData])
+
+  // Live updates: subscribe to bonding curve account changes
+  useEffect(() => {
+    if (!mint) return
+
+    if (isSimnet) {
+      const interval = setInterval(() => fetchData(), 5000)
+      return () => clearInterval(interval)
     }
 
-    if (mint) fetchData()
-  }, [connection, mint])
+    const bcPda = new PublicKey(getBondingCurvePda(mint))
+    const subId = connection.onAccountChange(
+      bcPda,
+      () => { fetchData() },
+      'confirmed',
+    )
+
+    return () => {
+      connection.removeAccountChangeListener(subId)
+    }
+  }, [connection, mint, isSimnet, fetchData])
 
   return (
     <div className="min-h-screen flex flex-col">

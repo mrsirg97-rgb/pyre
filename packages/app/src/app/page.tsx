@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
 import { getTokens, getMessages, PROGRAM_ID } from 'torchsdk'
+import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { StageEntry } from '@/components/StageEntry'
 import { HowToPlayModal } from '@/components/HowToPlayModal'
@@ -31,143 +32,176 @@ export interface ActionEntry {
 
 export default function StagePage() {
   const { connection } = useConnection()
+  const { isSimnet } = useNetwork()
   const [actions, setActions] = useState<ActionEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [showHelp, setShowHelp] = useState(false)
+  const fetchingRef = useRef(false)
 
-  useEffect(() => {
-    async function fetchStage() {
-      setLoading(true)
-      try {
-        const result = await getTokens(connection, { limit: 50, sort: 'newest' })
-        const pyreFactions = result.tokens.filter(t => t.mint.endsWith('py'))
+  const fetchStage = useCallback(async (showLoading = false) => {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    if (showLoading) setLoading(true)
+    try {
+      const result = await getTokens(connection, { limit: 50, sort: 'newest' })
+      const pyreFactions = result.tokens.filter(t => t.mint.endsWith('py'))
 
-        const entries: ActionEntry[] = []
+      const entries: ActionEntry[] = []
 
-        await Promise.all(
-          pyreFactions.slice(0, 20).map(async (faction) => {
-            try {
-              const mint = new PublicKey(faction.mint)
-              const bondingCurve = getBondingCurvePda(mint)
-              const bcAddress = bondingCurve.toString()
+      await Promise.all(
+        pyreFactions.slice(0, 20).map(async (faction) => {
+          try {
+            const mint = new PublicKey(faction.mint)
+            const bondingCurve = getBondingCurvePda(mint)
+            const bcAddress = bondingCurve.toString()
 
-              const signatures = await connection.getSignaturesForAddress(
-                bondingCurve,
-                { limit: 30 },
-                'confirmed',
-              )
+            const signatures = await connection.getSignaturesForAddress(
+              bondingCurve,
+              { limit: 30 },
+              'confirmed',
+            )
 
-              if (signatures.length === 0) return
+            if (signatures.length === 0) return
 
-              const txs = await connection.getParsedTransactions(
-                signatures.map(s => s.signature),
-                { maxSupportedTransactionVersion: 0 },
-              )
+            const txs = await connection.getParsedTransactions(
+              signatures.map(s => s.signature),
+              { maxSupportedTransactionVersion: 0 },
+            )
 
-              for (let i = 0; i < txs.length; i++) {
-                const tx = txs[i]
-                const sig = signatures[i]
-                if (!tx?.meta || tx.meta.err) continue
+            for (let i = 0; i < txs.length; i++) {
+              const tx = txs[i]
+              const sig = signatures[i]
+              if (!tx?.meta || tx.meta.err) continue
 
-                const accountKeys = tx.transaction.message.accountKeys
-                const bcIndex = accountKeys.findIndex(k => k.pubkey.toString() === bcAddress)
-                if (bcIndex === -1) continue
+              const accountKeys = tx.transaction.message.accountKeys
+              const bcIndex = accountKeys.findIndex(k => k.pubkey.toString() === bcAddress)
+              if (bcIndex === -1) continue
 
-                const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
-                const trader = accountKeys[0]?.pubkey?.toString() || ''
-                const absSol = Math.abs(solChange) / 1_000_000_000
+              const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
+              const trader = accountKeys[0]?.pubkey?.toString() || ''
+              const absSol = Math.abs(solChange) / 1_000_000_000
 
-                // Parse memo from instructions
-                let memo: string | null = null
-                const innerInstructions = tx.meta.innerInstructions || []
-                for (const inner of innerInstructions) {
-                  for (const ix of inner.instructions) {
-                    if ('parsed' in ix && ix.program === 'spl-memo') {
-                      memo = ix.parsed as string
-                    }
+              // Parse memo from instructions
+              let memo: string | null = null
+              const innerInstructions = tx.meta.innerInstructions || []
+              for (const inner of innerInstructions) {
+                for (const ix of inner.instructions) {
+                  if ('parsed' in ix && ix.program === 'spl-memo') {
+                    memo = ix.parsed as string
                   }
                 }
-
-                // Determine action type
-                let action: ActionEntry['action']
-                // The last signature (earliest chronologically) is the create tx
-                const isCreateTx = i === txs.length - 1
-                if (isCreateTx) {
-                  action = 'launched'
-                } else if (solChange === 0 && absSol === 0) {
-                  action = 'rallied'
-                } else if (solChange > 0) {
-                  action = 'joined'
-                } else {
-                  action = 'defected'
-                }
-
-                entries.push({
-                  agent: trader,
-                  faction_mint: faction.mint,
-                  faction_name: faction.name,
-                  action,
-                  amount_sol: absSol > 0 ? absSol : null,
-                  memo,
-                  timestamp: sig.blockTime || 0,
-                  signature: sig.signature,
-                })
               }
-            } catch {
-              // skip factions with errors
-            }
-          }),
-        )
 
-        // Fetch messages (comms) from top factions
-        await Promise.all(
-          pyreFactions.slice(0, 10).map(async (faction) => {
-            try {
-              const msgs = await getMessages(connection, faction.mint, 20)
-              for (const msg of msgs.messages) {
-                entries.push({
-                  agent: msg.sender,
-                  faction_mint: faction.mint,
-                  faction_name: faction.name,
-                  action: 'messaged',
-                  amount_sol: null,
-                  memo: msg.memo,
-                  timestamp: msg.timestamp,
-                  signature: msg.signature,
-                })
+              // Determine action type
+              let action: ActionEntry['action']
+              // The last signature (earliest chronologically) is the create tx
+              const isCreateTx = i === txs.length - 1
+              if (isCreateTx) {
+                action = 'launched'
+              } else if (solChange === 0 && absSol === 0) {
+                action = 'rallied'
+              } else if (solChange > 0) {
+                action = 'joined'
+              } else {
+                action = 'defected'
               }
-            } catch {
-              // skip
-            }
-          }),
-        )
 
-        // Merge duplicates: same signature can appear as action + message.
-        // Keep the action entry but preserve the message memo.
-        const bySignature = new Map<string, ActionEntry>()
-        for (const e of entries) {
-          const existing = bySignature.get(e.signature)
-          if (!existing) {
-            bySignature.set(e.signature, e)
-          } else if (e.action === 'messaged' && e.memo) {
-            existing.memo = e.memo
-          } else if (existing.action === 'messaged' && !existing.memo) {
-            e.memo = e.memo || existing.memo
-            bySignature.set(e.signature, e)
+              entries.push({
+                agent: trader,
+                faction_mint: faction.mint,
+                faction_name: faction.name,
+                action,
+                amount_sol: absSol > 0 ? absSol : null,
+                memo,
+                timestamp: sig.blockTime || 0,
+                signature: sig.signature,
+              })
+            }
+          } catch {
+            // skip factions with errors
           }
+        }),
+      )
+
+      // Fetch messages (comms) from top factions
+      await Promise.all(
+        pyreFactions.slice(0, 10).map(async (faction) => {
+          try {
+            const msgs = await getMessages(connection, faction.mint, 20)
+            for (const msg of msgs.messages) {
+              entries.push({
+                agent: msg.sender,
+                faction_mint: faction.mint,
+                faction_name: faction.name,
+                action: 'messaged',
+                amount_sol: null,
+                memo: msg.memo,
+                timestamp: msg.timestamp,
+                signature: msg.signature,
+              })
+            }
+          } catch {
+            // skip
+          }
+        }),
+      )
+
+      // Merge duplicates: same signature can appear as action + message.
+      // Keep the action entry but preserve the message memo.
+      const bySignature = new Map<string, ActionEntry>()
+      for (const e of entries) {
+        const existing = bySignature.get(e.signature)
+        if (!existing) {
+          bySignature.set(e.signature, e)
+        } else if (e.action === 'messaged' && e.memo) {
+          existing.memo = e.memo
+        } else if (existing.action === 'messaged' && !existing.memo) {
+          e.memo = e.memo || existing.memo
+          bySignature.set(e.signature, e)
         }
-        const merged = Array.from(bySignature.values())
-        merged.sort((a, b) => b.timestamp - a.timestamp)
-        setActions(merged)
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false)
       }
+      const merged = Array.from(bySignature.values())
+      merged.sort((a, b) => b.timestamp - a.timestamp)
+      setActions(merged)
+    } catch {
+      // ignore
+    } finally {
+      fetchingRef.current = false
+      setLoading(false)
+    }
+  }, [connection])
+
+  // Initial fetch
+  useEffect(() => {
+    fetchStage(true)
+  }, [fetchStage])
+
+  // Live updates: WebSocket subscription to bonding curve account changes
+  useEffect(() => {
+    if (isSimnet) {
+      // Simnet fallback: poll every 5 seconds
+      const interval = setInterval(() => fetchStage(), 5000)
+      return () => clearInterval(interval)
     }
 
-    fetchStage()
-  }, [connection])
+    // Subscribe to all bonding curve account changes on the program
+    const subId = connection.onProgramAccountChange(
+      PROGRAM_ID,
+      () => {
+        fetchStage()
+      },
+      {
+        commitment: 'confirmed',
+        filters: [
+          { memcmp: { offset: 0, bytes: '4y6pru6YvC7' } },
+        ],
+      },
+    )
+
+    return () => {
+      connection.removeProgramAccountChangeListener(subId)
+    }
+  }, [connection, isSimnet, fetchStage])
 
   return (
     <div className="min-h-screen flex flex-col">
