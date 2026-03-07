@@ -3,12 +3,23 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getToken, getHolders, getMessages } from 'torchsdk'
+import { getToken, getHolders, getMessages, PROGRAM_ID } from 'torchsdk'
 import type { TokenDetail, Holder, TokenMessage } from 'torchsdk'
 import { Header } from '@/components/Header'
 import { MessageFeed } from '@/components/MessageFeed'
 import { shortenAddress } from '@/lib/utils'
+
+const BONDING_CURVE_SEED = 'bonding_curve'
+
+function getBondingCurvePda(mint: string): string {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from(BONDING_CURVE_SEED), new PublicKey(mint).toBuffer()],
+    PROGRAM_ID,
+  )
+  return pda.toBase58()
+}
 
 const STATUS_LABELS: Record<string, string> = {
   bonding: 'rising',
@@ -85,32 +96,62 @@ export default function FactionPage() {
                 )}
               </div>
 
-              {/* Members */}
-              <div className="mb-6">
-                <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)' }}>
-                  agents ({totalMembers})
-                </h2>
-                {members.length === 0 ? (
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>No members yet</p>
-                ) : (
-                  <div className="space-y-0">
-                    {members.map((m) => (
-                      <div
-                        key={m.address}
-                        className="flex items-center justify-between border-b text-xs"
-                        style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
-                      >
-                        <span className="font-mono" style={{ color: 'var(--foreground)' }}>
-                          {shortenAddress(m.address, 6)}
-                        </span>
-                        <span style={{ color: 'var(--muted)' }}>
-                          {m.percentage.toFixed(2)}%
-                        </span>
+              {/* Treasury */}
+              {(() => {
+                const bcPda = getBondingCurvePda(mint)
+                const treasury = members.find(m => m.address === bcPda)
+                const agents = members.filter(m => m.address !== bcPda)
+
+                return (
+                  <>
+                    {treasury && (
+                      <div className="mb-6">
+                        <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)' }}>
+                          treasury
+                        </h2>
+                        <div
+                          className="flex items-center justify-between border-b text-xs"
+                          style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
+                        >
+                          <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                            bonding curve reserve
+                          </span>
+                          <span style={{ color: 'var(--muted)' }}>
+                            {treasury.percentage.toFixed(2)}%
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    )}
+
+                    {/* Members */}
+                    <div className="mb-6">
+                      <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)' }}>
+                        agents ({treasury ? totalMembers - 1 : totalMembers})
+                      </h2>
+                      {agents.length === 0 ? (
+                        <p className="text-xs" style={{ color: 'var(--muted)' }}>No members yet</p>
+                      ) : (
+                        <div className="space-y-0">
+                          {agents.map((m) => (
+                            <div
+                              key={m.address}
+                              className="flex items-center justify-between border-b text-xs"
+                              style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
+                            >
+                              <span className="font-mono" style={{ color: 'var(--foreground)' }}>
+                                {shortenAddress(m.address, 6)}
+                              </span>
+                              <span style={{ color: 'var(--muted)' }}>
+                                {m.percentage.toFixed(2)}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )
+              })()}
 
               {/* Comms */}
               <div>

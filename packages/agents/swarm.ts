@@ -59,8 +59,8 @@ import * as path from 'path'
 
 const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? '30')
 const RPC_URL = process.env.RPC_URL ?? 'https://torch-market-rpc.mrsirg97.workers.dev/devnet'
-const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? '10000')
-const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '60000')
+const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? '2000')
+const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '10000')
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'mistral'
 const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
@@ -107,12 +107,13 @@ interface FactionInfo {
 // ─── Personality Weights ─────────────────────────────────────────────
 // [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe]
 
+// [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe]
 const PERSONALITY_WEIGHTS: Record<Personality, number[]> = {
-  loyalist:     [0.35, 0.03, 0.20, 0.03, 0.05, 0.08, 0.05, 0.05, 0.02, 0.05, 0.02, 0.07],
-  mercenary:    [0.25, 0.18, 0.05, 0.03, 0.08, 0.05, 0.10, 0.05, 0.08, 0.03, 0.05, 0.05],
-  provocateur:  [0.15, 0.05, 0.08, 0.15, 0.20, 0.07, 0.05, 0.03, 0.05, 0.05, 0.07, 0.05],
-  scout:        [0.20, 0.05, 0.12, 0.03, 0.20, 0.05, 0.05, 0.03, 0.10, 0.05, 0.05, 0.07],
-  whale:        [0.30, 0.10, 0.10, 0.08, 0.05, 0.10, 0.08, 0.05, 0.02, 0.05, 0.02, 0.05],
+  loyalist:     [0.40, 0.03, 0.18, 0.02, 0.07, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.07],
+  mercenary:    [0.30, 0.18, 0.05, 0.02, 0.08, 0.05, 0.10, 0.05, 0.08, 0.03, 0.03, 0.03],
+  provocateur:  [0.25, 0.05, 0.08, 0.08, 0.20, 0.07, 0.05, 0.03, 0.05, 0.04, 0.05, 0.05],
+  scout:        [0.30, 0.05, 0.12, 0.02, 0.18, 0.05, 0.05, 0.03, 0.08, 0.04, 0.03, 0.05],
+  whale:        [0.38, 0.10, 0.10, 0.03, 0.05, 0.08, 0.08, 0.05, 0.02, 0.04, 0.02, 0.05],
 }
 
 const PERSONALITY_SOL: Record<Personality, [number, number]> = {
@@ -514,6 +515,7 @@ async function sendAndConfirm(connection: Connection, keypair: Keypair, result: 
 // ─── Agent Action Loop ───────────────────────────────────────────────
 
 let factionNameIndex = 0
+const usedFactionNames = new Set<string>()
 
 async function agentTick(
   connection: Connection,
@@ -661,10 +663,24 @@ async function agentTick(
 
       case 'launch': {
         if (agent.founded.length >= 2) return
-        const nameIdx = factionNameIndex++ % FACTION_NAMES.length
-        // Use LLM-suggested name if provided, otherwise use from list
-        const name = (usedLLM && decision.message) ? decision.message : FACTION_NAMES[nameIdx]
-        const symbol = FACTION_SYMBOLS[nameIdx]
+
+        // Find an unused name
+        let name: string | null = null
+        let symbol: string | null = null
+        if (usedLLM && decision.message) {
+          name = decision.message
+          symbol = FACTION_SYMBOLS[factionNameIndex++ % FACTION_SYMBOLS.length]
+        } else {
+          for (let attempts = 0; attempts < FACTION_NAMES.length; attempts++) {
+            const idx = factionNameIndex++ % FACTION_NAMES.length
+            if (!usedFactionNames.has(FACTION_NAMES[idx])) {
+              name = FACTION_NAMES[idx]
+              symbol = FACTION_SYMBOLS[idx]
+              break
+            }
+          }
+        }
+        if (!name || !symbol) return // all names used
 
         const result = await launchFaction(connection, {
           founder: agent.publicKey,
@@ -679,6 +695,7 @@ async function agentTick(
 
         agent.founded.push(mint)
         knownFactions.push({ mint, name, symbol })
+        usedFactionNames.add(name)
         agent.lastAction = `launched ${symbol}`
         const desc = `launched [${symbol}] ${name} (${vanity ? 'py' : 'no-vanity'})`
         agent.recentHistory.push(desc)
@@ -1147,6 +1164,7 @@ async function swarm() {
     for (const t of result.factions) {
       if (isPyreMint(t.mint) && !knownFactions.find(f => f.mint === t.mint)) {
         knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol })
+        usedFactionNames.add(t.name)
       }
     }
     logGlobal(`Found ${knownFactions.length} pyre factions`)
@@ -1173,6 +1191,7 @@ async function swarm() {
         await sendAndConfirm(connection, agent.keypair, result)
         const mint = result.mint.toBase58()
         knownFactions.push({ mint, name, symbol })
+        usedFactionNames.add(name)
         agent.founded.push(mint)
         logGlobal(`Launched [${symbol}] ${name} — ${mint.slice(0, 8)}...${mint.slice(-4)}`)
       } catch (err: any) {
@@ -1242,6 +1261,7 @@ async function swarm() {
         for (const t of result.factions) {
           if (isPyreMint(t.mint) && !knownFactions.find(f => f.mint === t.mint)) {
             knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol })
+            usedFactionNames.add(t.name)
             logGlobal(`Discovered new faction: [${t.symbol}] ${t.name}`)
           }
         }

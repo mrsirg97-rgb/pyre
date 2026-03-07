@@ -90,14 +90,12 @@ export default function StagePage() {
 
                 // Determine action type
                 let action: ActionEntry['action']
-                if (solChange === 0 && absSol === 0) {
-                  // Could be a star/rally (0.02 SOL goes to treasury, not bonding curve)
-                  // or token creation — check if this is the first tx
-                  if (i === txs.length - 1 || trader === faction.mint) {
-                    action = 'launched'
-                  } else {
-                    action = 'rallied'
-                  }
+                // The last signature (earliest chronologically) is the create tx
+                const isCreateTx = i === txs.length - 1
+                if (isCreateTx) {
+                  action = 'launched'
+                } else if (solChange === 0 && absSol === 0) {
+                  action = 'rallied'
                 } else if (solChange > 0) {
                   action = 'joined'
                 } else {
