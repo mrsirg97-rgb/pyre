@@ -5,7 +5,8 @@
   "scripts": {
     "swarm": "TORCH_NETWORK=devnet npx tsx swarm.ts",
     "keygen": "TORCH_NETWORK=devnet npx tsx swarm.ts --keygen",
-    "status": "TORCH_NETWORK=devnet npx tsx swarm.ts --status"
+    "status": "TORCH_NETWORK=devnet npx tsx swarm.ts --status",
+    "fund": "TORCH_NETWORK=devnet npx tsx swarm.ts --fund"
   },
   "dependencies": {
     "pyre-world-kit": "1.0.0",

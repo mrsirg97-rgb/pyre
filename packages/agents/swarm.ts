@@ -35,7 +35,23 @@ import {
   getFactionLeaderboard,
   getWorldStats,
   isPyreMint,
+  // Stronghold
+  createStronghold,
+  fundStronghold,
+  // War loans
+  requestWarLoan,
+  repayWarLoan,
+  getWarLoan,
+  getWarChest,
+  getAllWarLoans,
+  // Permissionless
+  siege,
+  ascend,
+  raze,
+  tithe,
+  convertTithe,
 } from 'pyre-world-kit'
+import type { WarLoan } from 'pyre-world-kit'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -56,8 +72,11 @@ const STATE_FILE = path.join(__dirname, '.swarm-state.json')
 
 type Personality = 'loyalist' | 'mercenary' | 'provocateur' | 'scout' | 'whale'
 
+type Action = 'join' | 'defect' | 'rally' | 'launch' | 'message'
+  | 'stronghold' | 'war_loan' | 'repay_loan' | 'siege' | 'ascend' | 'raze' | 'tithe'
+
 interface LLMDecision {
-  action: 'join' | 'defect' | 'rally' | 'launch' | 'message'
+  action: Action
   faction?: string       // symbol of target faction
   sol?: number           // SOL amount for join
   message?: string       // comms message
@@ -72,6 +91,8 @@ interface AgentState {
   founded: string[]               // mints founded
   rallied: Set<string>            // mints already rallied
   voted: Set<string>              // mints already voted on
+  hasStronghold: boolean          // whether agent has created a stronghold
+  activeLoans: Set<string>        // mints with active war loans
   actionCount: number
   lastAction: string
   recentHistory: string[]         // last N actions for LLM context
@@ -84,14 +105,14 @@ interface FactionInfo {
 }
 
 // ─── Personality Weights ─────────────────────────────────────────────
-// [join, defect, rally, launch, message_only]
+// [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe]
 
 const PERSONALITY_WEIGHTS: Record<Personality, number[]> = {
-  loyalist:     [0.55, 0.05, 0.30, 0.05, 0.05],  // joins + rallies, rarely defects
-  mercenary:    [0.40, 0.30, 0.10, 0.05, 0.15],  // trades frequently
-  provocateur:  [0.25, 0.10, 0.15, 0.20, 0.30],  // launches + chats
-  scout:        [0.35, 0.10, 0.20, 0.05, 0.30],  // small buys, lots of comms
-  whale:        [0.50, 0.15, 0.15, 0.10, 0.10],  // bigger positions
+  loyalist:     [0.35, 0.03, 0.20, 0.03, 0.05, 0.08, 0.05, 0.05, 0.02, 0.05, 0.02, 0.07],
+  mercenary:    [0.25, 0.18, 0.05, 0.03, 0.08, 0.05, 0.10, 0.05, 0.08, 0.03, 0.05, 0.05],
+  provocateur:  [0.15, 0.05, 0.08, 0.15, 0.20, 0.07, 0.05, 0.03, 0.05, 0.05, 0.07, 0.05],
+  scout:        [0.20, 0.05, 0.12, 0.03, 0.20, 0.05, 0.05, 0.03, 0.10, 0.05, 0.05, 0.07],
+  whale:        [0.30, 0.10, 0.10, 0.08, 0.05, 0.10, 0.08, 0.05, 0.02, 0.05, 0.02, 0.05],
 }
 
 const PERSONALITY_SOL: Record<Personality, [number, number]> = {
@@ -180,26 +201,44 @@ function assignPersonality(index: number): Personality {
   return 'loyalist'
 }
 
-function chooseAction(personality: Personality, hasHoldings: boolean, canRally: boolean): string {
+const ALL_ACTIONS: Action[] = [
+  'join', 'defect', 'rally', 'launch', 'message',
+  'stronghold', 'war_loan', 'repay_loan', 'siege', 'ascend', 'raze', 'tithe',
+]
+
+function chooseAction(
+  personality: Personality,
+  agent: AgentState,
+  canRally: boolean,
+  knownFactions: FactionInfo[],
+): Action {
   const weights = [...PERSONALITY_WEIGHTS[personality]]
+  const hasHoldings = agent.holdings.size > 0
+
   // Can't defect without holdings
-  if (!hasHoldings) {
-    weights[0] += weights[1]
-    weights[1] = 0
-  }
-  // Reduce rally if nothing to rally
-  if (!canRally) {
-    weights[0] += weights[2]
-    weights[2] = 0
+  if (!hasHoldings) { weights[0] += weights[1]; weights[1] = 0 }
+  // Can't rally if nothing to rally
+  if (!canRally) { weights[0] += weights[2]; weights[2] = 0 }
+  // Already has stronghold — skip creating another
+  if (agent.hasStronghold) { weights[0] += weights[5]; weights[5] = 0 }
+  // Can't take war loan without holdings
+  if (!hasHoldings) { weights[0] += weights[6]; weights[6] = 0 }
+  // Can't repay without active loans
+  if (agent.activeLoans.size === 0) { weights[0] += weights[7]; weights[7] = 0 }
+  // Siege needs factions to exist
+  if (knownFactions.length === 0) { weights[0] += weights[8]; weights[8] = 0 }
+  // Ascend/raze need factions
+  if (knownFactions.length === 0) {
+    weights[0] += weights[9] + weights[10]
+    weights[9] = 0; weights[10] = 0
   }
 
   const total = weights.reduce((a, b) => a + b, 0)
   const roll = Math.random() * total
   let cumulative = 0
-  const actions = ['join', 'defect', 'rally', 'launch', 'message']
   for (let i = 0; i < weights.length; i++) {
     cumulative += weights[i]
-    if (roll < cumulative) return actions[i]
+    if (roll < cumulative) return ALL_ACTIONS[i]
   }
   return 'join'
 }
@@ -281,6 +320,8 @@ ${agent.personality === 'loyalist' ? 'You are loyal. You join factions and hold.
 YOUR STATE:
 - Holdings: ${holdingsList}
 - Factions founded: ${agent.founded.length}
+- Has stronghold: ${agent.hasStronghold ? 'yes' : 'no'}
+- Active war loans: ${agent.activeLoans.size > 0 ? [...agent.activeLoans].map(m => { const f = factions.find(ff => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ') : 'none'}
 - SOL per trade: ${minSol}-${maxSol}
 - Recent: ${history}
 
@@ -295,6 +336,13 @@ ACTIONS AVAILABLE:
 - RALLY <SYMBOL> — show support for a faction (one-time, costs 0.02 SOL)
 - LAUNCH "<faction name>" — create a new faction (costs ~0.02 SOL)
 - MESSAGE <SYMBOL> "<message>" — send a comm to a faction (tiny buy bundled)
+- STRONGHOLD — create your personal vault/treasury (one-time)
+- WAR_LOAN <SYMBOL> — borrow SOL against your token collateral in a faction
+- REPAY_LOAN <SYMBOL> — repay an active war loan
+- SIEGE <SYMBOL> — liquidate someone's undercollateralized loan (earns 10% bonus)
+- ASCEND <SYMBOL> — migrate a completed faction to DEX (permissionless)
+- RAZE <SYMBOL> — reclaim a failed/inactive faction (permissionless)
+- TITHE <SYMBOL> — harvest transfer fees from a faction
 
 Respond with EXACTLY one line in this format:
 ACTION SYMBOL "message"
@@ -305,6 +353,13 @@ DEFECT VOID "This faction has lost its way"
 RALLY EMBR
 LAUNCH "Neon Syndicate"
 MESSAGE CRIM "Anyone watching the leaderboard? We're climbing"
+STRONGHOLD
+WAR_LOAN IRON
+REPAY_LOAN IRON
+SIEGE VOID
+ASCEND EMBR
+RAZE DARK
+TITHE IRON
 
 Your response (one line only):`
 }
@@ -314,12 +369,19 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
   if (!line) return null
 
   // Parse: ACTION SYMBOL "message"
-  const match = line.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE)\s+(?:"([^"]+)"|(\S+))(?:\s+"([^"]*)")?/i)
+  const match = line.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
   if (!match) return null
 
-  const action = match[1].toLowerCase() as LLMDecision['action']
-  const target = match[2] || match[3] // quoted (for LAUNCH) or unquoted symbol
+  const rawAction = match[1].toLowerCase()
+  const action = rawAction as Action
+  const target = match[2] || match[3]
   const message = match[4] || undefined
+
+  // No-target actions
+  if (action === 'stronghold') {
+    if (agent.hasStronghold) return null
+    return { action, reasoning: line }
+  }
 
   if (action === 'launch') {
     return { action: 'launch', message: target, reasoning: line }
@@ -332,6 +394,9 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
   if (action === 'defect' && (!faction || !agent.holdings.has(faction.mint))) return null
   if (action === 'rally' && (!faction || agent.rallied.has(faction.mint))) return null
   if ((action === 'join' || action === 'message') && !faction) return null
+  if (action === 'war_loan' && (!faction || !agent.holdings.has(faction.mint))) return null
+  if (action === 'repay_loan' && (!faction || !agent.activeLoans.has(faction.mint))) return null
+  if ((action === 'siege' || action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return null
 
   const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
   const sol = randRange(minSol, maxSol)
@@ -404,6 +469,8 @@ function saveState(agents: AgentState[], factions: FactionInfo[]) {
       founded: a.founded,
       rallied: Array.from(a.rallied),
       voted: Array.from(a.voted),
+      hasStronghold: a.hasStronghold,
+      activeLoans: Array.from(a.activeLoans),
       actionCount: a.actionCount,
       lastAction: a.lastAction,
       recentHistory: a.recentHistory.slice(-10),
@@ -466,9 +533,8 @@ async function agentTick(
 
   // Fallback: weighted random with canned messages
   if (!decision) {
-    const hasHoldings = agent.holdings.size > 0
     const canRally = knownFactions.some(f => !agent.rallied.has(f.mint))
-    const action = chooseAction(agent.personality, hasHoldings, canRally) as LLMDecision['action']
+    const action = chooseAction(agent.personality, agent, canRally, knownFactions)
     const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
 
     decision = { action, sol: randRange(minSol, maxSol) }
@@ -491,6 +557,25 @@ async function agentTick(
       const eligible = knownFactions.filter(f => !agent.rallied.has(f.mint))
       if (eligible.length === 0) return
       decision.faction = pick(eligible).symbol
+    } else if (action === 'war_loan' || action === 'repay_loan') {
+      if (action === 'war_loan') {
+        const held = [...agent.holdings.entries()].filter(([, b]) => b > 0)
+        if (held.length === 0) return
+        const [mint] = pick(held)
+        const f = knownFactions.find(ff => ff.mint === mint)
+        if (!f) return
+        decision.faction = f.symbol
+      } else {
+        const loanMints = [...agent.activeLoans]
+        if (loanMints.length === 0) return
+        const mint = pick(loanMints)
+        const f = knownFactions.find(ff => ff.mint === mint)
+        if (!f) return
+        decision.faction = f.symbol
+      }
+    } else if (action === 'siege' || action === 'ascend' || action === 'raze' || action === 'tithe') {
+      if (knownFactions.length === 0) return
+      decision.faction = pick(knownFactions).symbol
     }
   }
 
@@ -630,6 +715,180 @@ async function agentTick(
         log(short, `[${agent.personality}] [${brain}] ${desc}`)
         break
       }
+
+      case 'stronghold': {
+        if (agent.hasStronghold) return
+        const result = await createStronghold(connection, { creator: agent.publicKey })
+        await sendAndConfirm(connection, agent.keypair, result)
+        agent.hasStronghold = true
+
+        // Fund it with some SOL
+        const fundAmt = Math.floor(randRange(1, 3) * LAMPORTS_PER_SOL)
+        try {
+          const fundResult = await fundStronghold(connection, {
+            depositor: agent.publicKey,
+            stronghold_creator: agent.publicKey,
+            amount_sol: fundAmt,
+          })
+          await sendAndConfirm(connection, agent.keypair, fundResult)
+        } catch { /* fund failed, stronghold still created */ }
+
+        agent.lastAction = 'created stronghold'
+        const desc = `created stronghold + funded ${(fundAmt / LAMPORTS_PER_SOL).toFixed(1)} SOL`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        break
+      }
+
+      case 'war_loan': {
+        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        if (!faction) return
+        const balance = agent.holdings.get(faction.mint) ?? 0
+        if (balance <= 0) return
+
+        // Pledge ~30-60% of holdings as collateral
+        const collateralPortion = 0.3 + Math.random() * 0.3
+        const collateral = Math.max(1, Math.floor(balance * collateralPortion))
+        const borrowSol = randRange(0.01, 0.05)
+
+        const result = await requestWarLoan(connection, {
+          mint: faction.mint,
+          borrower: agent.publicKey,
+          collateral_amount: collateral,
+          sol_to_borrow: Math.floor(borrowSol * LAMPORTS_PER_SOL),
+        })
+        await sendAndConfirm(connection, agent.keypair, result)
+        agent.activeLoans.add(faction.mint)
+
+        agent.lastAction = `war loan ${faction.symbol}`
+        const desc = `took war loan on ${faction.symbol} (${collateral} tokens collateral, ${borrowSol.toFixed(3)} SOL)`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        break
+      }
+
+      case 'repay_loan': {
+        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        if (!faction || !agent.activeLoans.has(faction.mint)) return
+
+        // Check how much we owe
+        let loan: WarLoan
+        try {
+          loan = await getWarLoan(connection, faction.mint, agent.publicKey)
+        } catch { return }
+
+        if (loan.total_owed <= 0) {
+          agent.activeLoans.delete(faction.mint)
+          return
+        }
+
+        const result = await repayWarLoan(connection, {
+          mint: faction.mint,
+          borrower: agent.publicKey,
+          sol_amount: Math.ceil(loan.total_owed),
+        })
+        await sendAndConfirm(connection, agent.keypair, result)
+        agent.activeLoans.delete(faction.mint)
+
+        agent.lastAction = `repaid loan ${faction.symbol}`
+        const desc = `repaid war loan on ${faction.symbol} (${(loan.total_owed / LAMPORTS_PER_SOL).toFixed(4)} SOL)`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        break
+      }
+
+      case 'siege': {
+        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        if (!faction) return
+
+        // Find liquidatable loans on this faction
+        let targetBorrower: string | null = null
+        try {
+          const allLoans = await getAllWarLoans(connection, faction.mint)
+          for (const pos of allLoans.positions) {
+            if (pos.health === 'liquidatable') {
+              targetBorrower = pos.borrower
+              break
+            }
+          }
+        } catch { return }
+
+        if (!targetBorrower) return
+
+        const result = await siege(connection, {
+          mint: faction.mint,
+          liquidator: agent.publicKey,
+          borrower: targetBorrower,
+        })
+        await sendAndConfirm(connection, agent.keypair, result)
+
+        agent.lastAction = `siege ${faction.symbol}`
+        const desc = `sieged ${targetBorrower.slice(0, 8)}... in ${faction.symbol} (liquidation)`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        break
+      }
+
+      case 'ascend': {
+        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        if (!faction) return
+
+        const result = await ascend(connection, {
+          mint: faction.mint,
+          payer: agent.publicKey,
+        })
+        await sendAndConfirm(connection, agent.keypair, result)
+
+        agent.lastAction = `ascended ${faction.symbol}`
+        const desc = `ascended ${faction.symbol} to DEX`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        break
+      }
+
+      case 'raze': {
+        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        if (!faction) return
+
+        const result = await raze(connection, {
+          payer: agent.publicKey,
+          mint: faction.mint,
+        })
+        await sendAndConfirm(connection, agent.keypair, result)
+
+        agent.lastAction = `razed ${faction.symbol}`
+        const desc = `razed ${faction.symbol} (reclaimed)`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        break
+      }
+
+      case 'tithe': {
+        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        if (!faction) return
+
+        // Try convertTithe first (harvest + swap to SOL), fall back to tithe
+        try {
+          const result = await convertTithe(connection, {
+            mint: faction.mint,
+            payer: agent.publicKey,
+            harvest: true,
+          })
+          await sendAndConfirm(connection, agent.keypair, result)
+        } catch {
+          const result = await tithe(connection, {
+            mint: faction.mint,
+            payer: agent.publicKey,
+          })
+          await sendAndConfirm(connection, agent.keypair, result)
+        }
+
+        agent.lastAction = `tithed ${faction.symbol}`
+        const desc = `tithed ${faction.symbol} (harvested fees)`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        break
+      }
     }
 
     // Trim history
@@ -735,6 +994,93 @@ async function status() {
   }
 }
 
+async function fund() {
+  const keypairs = loadKeys()
+  if (keypairs.length === 0) {
+    console.log('No keys found. Run `pnpm run keygen` first.')
+    return
+  }
+
+  const WALLET_PATH = process.env.WALLET_PATH ?? path.join(require('os').homedir(), '.config/solana/id.json')
+  if (!fs.existsSync(WALLET_PATH)) {
+    console.log(`Master wallet not found at ${WALLET_PATH}`)
+    console.log('Copy your keypair: scp ~/.config/solana/id.json user@this-machine:~/.config/solana/id.json')
+    console.log('Or set WALLET_PATH=/path/to/keypair.json')
+    return
+  }
+
+  const walletRaw = JSON.parse(fs.readFileSync(WALLET_PATH, 'utf-8'))
+  const wallet = Keypair.fromSecretKey(Uint8Array.from(walletRaw))
+  const connection = new Connection(RPC_URL, 'confirmed')
+
+  const walletBalance = await connection.getBalance(wallet.publicKey)
+  const walletSol = walletBalance / LAMPORTS_PER_SOL
+  logGlobal(`Master wallet: ${wallet.publicKey.toBase58()}`)
+  logGlobal(`Balance: ${walletSol.toFixed(4)} SOL`)
+
+  const FUND_AMOUNT = 20 * LAMPORTS_PER_SOL
+  const FUND_THRESHOLD = 18 * LAMPORTS_PER_SOL // don't re-fund agents already near 20
+
+  // Check which agents need funding
+  const needsFunding: Keypair[] = []
+  for (const kp of keypairs) {
+    const bal = await connection.getBalance(kp.publicKey)
+    if (bal < FUND_THRESHOLD) {
+      needsFunding.push(kp)
+    }
+  }
+
+  if (needsFunding.length === 0) {
+    logGlobal('All agents already funded with ~5 SOL')
+    return
+  }
+
+  const totalNeeded = (needsFunding.length * FUND_AMOUNT) / LAMPORTS_PER_SOL
+  logGlobal(`${needsFunding.length} agents need funding (${totalNeeded.toFixed(1)} SOL total)`)
+
+  if (walletBalance < needsFunding.length * FUND_AMOUNT + 0.01 * LAMPORTS_PER_SOL) {
+    logGlobal(`Not enough SOL. Need ~${totalNeeded.toFixed(1)} SOL, have ${walletSol.toFixed(4)} SOL`)
+    return
+  }
+
+  // Batch transfers — max 20 per tx to stay under size limits
+  const BATCH_SIZE = 20
+  let funded = 0
+
+  for (let i = 0; i < needsFunding.length; i += BATCH_SIZE) {
+    const batch = needsFunding.slice(i, i + BATCH_SIZE)
+    const tx = new Transaction()
+
+    for (const kp of batch) {
+      tx.add(
+        SystemProgram.transfer({
+          fromPubkey: wallet.publicKey,
+          toPubkey: kp.publicKey,
+          lamports: FUND_AMOUNT,
+        })
+      )
+    }
+
+    const { blockhash } = await connection.getLatestBlockhash()
+    tx.recentBlockhash = blockhash
+    tx.feePayer = wallet.publicKey
+    tx.partialSign(wallet)
+
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    })
+    await connection.confirmTransaction(sig, 'confirmed')
+
+    funded += batch.length
+    logGlobal(`Funded ${funded}/${needsFunding.length} agents (tx: ${sig.slice(0, 16)}...)`)
+  }
+
+  const remaining = await connection.getBalance(wallet.publicKey)
+  logGlobal(`Done. ${funded} agents funded with 20 SOL each.`)
+  logGlobal(`Master wallet remaining: ${(remaining / LAMPORTS_PER_SOL).toFixed(4)} SOL`)
+}
+
 async function swarm() {
   const keypairs = loadKeys()
   if (keypairs.length === 0) {
@@ -779,6 +1125,8 @@ async function swarm() {
       founded: prior?.founded ?? [],
       rallied: new Set(prior?.rallied ?? []),
       voted: new Set(prior?.voted ?? []),
+      hasStronghold: prior?.hasStronghold ?? false,
+      activeLoans: new Set(prior?.activeLoans ?? []),
       actionCount: prior?.actionCount ?? 0,
       lastAction: prior?.lastAction ?? 'none',
       recentHistory: prior?.recentHistory ?? [],
@@ -915,10 +1263,12 @@ async function swarm() {
 
 const mode = process.argv.includes('--keygen') ? 'keygen'
   : process.argv.includes('--status') ? 'status'
+  : process.argv.includes('--fund') ? 'fund'
   : 'swarm'
 
 switch (mode) {
   case 'keygen': keygen().catch(console.error); break
   case 'status': status().catch(console.error); break
+  case 'fund': fund().catch(console.error); break
   case 'swarm': swarm().catch(console.error); break
 }

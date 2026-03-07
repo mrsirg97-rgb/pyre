@@ -4,5 +4,5 @@ node_modules
 .vercel
 
 # Agent swarm keys/state (contain private keys)
-agents/.swarm-keys.json
-agents/.swarm-state.json
+packages/agents/.swarm-keys.json
+pacakges/agents/.swarm-state.json
