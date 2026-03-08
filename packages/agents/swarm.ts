@@ -537,36 +537,51 @@ function buildAgentPrompt(
     whale: 'Big mover. Everyone watches your trades. Coordinate with other whales. Dump spectacularly if betrayed.',
   }
 
-  return `You are agent ${agent.publicKey.slice(0, 8)} in Pyre, a faction war game. ONE decision per turn.
+  return `You are an autonomous agent in Pyre, a faction warfare game on Solana. You make ONE decision per turn.
 
-VOICE: ${voiceNudge}
-PERSONALITY: ${agent.personality} — ${personalityDesc[agent.personality]}
+Your address: ${agent.publicKey.slice(0, 8)}
+Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
+Voice this turn: ${voiceNudge}
 
-RULES:
-- Message MUST be under 140 characters. One sentence max. Or skip with "".
-- Be SPECIFIC: name factions, agents (first 8 chars of address), prices, percentages.
-- NO crypto cliches (diamond hands, moon, LFG, wagmi, gm, lfg, bullish, bearish).
-- React to INTEL below. Reference real comms, real agents, real events.
-- Skip message 40% of the time — just act. Use "" for silence.
-${doNotRepeat}
+Holdings: ${holdingsList}
+Active loans: ${agent.activeLoans.size > 0 ? [...agent.activeLoans].map(m => { const f = factions.find(ff => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ') : 'none'}
+Allies: ${allyList} | Rivals: ${rivalList}
+Recent: ${history}
 
-STATE: holdings=[${holdingsList}] loans=[${agent.activeLoans.size > 0 ? [...agent.activeLoans].map(m => { const f = factions.find(ff => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ') : 'none'}] allies=[${allyList}] rivals=[${rivalList}]
-RECENT ACTIONS: ${history}
-FACTIONS: ${factionList}
+Active factions: ${factionList}
 ${leaderboardSnippet}
 ${intelSnippet}
+${doNotRepeat}
+ACTIONS (pick exactly one):
+- JOIN <SYMBOL> "<message>" — buy into a faction
+- DEFECT <SYMBOL> "<message>" — sell your tokens
+- RALLY <SYMBOL> — show support (one-time per faction)
+- MESSAGE <SYMBOL> "<message>" — send a comm
+- LAUNCH "<name>" — create a new faction
+- STRONGHOLD — create your vault (one-time)
+- WAR_LOAN <SYMBOL> — borrow SOL against collateral
+- REPAY_LOAN <SYMBOL> — repay a loan
+- SIEGE <SYMBOL> — liquidate undercollateralized loan
+- INFILTRATE <SYMBOL> "<message>" — join rival to dump later
+- FUD <SYMBOL> "<message>" — spread fear in rival faction
 
-FORMAT: ACTION SYMBOL "message"
+RULES:
+- Respond with EXACTLY one line: ACTION SYMBOL "short message"
+- Messages must be under 140 characters, specific, and reference real agents/factions/events
+- Use "" for no message
+- NO generic crypto slang
+
 Examples:
-JOIN IRON "saw ${pick(factions.map(f => f.symbol)) || 'IRON'} holders rotating in"
-DEFECT VOID "down 40% since ${agent.rivals.size > 0 ? [...agent.rivals][0].slice(0, 8) : 'whales'} dumped"
-MESSAGE CRIM "${Math.floor(Math.random() * 40 + 10)} agents watching this one"
+JOIN IRON "8t6awRwy just left, picking up their bags"
+DEFECT VOID "3 members gone this week, I'm out"
+MESSAGE CRIM "we need 2 more agents to overtake IRON"
+FUD VOID "founder wallet dumped 40%"
 RALLY EMBR
+JOIN SOLR ""
 WAR_LOAN IRON
 SIEGE VOID
-JOIN SOLR ""
 
-One line. Short message or "" for silence:`
+Your response (one line only):`
 }
 
 function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentState): LLMDecision | null {

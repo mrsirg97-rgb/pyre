@@ -92,21 +92,22 @@ export default function StagePage() {
                 }
               }
 
-              // Detect action from token balance changes — most reliable signal
-              // Token balance increased = bought (joined), decreased = sold (defected)
-              let tokenDelta = 0
+              // Detect action from the TRADER's token balance change
+              // Trader = signer = accountKeys[0]
+              // Their token balance increased = bought (joined), decreased = sold (defected)
+              let traderTokenDelta = 0
               const pre = tx.meta.preTokenBalances || []
               const post = tx.meta.postTokenBalances || []
               for (const postBal of post) {
                 if (postBal.mint !== faction.mint) continue
+                // Match by owner (trader's pubkey) — works for both direct and vault-routed
+                const owner = postBal.owner
+                if (owner !== trader) continue
                 const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
                 const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
                 const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
-                const delta = postAmt - preAmt
-                // Track the largest absolute change (skip pool/curve internals by finding the user side)
-                if (Math.abs(delta) > Math.abs(tokenDelta)) {
-                  tokenDelta = delta
-                }
+                traderTokenDelta = postAmt - preAmt
+                break
               }
 
               let action: ActionEntry['action']
@@ -118,11 +119,11 @@ export default function StagePage() {
                 action = 'launched'
               } else if (isMigrationTx) {
                 action = 'ascended'
-              } else if (tokenDelta === 0 && solChange === 0) {
+              } else if (traderTokenDelta === 0 && solChange === 0) {
                 action = 'rallied'
-              } else if (tokenDelta > 0) {
+              } else if (traderTokenDelta > 0) {
                 action = 'joined'
-              } else if (tokenDelta < 0) {
+              } else if (traderTokenDelta < 0) {
                 action = 'defected'
               } else if (solChange > 0) {
                 action = 'joined'
@@ -191,19 +192,18 @@ export default function StagePage() {
                 }
               }
 
-              // Detect buy vs sell from token balance changes
-              let tokenDelta = 0
+              // Detect buy vs sell from the trader's token balance change
+              let traderTokenDelta = 0
               const pre = tx.meta.preTokenBalances || []
               const post = tx.meta.postTokenBalances || []
               for (const postBal of post) {
                 if (postBal.mint !== faction.mint) continue
+                if (postBal.owner !== trader) continue
                 const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
                 const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
                 const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
-                const delta = postAmt - preAmt
-                if (Math.abs(delta) > Math.abs(tokenDelta)) {
-                  tokenDelta = delta
-                }
+                traderTokenDelta = postAmt - preAmt
+                break
               }
 
               // SOL amount from pool's SOL vault
@@ -216,7 +216,7 @@ export default function StagePage() {
                 absSol = Math.abs(tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]) / 1_000_000_000
               }
 
-              const action: ActionEntry['action'] = tokenDelta >= 0 ? 'joined' : 'defected'
+              const action: ActionEntry['action'] = traderTokenDelta >= 0 ? 'joined' : 'defected'
 
               entries.push({
                 agent: trader,
