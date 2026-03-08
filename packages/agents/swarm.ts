@@ -646,6 +646,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'SEIGE': 'SIEGE', 'SEIG': 'SIEGE',
       'INFLTRATE': 'INFILTRATE', 'INFILTRTE': 'INFILTRATE',
       'ALERT': 'FUD', 'EXPOSE': 'FUD',
+      'QUESTION': 'MESSAGE', 'ASK': 'MESSAGE', 'TAUNT': 'FUD', 'RALLYING': 'RALLY',
     }
 
     // Try to extract action — handle both "ACTION SYMBOL" and "ACTIONSYMBOL" (no space)
