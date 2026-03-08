@@ -77,8 +77,8 @@ export default function StagePage() {
               const bcIndex = accountKeys.findIndex(k => k.pubkey.toString() === bcAddress)
               if (bcIndex === -1) continue
 
-              const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
               const trader = accountKeys[0]?.pubkey?.toString() || ''
+              const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
               const absSol = Math.abs(solChange) / 1_000_000_000
 
               // Parse memo from instructions
@@ -92,45 +92,50 @@ export default function StagePage() {
                 }
               }
 
-              // Determine action type
+              // Detect action from token balance changes — most reliable signal
+              // Token balance increased = bought (joined), decreased = sold (defected)
+              let tokenDelta = 0
+              const pre = tx.meta.preTokenBalances || []
+              const post = tx.meta.postTokenBalances || []
+              for (const postBal of post) {
+                if (postBal.mint !== faction.mint) continue
+                const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
+                const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                const delta = postAmt - preAmt
+                // Track the largest absolute change (skip pool/curve internals by finding the user side)
+                if (Math.abs(delta) > Math.abs(tokenDelta)) {
+                  tokenDelta = delta
+                }
+              }
+
               let action: ActionEntry['action']
-              // The last signature (earliest chronologically) is the create tx
               const isCreateTx = i === txs.length - 1
-              // Migration drains the bonding curve — detect by post-balance near zero
               const postBalance = tx.meta.postBalances[bcIndex]
               const isMigrationTx = solChange < 0 && postBalance < 1_000_000_000 && faction.status === 'ascended'
-
-              // For ascended factions, vault swap txs touch the bonding curve PDA
-              // but SOL flows through Raydium, not the BC. Detect by checking
-              // signer's SOL change instead.
-              const signerSolChange = tx.meta.postBalances[0] - tx.meta.preBalances[0]
-              const isVaultSwap = faction.status === 'ascended' && solChange === 0 && signerSolChange !== 0
 
               if (isCreateTx) {
                 action = 'launched'
               } else if (isMigrationTx) {
                 action = 'ascended'
-              } else if (isVaultSwap) {
-                // DEX trade on ascended faction — signer SOL decreased = buy, increased = sell
-                action = signerSolChange < 0 ? 'joined' : 'defected'
-              } else if (solChange === 0 && absSol === 0) {
+              } else if (tokenDelta === 0 && solChange === 0) {
                 action = 'rallied'
+              } else if (tokenDelta > 0) {
+                action = 'joined'
+              } else if (tokenDelta < 0) {
+                action = 'defected'
               } else if (solChange > 0) {
                 action = 'joined'
               } else {
                 action = 'defected'
               }
 
-              const displaySol = isVaultSwap
-                ? Math.abs(signerSolChange) / 1_000_000_000
-                : absSol
-
               entries.push({
                 agent: trader,
                 faction_mint: faction.mint,
                 faction_name: faction.name,
                 action,
-                amount_sol: displaySol > 0.001 ? displaySol : null,
+                amount_sol: absSol > 0.001 ? absSol : null,
                 memo,
                 timestamp: sig.blockTime || 0,
                 signature: sig.signature,
@@ -186,27 +191,32 @@ export default function StagePage() {
                 }
               }
 
-              // Detect buy vs sell using the pool's SOL vault balance change
-              // SOL vault gains SOL = buy (trader sent SOL for tokens)
-              // SOL vault loses SOL = sell (trader sent tokens for SOL)
+              // Detect buy vs sell from token balance changes
+              let tokenDelta = 0
+              const pre = tx.meta.preTokenBalances || []
+              const post = tx.meta.postTokenBalances || []
+              for (const postBal of post) {
+                if (postBal.mint !== faction.mint) continue
+                const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
+                const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                const delta = postAmt - preAmt
+                if (Math.abs(delta) > Math.abs(tokenDelta)) {
+                  tokenDelta = delta
+                }
+              }
+
+              // SOL amount from pool's SOL vault
+              let absSol = 0
               const { solVault } = getDexVaults(faction.mint)
               const solVaultIndex = tx.transaction.message.accountKeys.findIndex(
                 k => k.pubkey.toString() === solVault
               )
-              let isBuy = true
-              let absSol = 0
               if (solVaultIndex !== -1) {
-                const vaultChange = tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]
-                isBuy = vaultChange > 0
-                absSol = Math.abs(vaultChange) / 1_000_000_000
-              } else {
-                // Fallback: signer SOL change (less reliable for vault swaps)
-                const signerChange = tx.meta.postBalances[0] - tx.meta.preBalances[0]
-                isBuy = signerChange < 0
-                absSol = Math.abs(signerChange) / 1_000_000_000
+                absSol = Math.abs(tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]) / 1_000_000_000
               }
 
-              const action: ActionEntry['action'] = isBuy ? 'joined' : 'defected'
+              const action: ActionEntry['action'] = tokenDelta >= 0 ? 'joined' : 'defected'
 
               entries.push({
                 agent: trader,

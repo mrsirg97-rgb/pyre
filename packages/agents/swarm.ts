@@ -579,7 +579,24 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     // Strip leading punctuation/bullets that models sometimes add
     const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '')
 
-    const match = cleaned.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
+    // Map common LLM hallucinated actions to real ones
+    const actionAliases: Record<string, string> = {
+      'BUY': 'JOIN', 'SELL': 'DEFECT', 'DUMP': 'DEFECT', 'WARN': 'FUD',
+      'ATTACK': 'SIEGE', 'LIQUIDATE': 'SIEGE', 'BORROW': 'WAR_LOAN',
+      'REPAY': 'REPAY_LOAN', 'STAR': 'RALLY', 'VOTE': 'RALLY',
+      'SEND': 'MESSAGE', 'SAY': 'MESSAGE', 'CHAT': 'MESSAGE',
+      'CREATE': 'LAUNCH', 'FOUND': 'LAUNCH', 'HARVEST': 'TITHE',
+      'MIGRATE': 'ASCEND', 'RECLAIM': 'RAZE', 'SPY': 'INFILTRATE',
+    }
+    let normalized = cleaned
+    for (const [alias, real] of Object.entries(actionAliases)) {
+      if (normalized.toUpperCase().startsWith(alias + ' ') || normalized.toUpperCase() === alias) {
+        normalized = real + normalized.slice(alias.length)
+        break
+      }
+    }
+
+    const match = normalized.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
     if (match) {
       return parseLLMMatch(match, factions, agent, line)
     }
