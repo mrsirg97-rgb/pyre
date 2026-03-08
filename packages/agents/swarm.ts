@@ -292,6 +292,21 @@ function chooseAction(
   if (agent.infiltrated.size > 0) {
     weights[1] += 0.10
   }
+  // Boost war loans and sieges when ascended factions exist
+  const ascendedFactions = knownFactions.filter(f => f.status === 'ascended')
+  if (ascendedFactions.length > 0 && hasHoldings) {
+    // Holding ascended tokens — aggressively take loans to leverage position
+    const holdsAscended = ascendedFactions.some(f => agent.holdings.has(f.mint))
+    if (holdsAscended) {
+      weights[6] += 0.15  // war_loan: borrow against ascended holdings
+    }
+    // Boost siege — more loans means more liquidation opportunities
+    weights[8] += 0.12  // siege
+    // If agent has active loans, boost repay slightly to keep healthy
+    if (agent.activeLoans.size > 0) {
+      weights[7] += 0.06  // repay_loan
+    }
+  }
 
   const total = weights.reduce((a, b) => a + b, 0)
   const roll = Math.random() * total
@@ -768,7 +783,9 @@ async function agentTick(
       if (action === 'war_loan') {
         const held = [...agent.holdings.entries()].filter(([, b]) => b > 0)
         if (held.length === 0) return
-        const [mint] = pick(held)
+        // Prefer ascended factions for war loans (more volatile, more interesting)
+        const heldAscended = held.filter(([mint]) => knownFactions.find(ff => ff.mint === mint)?.status === 'ascended')
+        const [mint] = heldAscended.length > 0 && Math.random() < 0.75 ? pick(heldAscended) : pick(held)
         const f = knownFactions.find(ff => ff.mint === mint)
         if (!f) return
         decision.faction = f.symbol
@@ -793,8 +810,21 @@ async function agentTick(
       decision.faction = (bearish.length > 0 ? pick(bearish) : pick(razeable)).symbol
     } else if (action === 'siege' || action === 'tithe') {
       if (knownFactions.length === 0) return
-      const bearish = knownFactions.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
-      decision.faction = (bearish.length > 0 ? pick(bearish) : pick(knownFactions)).symbol
+      if (action === 'siege') {
+        // Prefer ascended factions — more loans, more liquidation targets
+        const ascended = knownFactions.filter(f => f.status === 'ascended')
+        const rivals = knownFactions.filter(f => !agent.holdings.has(f.mint))
+        const ascendedRivals = rivals.filter(f => f.status === 'ascended')
+        // Prioritize: ascended rivals > ascended > rivals > any
+        const pool = ascendedRivals.length > 0 ? ascendedRivals
+          : ascended.length > 0 ? ascended
+          : rivals.length > 0 ? rivals
+          : knownFactions
+        decision.faction = pick(pool).symbol
+      } else {
+        const bearish = knownFactions.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
+        decision.faction = (bearish.length > 0 ? pick(bearish) : pick(knownFactions)).symbol
+      }
     } else if (action === 'infiltrate') {
       // Join a rival faction with intent to dump later
       const heldMints = [...agent.holdings.keys()]
@@ -1060,10 +1090,15 @@ async function agentTick(
         const balance = agent.holdings.get(faction.mint) ?? 0
         if (balance <= 0) return
 
-        // Pledge ~30-60% of holdings as collateral
-        const collateralPortion = 0.3 + Math.random() * 0.3
+        // Pledge more collateral on ascended factions (more liquid, higher leverage plays)
+        const isAscended = faction.status === 'ascended'
+        const collateralPortion = isAscended
+          ? 0.4 + Math.random() * 0.4   // 40-80% for ascended
+          : 0.3 + Math.random() * 0.3   // 30-60% normally
         const collateral = Math.max(1, Math.floor(balance * collateralPortion))
-        const borrowSol = randRange(0.01, 0.05)
+        const borrowSol = isAscended
+          ? randRange(0.02, 0.1)         // borrow more on ascended
+          : randRange(0.01, 0.05)
 
         const result = await requestWarLoan(connection, {
           mint: faction.mint,

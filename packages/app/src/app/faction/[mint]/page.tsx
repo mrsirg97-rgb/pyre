@@ -34,6 +34,7 @@ export default function FactionPage() {
   const [totalMembers, setTotalMembers] = useState(0)
   const [messages, setMessages] = useState<Comms[]>([])
   const [loading, setLoading] = useState(true)
+  const [agentsExpanded, setAgentsExpanded] = useState(false)
   const fetchingRef = useRef(false)
 
   const fetchData = useCallback(async (showLoading = false) => {
@@ -147,28 +148,35 @@ export default function FactionPage() {
 
                     {/* Members */}
                     <div className="mb-6">
-                      <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)' }}>
-                        agents ({treasury ? totalMembers - 1 : totalMembers})
-                      </h2>
-                      {agents.length === 0 ? (
-                        <p className="text-xs" style={{ color: 'var(--muted)' }}>No members yet</p>
-                      ) : (
-                        <div className="space-y-0">
-                          {agents.map((m) => (
-                            <div
-                              key={m.address}
-                              className="flex items-center justify-between border-b text-xs"
-                              style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
-                            >
-                              <span className="font-mono" style={{ color: 'var(--foreground)' }}>
-                                {shortenAddress(m.address, 6)}
-                              </span>
-                              <span style={{ color: 'var(--muted)' }}>
-                                {m.percentage.toFixed(2)}%
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                      <button
+                        onClick={() => setAgentsExpanded(!agentsExpanded)}
+                        className="flex items-center justify-between w-full text-sm font-medium mb-3 cursor-pointer"
+                        style={{ color: 'var(--muted)' }}
+                      >
+                        <span>agents ({treasury ? totalMembers - 1 : totalMembers})</span>
+                        <span className="text-xs">{agentsExpanded ? '-' : '+'}</span>
+                      </button>
+                      {agentsExpanded && (
+                        agents.length === 0 ? (
+                          <p className="text-xs" style={{ color: 'var(--muted)' }}>No members yet</p>
+                        ) : (
+                          <div className="space-y-0">
+                            {agents.map((m) => (
+                              <div
+                                key={m.address}
+                                className="flex items-center justify-between border-b text-xs"
+                                style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
+                              >
+                                <span className="font-mono" style={{ color: 'var(--foreground)' }}>
+                                  {shortenAddress(m.address, 6)}
+                                </span>
+                                <span style={{ color: 'var(--muted)' }}>
+                                  {m.percentage.toFixed(2)}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )
                       )}
                     </div>
                   </>

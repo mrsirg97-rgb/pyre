@@ -122,33 +122,35 @@ export async function getFactions(
   const listResult = mapTokenListResult(result);
 
   // Enrich ascended factions with live pool price (list endpoint only has stale bonding curve mcap)
+  // Use Promise.allSettled so a single failure doesn't block/break the list
   const ascended = listResult.factions.filter(f => f.status === 'ascended');
   if (ascended.length > 0) {
-    await Promise.all(ascended.map(async (faction) => {
-      try {
-        const mint = new PublicKey(faction.mint);
-        const raydium = getRaydiumMigrationAccounts(mint);
-        const [vault0Info, vault1Info] = await Promise.all([
-          connection.getTokenAccountBalance(raydium.token0Vault),
-          connection.getTokenAccountBalance(raydium.token1Vault),
-        ]);
-        const vault0 = Number(vault0Info.value.amount);
-        const vault1 = Number(vault1Info.value.amount);
-        const solReserves = raydium.isWsolToken0 ? vault0 : vault1;
-        const tokenReserves = raydium.isWsolToken0 ? vault1 : vault0;
-        if (tokenReserves > 0) {
-          // solReserves in lamports, tokenReserves in base units (10^6)
-          const LAMPORTS = 1_000_000_000;
-          const TOKEN_MUL = 1_000_000;
-          const priceInSol = (solReserves * TOKEN_MUL) / (tokenReserves * LAMPORTS);
-          const TOTAL_SUPPLY = 1_000_000_000 * TOKEN_MUL;
-          faction.price_sol = priceInSol;
-          faction.market_cap_sol = (priceInSol * TOTAL_SUPPLY) / TOKEN_MUL;
-        }
-      } catch {
-        // Pool may not exist yet — keep stale values
+    const enrichPromise = Promise.allSettled(ascended.map(async (faction) => {
+      const mint = new PublicKey(faction.mint);
+      const raydium = getRaydiumMigrationAccounts(mint);
+      const [vault0Info, vault1Info] = await Promise.all([
+        connection.getTokenAccountBalance(raydium.token0Vault),
+        connection.getTokenAccountBalance(raydium.token1Vault),
+      ]);
+      const vault0 = Number(vault0Info.value.amount);
+      const vault1 = Number(vault1Info.value.amount);
+      const solReserves = raydium.isWsolToken0 ? vault0 : vault1;
+      const tokenReserves = raydium.isWsolToken0 ? vault1 : vault0;
+      if (tokenReserves > 0) {
+        const LAMPORTS = 1_000_000_000;
+        const TOKEN_MUL = 1_000_000;
+        const priceInSol = (solReserves * TOKEN_MUL) / (tokenReserves * LAMPORTS);
+        const TOTAL_SUPPLY = 1_000_000_000 * TOKEN_MUL;
+        faction.price_sol = priceInSol;
+        faction.market_cap_sol = (priceInSol * TOTAL_SUPPLY) / TOKEN_MUL;
       }
     }));
+
+    // Race enrichment against a 3s timeout so the list always loads
+    await Promise.race([
+      enrichPromise,
+      new Promise(resolve => setTimeout(resolve, 3000)),
+    ]);
   }
 
   return listResult;
