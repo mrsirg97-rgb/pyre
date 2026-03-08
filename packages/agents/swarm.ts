@@ -15,7 +15,7 @@
  *   MIN_INTERVAL=10000        # Min ms between agent actions (default 10s)
  *   MAX_INTERVAL=60000        # Max ms between agent actions (default 60s)
  *   OLLAMA_URL=http://...     # Ollama API (default: http://localhost:11434)
- *   OLLAMA_MODEL=qwen2.5:3b   # Model name (default: qwen2.5:3b)
+ *   OLLAMA_MODEL=gemma3:4b    # Model name (default: gemma3:4b)
  *   LLM_ENABLED=true          # Enable LLM brain (default: true)
  */
 
@@ -556,19 +556,40 @@ FACTIONS: ${factionList}
 ${leaderboardSnippet}
 ${intelSnippet}
 
-FORMAT: ACTION SYMBOL "message" (or "" for no message)
-ACTIONS: JOIN, DEFECT, RALLY, LAUNCH, MESSAGE, STRONGHOLD, WAR_LOAN, REPAY_LOAN, SIEGE, ASCEND, RAZE, TITHE, INFILTRATE, FUD
+FORMAT: ACTION SYMBOL "message"
+Examples:
+JOIN IRON "saw ${pick(factions.map(f => f.symbol)) || 'IRON'} holders rotating in"
+DEFECT VOID "down 40% since ${agent.rivals.size > 0 ? [...agent.rivals][0].slice(0, 8) : 'whales'} dumped"
+MESSAGE CRIM "${Math.floor(Math.random() * 40 + 10)} agents watching this one"
+RALLY EMBR
+WAR_LOAN IRON
+SIEGE VOID
+JOIN SOLR ""
 
-One line only:`
+One line. Short message or "" for silence:`
 }
 
 function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentState): LLMDecision | null {
-  const line = raw.split('\n').find(l => l.trim().length > 0)?.trim()
-  if (!line) return null
+  // Try each non-empty line until one parses
+  const lines = raw.split('\n').filter(l => l.trim().length > 0)
+  if (lines.length === 0) return null
 
-  // Parse: ACTION SYMBOL "message"
-  const match = line.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
-  if (!match) return null
+  for (const candidate of lines) {
+    const line = candidate.trim()
+    // Strip leading punctuation/bullets that models sometimes add
+    const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '')
+
+    const match = cleaned.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
+    if (match) {
+      return parseLLMMatch(match, factions, agent, line)
+    }
+  }
+
+  log(agent.publicKey.slice(0, 8), `LLM parse fail: "${raw.slice(0, 80)}"`)
+  return null
+}
+
+function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: AgentState, line: string): LLMDecision | null {
 
   const rawAction = match[1].toLowerCase()
   const action = rawAction as Action
@@ -1155,16 +1176,14 @@ async function agentTick(
         const balance = agent.holdings.get(faction.mint) ?? 0
         if (balance <= 0) return
 
-        // Pledge more collateral on ascended factions (more liquid, higher leverage plays)
+        // Pledge collateral — more on ascended factions (more liquid)
         const isAscended = faction.status === 'ascended'
         const collateralPortion = isAscended
-          ? 0.4 + Math.random() * 0.4   // 40-80% for ascended
-          : 0.3 + Math.random() * 0.3   // 30-60% normally
+          ? 0.5 + Math.random() * 0.4   // 50-90% for ascended — need high collateral
+          : 0.4 + Math.random() * 0.3   // 40-70% normally
         const collateral = Math.max(1, Math.floor(balance * collateralPortion))
-        // Min borrow is 0.1 SOL on-chain
-        const borrowSol = isAscended
-          ? randRange(0.1, 0.3)          // borrow more on ascended
-          : randRange(0.1, 0.15)
+        // Min borrow is 0.1 SOL on-chain, keep conservative to avoid LTV rejection
+        const borrowSol = 0.1
 
         const result = await requestWarLoan(connection, {
           mint: faction.mint,
