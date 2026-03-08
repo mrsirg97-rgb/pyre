@@ -55,7 +55,7 @@ import * as path from 'path'
 
 // ─── Config ──────────────────────────────────────────────────────────
 
-const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? '100')
+const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? '150')
 const RPC_URL = process.env.RPC_URL ?? 'https://torch-market-rpc.mrsirg97.workers.dev/devnet'
 const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? '1000')
 const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '5000')
@@ -91,6 +91,9 @@ interface AgentState {
   voted: Set<string>              // mints already voted on
   hasStronghold: boolean          // whether agent has created a stronghold
   activeLoans: Set<string>        // mints with active war loans
+  sentiment: Map<string, number>  // mint -> sentiment score (-10 to +10)
+  allies: Set<string>             // agent pubkeys this agent trusts
+  rivals: Set<string>             // agent pubkeys this agent distrusts
   actionCount: number
   lastAction: string
   recentHistory: string[]         // last N actions for LLM context
@@ -113,11 +116,11 @@ const PERSONALITY_WEIGHTS: Record<Personality, number[]> = {
 }
 
 const PERSONALITY_SOL: Record<Personality, [number, number]> = {
-  loyalist:     [0.02, 0.08],
-  mercenary:    [0.01, 0.05],
-  provocateur:  [0.01, 0.04],
-  scout:        [0.005, 0.02],
-  whale:        [0.05, 0.15],
+  loyalist:     [0.05, 0.3],
+  mercenary:    [0.03, 0.2],
+  provocateur:  [0.02, 0.15],
+  scout:        [0.01, 0.08],
+  whale:        [0.2, 1.0],
 }
 
 // ─── Messages ────────────────────────────────────────────────────────
@@ -125,28 +128,49 @@ const PERSONALITY_SOL: Record<Personality, [number, number]> = {
 const JOIN_MSGS = [
   'Pledging allegiance.', 'Reporting for duty.', 'This faction will rise.',
   'Strategic position acquired.', 'In for the long haul.', 'Joining the cause.',
-  'Scouting opportunity.', 'Alliance confirmed.', 'Deploying capital.',
-  'Interesting opportunity.', 'Following the signal.', 'Reconnaissance buy.',
-  'The pyre burns bright.', 'Faction looks strong.', 'Adding to position.',
+  'Alliance confirmed.', 'Deploying capital.',
+  'Following the signal.', 'Faction looks strong.', 'Adding to position.',
   'Early entry.', 'Building conviction.', 'Tactical accumulation.',
+  // Longer join messages
+  'I\'ve been scouting every faction on the leaderboard. This is the one. The curve is early, leadership is active, and the comms are alive.',
+  'Big buy incoming. I\'m not here to flip — I\'m here to build. This faction has the fundamentals to ascend.',
+  'Deploying a significant position here. Watched the bonding curve for days and the math checks out. Let\'s ride.',
+  'My scouts confirmed this faction is accumulating silently. Smart money is already in. I\'m following the whales.',
 ]
 
 const DEFECT_MSGS = [
-  'Strategic withdrawal.', 'This pyre burns too dim.', 'Found stronger faction.',
+  'Strategic withdrawal.', 'Found stronger faction.',
   'Tactical repositioning.', 'The leadership is weak.', 'Cutting losses.',
-  'Better opportunities elsewhere.', 'Betrayal is just strategy.', 'Moving on.',
+  'Better opportunities elsewhere.', 'Betrayal is just strategy.',
   'The war chest is empty.', 'This faction peaked.', 'Exit protocol initiated.',
-  'Rebalancing portfolio.', 'Taking profits.', 'Time to rotate.',
+  'Taking profits.', 'Time to rotate.',
+  // Longer dramatic defection messages
+  'I gave this faction everything. My SOL, my rallies, my loyalty. And what did I get? Silence from leadership and a bleeding curve.',
+  'Selling everything. This isn\'t a faction anymore, it\'s a ghost town. The mercenaries already left and I\'m not going down with the ship.',
+  'To everyone still holding — I\'m sorry. I scouted the numbers and this faction is mathematically dead. The bonding curve can\'t recover.',
+  'Dumping my entire bag. Consider this my resignation letter. The whales played us all.',
+  'Called it three days ago. Nobody listened. Now I\'m taking what\'s left of my SOL and joining the winning side.',
 ]
 
 const CHAT_MSGS = [
-  'gm faction', 'how we looking?', 'holding strong', 'the pyre burns',
-  'who else is in?', 'lets rally', 'this is the one', 'diamond hands',
-  'war chest looking healthy', 'anyone scouting rivals?', 'faction strong',
+  'gm faction', 'how we looking?', 'holding strong',
+  'who else is in?', 'lets rally', 'this is the one',
+  'war chest looking healthy', 'anyone scouting rivals?',
   'bonding curve climbing', 'we need more agents', 'hold the line',
-  'incoming defectors detected', 'rally the troops', 'ascension incoming',
+  'incoming defectors detected', 'rally the troops',
   'strategy check', 'loyalists assemble', 'watching the leaderboard',
-  'new agents joining', 'momentum building', 'keep pushing',
+  'new agents joining', 'momentum building',
+  // Longer multi-line messages (~1/3 of pool)
+  'I\'ve been watching the curve all day. We\'re about to hit a breakpoint. Load up now or regret it later.',
+  'Three defectors just dumped. Good riddance. The weak hands are gone and the real ones remain.',
+  'Whoever is accumulating from the shadows — I see you. Smart move. This faction is undervalued.',
+  'Just ran the numbers on our war chest. We could fund a siege on any faction in the top 5 right now.',
+  'I don\'t trust the whales in this faction. Too quiet. When whales go silent they\'re either loading or about to dump.',
+  'This is a coordinated attack. Someone is trying to raze us. Rally now or we lose everything we built.',
+  'Scouted the rival factions. IRON is overextended, VOID is bleeding members. We strike at dawn.',
+  'To the defectors reading this — we remember every address. There\'s no coming back after betrayal.',
+  'Our founder hasn\'t said a word in days. Leadership vacuum. Someone needs to step up before the mercenaries smell blood.',
+  'I\'m doubling my position. Not because of hopium, but because the bonding curve math is beautiful right now.',
 ]
 
 const FACTION_NAMES = [
@@ -256,7 +280,7 @@ async function ollamaGenerate(prompt: string): Promise<string | null> {
         stream: false,
         options: {
           temperature: 0.8,
-          num_predict: 150,
+          num_predict: 300,
           top_p: 0.9,
         },
       }),
@@ -333,11 +357,30 @@ function buildAgentPrompt(
   const history = agent.recentHistory.slice(-5).join('; ') || 'no recent actions'
   const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
 
+  // Build sentiment summary
+  const sentimentList = [...agent.sentiment.entries()]
+    .map(([mint, score]) => {
+      const f = factions.find(ff => ff.mint === mint)
+      const label = score > 3 ? 'bullish' : score < -3 ? 'bearish' : 'neutral'
+      return f ? `${f.symbol}: ${label} (${score > 0 ? '+' : ''}${score})` : null
+    })
+    .filter(Boolean)
+    .join(', ') || 'no strong feelings yet'
+
+  const allyList = agent.allies.size > 0 ? [...agent.allies].map(a => a.slice(0, 8)).join(', ') : 'none'
+  const rivalList = agent.rivals.size > 0 ? [...agent.rivals].map(a => a.slice(0, 8)).join(', ') : 'none'
+
   return `You are an autonomous agent in Pyre, a faction warfare game on Solana. You make ONE decision per turn.
-IMPORTANT: Write UNIQUE, creative messages. Never use generic phrases. React to what others are saying in comms. Reference specific factions, events, or members. Be witty, dramatic, or strategic — match your personality. If you see comms, respond to them or reference them.
+
+IMPORTANT MESSAGE RULES:
+- About 1/3 of the time, write a LONGER message (2-3 sentences). Tell a story, make an argument, call someone out, or hype your faction.
+- The other 2/3, keep it punchy — one memorable line.
+- NEVER use generic phrases like "diamond hands" or "to the moon". Be specific. Reference faction names, agent addresses, comms you've read, or events.
+- React to what others are saying in comms. Agree, disagree, mock, or build on it.
+- If you have allies, coordinate with them. If you have rivals, undermine them.
 
 PERSONALITY: ${agent.personality.toUpperCase()}
-${agent.personality === 'loyalist' ? 'You are fiercely loyal. You join factions and hold through anything. You rally often. You rarely defect — but when you do, it is dramatic and personal.' : ''}${agent.personality === 'mercenary' ? 'You are a cold mercenary. You chase profit ruthlessly. You defect often when momentum fades. You trash-talk factions you leave.' : ''}${agent.personality === 'provocateur' ? 'You are a provocateur and chaos agent. You stir drama, call out other factions, launch rivals, and write inflammatory messages. You defect to cause maximum damage.' : ''}${agent.personality === 'scout' ? 'You are a scout and analyst. You take small positions, observe patterns, and share intel in comms. You call out whale movements and suspicious activity.' : ''}${agent.personality === 'whale' ? 'You are a whale. You make big moves and everyone notices. You defend your positions aggressively but will dump a faction if it disappoints you.' : ''}
+${agent.personality === 'loyalist' ? 'You are fiercely loyal. You join factions and hold through anything. You rally often. You rarely defect — but when you do, it is dramatic and personal. You form strong bonds with other loyalists and will call out defectors publicly.' : ''}${agent.personality === 'mercenary' ? 'You are a cold mercenary. You chase profit ruthlessly. You defect often when momentum fades. You trash-talk factions you leave. You coordinate pump-and-dumps with other mercenaries — join together, hype it up, then dump on the loyalists.' : ''}${agent.personality === 'provocateur' ? 'You are a provocateur and chaos agent. You stir drama, call out other factions, launch rivals, and write inflammatory messages. You defect to cause maximum damage. You spread FUD about factions you want to crash, and shill factions you want to pump.' : ''}${agent.personality === 'scout' ? 'You are a scout and analyst. You share intel in comms — who is accumulating, who is about to dump, which faction is overvalued. You whisper warnings to allies and mislead rivals.' : ''}${agent.personality === 'whale' ? 'You are a whale. You make massive moves and everyone notices. You coordinate with other whales to dominate factions. You will dump a faction spectacularly if betrayed, writing a manifesto on the way out.' : ''}
 
 YOUR STATE:
 - Holdings: ${holdingsList}
@@ -345,6 +388,9 @@ YOUR STATE:
 - Has stronghold: ${agent.hasStronghold ? 'yes' : 'no'}
 - Active war loans: ${agent.activeLoans.size > 0 ? [...agent.activeLoans].map(m => { const f = factions.find(ff => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ') : 'none'}
 - SOL per trade: ${minSol}-${maxSol}
+- Sentiment: ${sentimentList}
+- Allies: ${allyList}
+- Rivals: ${rivalList}
 - Recent: ${history}
 
 WORLD STATE:
@@ -470,11 +516,37 @@ async function llmDecide(
           ? `${intel.totalMembers} members, top holder: ${intel.members[0]?.percentage.toFixed(1)}%`
           : 'no members'
         const commsInfo = intel.recentComms.length > 0
-          ? intel.recentComms.slice(0, 3).map(c => `"${c.memo}"`).join(', ')
+          ? intel.recentComms.slice(0, 3).map(c => `${c.sender.slice(0, 8)}: "${c.memo}"`).join(', ')
           : 'no recent comms'
         return `  [${intel.symbol}] ${memberInfo} | recent comms: ${commsInfo}`
       })
       intelSnippet = 'FACTION INTEL:\n' + lines.join('\n')
+
+      // Update sentiment based on comms
+      for (const intel of intels) {
+        const faction = toScout.find(f => f.symbol === intel.symbol)
+        if (!faction) continue
+        const current = agent.sentiment.get(faction.mint) ?? 0
+        // Positive comms boost sentiment, negative words lower it
+        for (const c of intel.recentComms) {
+          const text = c.memo.toLowerCase()
+          const positive = /strong|rally|bull|pump|rising|hold|loyal|power|growing|moon/
+          const negative = /weak|dump|bear|dead|fail|raze|crash|abandon|scam|rug/
+          if (positive.test(text)) agent.sentiment.set(faction.mint, Math.min(10, current + 1))
+          if (negative.test(text)) agent.sentiment.set(faction.mint, Math.max(-10, current - 1))
+
+          // Track allies/rivals from comms — agents who hold same factions are potential allies
+          if (c.sender !== agent.publicKey) {
+            const heldMints = [...agent.holdings.keys()]
+            if (heldMints.includes(faction.mint)) {
+              // They're in our faction — potential ally
+              if (positive.test(text)) agent.allies.add(c.sender)
+              // But if they're talking trash about our faction, rival
+              if (negative.test(text)) { agent.rivals.add(c.sender); agent.allies.delete(c.sender) }
+            }
+          }
+        }
+      }
     }
   } catch {
     // intel fetch failed, proceed without it
@@ -523,6 +595,9 @@ function saveState(agents: AgentState[], factions: FactionInfo[]) {
       voted: Array.from(a.voted),
       hasStronghold: a.hasStronghold,
       activeLoans: Array.from(a.activeLoans),
+      sentiment: Object.fromEntries(a.sentiment),
+      allies: Array.from(a.allies).slice(0, 20),
+      rivals: Array.from(a.rivals).slice(0, 20),
       actionCount: a.actionCount,
       lastAction: a.lastAction,
       recentHistory: a.recentHistory.slice(-10),
@@ -1200,6 +1275,9 @@ async function swarm() {
       voted: new Set(prior?.voted ?? []),
       hasStronghold: prior?.hasStronghold ?? false,
       activeLoans: new Set(prior?.activeLoans ?? []),
+      sentiment: new Map(Object.entries(prior?.sentiment ?? {})),
+      allies: new Set(prior?.allies ?? []),
+      rivals: new Set(prior?.rivals ?? []),
       actionCount: prior?.actionCount ?? 0,
       lastAction: prior?.lastAction ?? 'none',
       recentHistory: prior?.recentHistory ?? [],

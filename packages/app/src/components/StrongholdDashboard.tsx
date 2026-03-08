@@ -1,11 +1,11 @@
 'use client'
 
 import { useWallet } from '@solana/wallet-adapter-react'
-import type { VaultInfo } from 'torchsdk'
+import type { Stronghold } from 'pyre-world-kit'
 import { shortenAddress, fmtSol } from '@/lib/utils'
 
 interface StrongholdDashboardProps {
-  vault: VaultInfo
+  vault: Stronghold
 }
 
 export function StrongholdDashboard({ vault }: StrongholdDashboardProps) {
@@ -30,7 +30,7 @@ export function StrongholdDashboard({ vault }: StrongholdDashboardProps) {
         </div>
         <div className="p-3 rounded" style={{ background: 'var(--surface)' }}>
           <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Linked Agents</p>
-          <p className="text-lg font-mono">{vault.linked_wallets}</p>
+          <p className="text-lg font-mono">{vault.linked_agents}</p>
         </div>
         <div className="p-3 rounded" style={{ background: 'var(--surface)' }}>
           <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Total Deposited</p>

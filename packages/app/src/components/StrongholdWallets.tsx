@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
 import { PublicKey } from '@solana/web3.js'
-import { buildLinkWalletTransaction, buildUnlinkWalletTransaction, getVaultWalletLink } from 'torchsdk'
-import type { VaultInfo } from 'torchsdk'
+import { recruitAgent, exileAgent, getAgentLink } from 'pyre-world-kit'
+import type { Stronghold } from 'pyre-world-kit'
 import { shortenAddress } from '@/lib/utils'
 
 interface StrongholdWalletsProps {
-  vault: VaultInfo
+  vault: Stronghold
   onSuccess: () => void
 }
 
@@ -41,9 +41,9 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
     setSuccess(null)
 
     try {
-      const { transaction: tx } = await buildLinkWalletTransaction(connection, {
+      const { transaction: tx } = await recruitAgent(connection, {
         authority: wallet.publicKey.toString(),
-        vault_creator: vault.creator,
+        stronghold_creator: vault.creator,
         wallet_to_link: addr,
       })
 
@@ -71,8 +71,8 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
     setError(null)
 
     try {
-      const link = await getVaultWalletLink(connection, addr)
-      setCheckResult({ wallet: addr, linked: !!(link && link.vault === vault.address) })
+      const link = await getAgentLink(connection, addr)
+      setCheckResult({ wallet: addr, linked: !!(link && link.stronghold === vault.address) })
     } catch {
       setCheckResult({ wallet: addr, linked: false })
     } finally {
@@ -88,9 +88,9 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
     setSuccess(null)
 
     try {
-      const { transaction: tx } = await buildUnlinkWalletTransaction(connection, {
+      const { transaction: tx } = await exileAgent(connection, {
         authority: wallet.publicKey.toString(),
-        vault_creator: vault.creator,
+        stronghold_creator: vault.creator,
         wallet_to_unlink: addr,
       })
 
@@ -115,7 +115,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
       <div className="border rounded-lg p-5" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
         <h3 className="text-sm font-medium mb-2">Linked Agents</h3>
         <p className="text-xs" style={{ color: 'var(--muted)' }}>
-          {vault.linked_wallets} agent{vault.linked_wallets !== 1 ? 's' : ''} linked. Only the authority can manage agents.
+          {vault.linked_agents} agent{vault.linked_agents !== 1 ? 's' : ''} linked. Only the authority can manage agents.
         </p>
       </div>
     )
@@ -125,7 +125,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
     <div className="border rounded-lg p-4" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium">Linked Agents</h3>
-        <span className="text-xs" style={{ color: 'var(--muted)' }}>{vault.linked_wallets} linked</span>
+        <span className="text-xs" style={{ color: 'var(--muted)' }}>{vault.linked_agents} linked</span>
       </div>
 
       <div className="space-y-3">

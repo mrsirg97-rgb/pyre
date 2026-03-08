@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getTokens } from 'torchsdk'
-import type { TokenSummary } from 'torchsdk'
+import { getFactions } from 'pyre-world-kit'
+import type { FactionSummary } from 'pyre-world-kit'
 
-export type { TokenSummary }
+export type { FactionSummary }
 
 interface UseFactionsResult {
-  factions: TokenSummary[]
+  factions: FactionSummary[]
   total: number
   loading: boolean
   refetch: () => void
@@ -16,15 +16,15 @@ interface UseFactionsResult {
 
 export function useFactions(limit = 50): UseFactionsResult {
   const { connection } = useConnection()
-  const [factions, setFactions] = useState<TokenSummary[]>([])
+  const [factions, setFactions] = useState<FactionSummary[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const fetchFactions = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await getTokens(connection, { limit, sort: 'newest' })
-      const pyreFactions = result.tokens.filter(t => t.mint.endsWith('py'))
+      const result = await getFactions(connection, { limit, sort: 'newest' })
+      const pyreFactions = result.factions.filter(t => t.mint.endsWith('py'))
       setFactions(pyreFactions)
       setTotal(pyreFactions.length)
     } catch {

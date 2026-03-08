@@ -1,21 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import type { TokenSummary } from 'torchsdk'
-
-const STATUS_LABELS: Record<string, string> = {
-  bonding: 'rising',
-  complete: 'ready',
-  migrated: 'ascended',
-  reclaimed: 'razed',
-}
+import type { FactionSummary } from 'pyre-world-kit'
 
 interface FactionCardProps {
-  faction: TokenSummary
+  faction: FactionSummary
 }
 
 export function FactionCard({ faction }: FactionCardProps) {
-  const status = STATUS_LABELS[faction.status] || faction.status
+  const status = faction.status
 
   return (
     <Link
@@ -39,7 +32,7 @@ export function FactionCard({ faction }: FactionCardProps) {
       <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--muted)' }}>
         <span>{faction.price_sol.toFixed(6)} SOL</span>
         <span>mcap {faction.market_cap_sol.toFixed(2)}</span>
-        {faction.holders !== null && <span>{faction.holders} members</span>}
+        {faction.members !== null && <span>{faction.members} members</span>}
         <span>{Math.round(faction.progress_percent)}%</span>
       </div>
     </Link>

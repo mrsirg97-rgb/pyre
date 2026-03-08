@@ -5,8 +5,8 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getToken, getHolders, getMessages, PROGRAM_ID } from 'torchsdk'
-import type { TokenDetail, Holder, TokenMessage } from 'torchsdk'
+import { getFaction, getMembers, getComms, PROGRAM_ID } from 'pyre-world-kit'
+import type { FactionDetail, Member, Comms } from 'pyre-world-kit'
 import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { MessageFeed } from '@/components/MessageFeed'
@@ -22,12 +22,6 @@ function getBondingCurvePda(mint: string): string {
   return pda.toBase58()
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  bonding: 'rising',
-  complete: 'ready',
-  migrated: 'ascended',
-  reclaimed: 'razed',
-}
 
 export default function FactionPage() {
   const params = useParams()
@@ -35,10 +29,10 @@ export default function FactionPage() {
   const { connection } = useConnection()
   const { isSimnet } = useNetwork()
 
-  const [faction, setFaction] = useState<TokenDetail | null>(null)
-  const [members, setMembers] = useState<Holder[]>([])
+  const [faction, setFaction] = useState<FactionDetail | null>(null)
+  const [members, setMembers] = useState<Member[]>([])
   const [totalMembers, setTotalMembers] = useState(0)
-  const [messages, setMessages] = useState<TokenMessage[]>([])
+  const [messages, setMessages] = useState<Comms[]>([])
   const [loading, setLoading] = useState(true)
   const fetchingRef = useRef(false)
 
@@ -47,15 +41,15 @@ export default function FactionPage() {
     fetchingRef.current = true
     if (showLoading) setLoading(true)
     try {
-      const [detail, holdersResult, msgsResult] = await Promise.all([
-        getToken(connection, mint),
-        getHolders(connection, mint, 50).catch(() => ({ holders: [], total_holders: 0 })),
-        getMessages(connection, mint, 50).catch(() => ({ messages: [], total: 0 })),
+      const [detail, membersResult, commsResult] = await Promise.all([
+        getFaction(connection, mint),
+        getMembers(connection, mint, 50).catch(() => ({ members: [], total_members: 0 })),
+        getComms(connection, mint, 50).catch(() => ({ comms: [], total: 0 })),
       ])
       setFaction(detail)
-      setMembers(holdersResult.holders)
-      setTotalMembers(holdersResult.total_holders)
-      setMessages(msgsResult.messages)
+      setMembers(membersResult.members)
+      setTotalMembers(membersResult.total_members)
+      setMessages(commsResult.comms)
     } catch {
       // ignore
     } finally {
@@ -112,12 +106,12 @@ export default function FactionPage() {
                   <span className="font-mono text-sm" style={{ color: 'var(--muted)' }}>{faction.symbol}</span>
                 </div>
                 <div className="flex flex-wrap gap-4 text-xs" style={{ color: 'var(--muted)' }}>
-                  <span>{STATUS_LABELS[faction.status] || faction.status}</span>
+                  <span>{faction.status}</span>
                   <span>{faction.price_sol.toFixed(6)} SOL</span>
                   <span>mcap {faction.market_cap_sol.toFixed(2)}</span>
                   <span>{Math.round(faction.progress_percent)}%</span>
-                  <span>{faction.stars} rallies</span>
-                  <span>founder {shortenAddress(faction.creator)}</span>
+                  <span>{faction.rallies} rallies</span>
+                  <span>founder {shortenAddress(faction.founder)}</span>
                 </div>
                 {faction.description && (
                   <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>{faction.description}</p>

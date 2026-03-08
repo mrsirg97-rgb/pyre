@@ -406,7 +406,7 @@ export interface AgentFactionPosition {
 }
 
 export interface WorldEvent {
-  type: 'launch' | 'join' | 'defect' | 'rally' | 'ascend' | 'raze';
+  type: 'launch' | 'join' | 'defect' | 'rally' | 'ascend' | 'raze' | 'messaged' | 'siege' | 'tithe' | 'war_loan' | 'repay_loan';
   faction_mint: string;
   faction_name: string;
   agent?: string;

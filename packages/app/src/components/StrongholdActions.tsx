@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
-import { buildDepositVaultTransaction, buildWithdrawVaultTransaction, LAMPORTS_PER_SOL } from 'torchsdk'
-import type { VaultInfo } from 'torchsdk'
+import { fundStronghold, withdrawFromStronghold, LAMPORTS_PER_SOL } from 'pyre-world-kit'
+import type { Stronghold } from 'pyre-world-kit'
 import { fmtSol } from '@/lib/utils'
 
 interface StrongholdActionsProps {
-  vault: VaultInfo
+  vault: Stronghold
   onSuccess: () => void
 }
 
@@ -41,9 +41,9 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
       let tx
 
       if (tab === 'deposit') {
-        const result = await buildDepositVaultTransaction(connection, {
+        const result = await fundStronghold(connection, {
           depositor: wallet.publicKey.toString(),
-          vault_creator: vault.creator,
+          stronghold_creator: vault.creator,
           amount_sol: lamports,
         })
         tx = result.transaction
@@ -53,9 +53,9 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
           setLoading(false)
           return
         }
-        const result = await buildWithdrawVaultTransaction(connection, {
+        const result = await withdrawFromStronghold(connection, {
           authority: wallet.publicKey.toString(),
-          vault_creator: vault.creator,
+          stronghold_creator: vault.creator,
           amount_sol: lamports,
         })
         tx = result.transaction

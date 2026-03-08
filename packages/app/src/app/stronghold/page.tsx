@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
-import { buildCreateVaultTransaction } from 'torchsdk'
+import { createStronghold } from 'pyre-world-kit'
 import { Header } from '@/components/Header'
 import { StrongholdDashboard } from '@/components/StrongholdDashboard'
 import { StrongholdActions } from '@/components/StrongholdActions'
@@ -25,7 +25,7 @@ export default function StrongholdPage() {
     setCreateError(null)
 
     try {
-      const { transaction: tx } = await buildCreateVaultTransaction(connection, {
+      const { transaction: tx } = await createStronghold(connection, {
         creator: wallet.publicKey.toString(),
       })
 

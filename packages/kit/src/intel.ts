@@ -5,7 +5,7 @@
  * strategic intelligence. Agents use these to reason about the world.
  */
 
-import { Connection } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import {
   getTokens,
   getToken,
@@ -13,6 +13,7 @@ import {
   getMessages,
   getVaultForWallet,
   verifySaid,
+  PROGRAM_ID,
 } from 'torchsdk';
 import type { TokenDetail, TokenSummary } from 'torchsdk';
 

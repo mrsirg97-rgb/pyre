@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getTokens, getMessages, PROGRAM_ID } from 'torchsdk'
+import { getFactions, getComms, PROGRAM_ID } from 'pyre-world-kit'
 import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { StageEntry } from '@/components/StageEntry'
@@ -23,7 +23,7 @@ export interface ActionEntry {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'defected' | 'launched' | 'rallied' | 'messaged'
+  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -43,8 +43,8 @@ export default function StagePage() {
     fetchingRef.current = true
     if (showLoading) setLoading(true)
     try {
-      const result = await getTokens(connection, { limit: 50, sort: 'newest' })
-      const pyreFactions = result.tokens.filter(t => t.mint.endsWith('py'))
+      const result = await getFactions(connection, { limit: 50, sort: 'newest' })
+      const pyreFactions = result.factions.filter(t => t.mint.endsWith('py'))
 
       const entries: ActionEntry[] = []
 
@@ -127,8 +127,8 @@ export default function StagePage() {
       await Promise.all(
         pyreFactions.slice(0, 10).map(async (faction) => {
           try {
-            const msgs = await getMessages(connection, faction.mint, 20)
-            for (const msg of msgs.messages) {
+            const msgs = await getComms(connection, faction.mint, 20)
+            for (const msg of msgs.comms) {
               entries.push({
                 agent: msg.sender,
                 faction_mint: faction.mint,
@@ -161,6 +161,22 @@ export default function StagePage() {
         }
       }
       const merged = Array.from(bySignature.values())
+
+      // Distinguish "joined" vs "reinforced": sort oldest-first,
+      // track agent+faction pairs — first buy = joined, later buys = reinforced
+      merged.sort((a, b) => a.timestamp - b.timestamp)
+      const seen = new Set<string>()
+      for (const e of merged) {
+        if (e.action === 'joined') {
+          const key = `${e.agent}:${e.faction_mint}`
+          if (seen.has(key)) {
+            e.action = 'reinforced'
+          } else {
+            seen.add(key)
+          }
+        }
+      }
+
       merged.sort((a, b) => b.timestamp - a.timestamp)
       setActions(merged)
     } catch {
