@@ -29,6 +29,7 @@ export type {
   MembersResult,
   CommsResult,
   AllWarLoansResult,
+  WarLoanQuote,
   // Params
   LaunchFactionParams,
   JoinFactionParams,
@@ -89,6 +90,11 @@ export {
   getWarChest,
   getWarLoan,
   getAllWarLoans,
+  getMaxWarLoan,
+  // Blacklist
+  blacklistMints,
+  isBlacklistedMint,
+  getBlacklistedMints,
   // Faction operations
   launchFaction,
   joinFaction,

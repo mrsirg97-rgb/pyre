@@ -61,6 +61,7 @@ import type {
   AgentLink,
   WarChest,
   WarLoan,
+  WarLoanQuote,
   AllWarLoansResult,
   LaunchFactionParams,
   JoinFactionParams,
@@ -104,6 +105,27 @@ import {
 } from './mappers';
 
 import { buildCreateFactionTransaction, isPyreMint } from './vanity';
+
+// ─── Blacklist ──────────────────────────────────────────────────────
+// Mints from previous swarm runs. Agents should skip these and only
+// interact with freshly launched factions.
+
+const BLACKLISTED_MINTS = new Set<string>();
+
+/** Add mints to the blacklist (call at startup with old mints) */
+export function blacklistMints(mints: string[]): void {
+  for (const m of mints) BLACKLISTED_MINTS.add(m);
+}
+
+/** Check if a mint is blacklisted */
+export function isBlacklistedMint(mint: string): boolean {
+  return BLACKLISTED_MINTS.has(mint);
+}
+
+/** Get all blacklisted mints */
+export function getBlacklistedMints(): string[] {
+  return Array.from(BLACKLISTED_MINTS);
+}
 
 // ─── Read Operations ───────────────────────────────────────────────
 
@@ -316,6 +338,66 @@ export async function getAllWarLoans(
 ): Promise<AllWarLoansResult> {
   const result = await getAllLoanPositions(connection, mint);
   return mapAllLoansResult(result);
+}
+
+/**
+ * Compute max borrowable SOL for a given collateral amount.
+ *
+ * Mirrors the burnfun LendingDashboard logic — effective max borrow is the
+ * minimum of three caps:
+ *   1. LTV limit: collateral_value_sol * (max_ltv_bps / 10000)
+ *   2. Pool available: treasury_sol * utilization_cap - total_lent
+ *   3. Per-user cap: (collateral / total_supply) * borrow_share_multiplier * max_lendable
+ *
+ * All values in lamports. Accounts for Token-2022 transfer fee (4 bps).
+ */
+export async function getMaxWarLoan(
+  connection: Connection,
+  mint: string,
+  collateralAmount: number,
+): Promise<WarLoanQuote> {
+  const TOTAL_SUPPLY = 1_000_000_000_000_000; // 1B tokens * 1e6 multiplier (base units)
+  const TRANSFER_FEE_BPS = 4;
+  const LAMPORTS_PER_SOL = 1_000_000_000;
+
+  const [lending, detail] = await Promise.all([
+    getLendingInfo(connection, mint),
+    getToken(connection, mint),
+  ]);
+
+  // Price per base-unit token in SOL (lamports)
+  const pricePerToken = detail.price_sol; // SOL per display token
+  const TOKEN_MULTIPLIER = 1_000_000;
+
+  // Collateral value in SOL (lamports)
+  const collateralDisplayTokens = collateralAmount / TOKEN_MULTIPLIER;
+  const collateralValueSol = collateralDisplayTokens * pricePerToken * LAMPORTS_PER_SOL;
+
+  // 1. LTV cap
+  const ltvMaxSol = collateralValueSol * (lending.max_ltv_bps / 10000);
+
+  // 2. Pool available
+  const treasurySol = detail.treasury_sol_balance * LAMPORTS_PER_SOL;
+  const maxLendableSol = treasurySol * lending.utilization_cap_bps / 10000;
+  const totalLent = (lending.total_sol_lent ?? 0);
+  const poolAvailableSol = Math.max(0, maxLendableSol - totalLent);
+
+  // 3. Per-user cap (accounts for transfer fee reducing net collateral)
+  const netCollateral = collateralAmount * (1 - TRANSFER_FEE_BPS / 10000);
+  const borrowMultiplier = lending.borrow_share_multiplier || 3;
+  const perUserCapSol = maxLendableSol * netCollateral * borrowMultiplier / TOTAL_SUPPLY;
+
+  const maxBorrowSol = Math.max(0, Math.min(ltvMaxSol, poolAvailableSol, perUserCapSol));
+
+  return {
+    max_borrow_sol: Math.floor(maxBorrowSol),
+    collateral_value_sol: Math.floor(collateralValueSol),
+    ltv_max_sol: Math.floor(ltvMaxSol),
+    pool_available_sol: Math.floor(poolAvailableSol),
+    per_user_cap_sol: Math.floor(perUserCapSol),
+    interest_rate_bps: lending.interest_rate_bps,
+    liquidation_threshold_bps: lending.liquidation_threshold_bps,
+  };
 }
 
 // ─── Faction Operations (controller) ───────────────────────────────

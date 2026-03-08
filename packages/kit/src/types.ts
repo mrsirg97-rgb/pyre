@@ -360,6 +360,26 @@ export interface FactionListParams {
   sort?: FactionSortOption;
 }
 
+// ─── War Loan Quote ─────────────────────────────────────────────
+
+/** Result of computing max borrowable SOL for a given collateral amount */
+export interface WarLoanQuote {
+  /** Max SOL borrowable (lamports) — minimum of LTV cap, pool available, per-user cap */
+  max_borrow_sol: number;
+  /** Collateral value in SOL (lamports) */
+  collateral_value_sol: number;
+  /** LTV-limited max borrow (lamports) */
+  ltv_max_sol: number;
+  /** Pool available SOL (lamports) */
+  pool_available_sol: number;
+  /** Per-user cap SOL (lamports) — based on share of supply * borrow_share_multiplier */
+  per_user_cap_sol: number;
+  /** Current interest rate in bps per epoch */
+  interest_rate_bps: number;
+  /** Liquidation threshold in bps */
+  liquidation_threshold_bps: number;
+}
+
 // ─── Intel Types ───────────────────────────────────────────────────
 
 export interface FactionPower {

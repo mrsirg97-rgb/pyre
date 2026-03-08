@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions } from 'pyre-world-kit'
+import { getFactions, isPyreMint } from 'pyre-world-kit'
 import type { FactionSummary } from 'pyre-world-kit'
 
 export type { FactionSummary }
+
+// Only show factions created after this timestamp (filters out old devnet factions)
+const FACTION_EPOCH = 1741459200 // 2026-03-09T00:00:00Z
 
 interface UseFactionsResult {
   factions: FactionSummary[]
@@ -24,7 +27,7 @@ export function useFactions(limit = 50): UseFactionsResult {
     setLoading(true)
     try {
       const result = await getFactions(connection, { limit, sort: 'newest' })
-      const pyreFactions = result.factions.filter(t => t.mint.endsWith('py'))
+      const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && t.created_at >= FACTION_EPOCH)
       setFactions(pyreFactions)
       setTotal(pyreFactions.length)
     } catch {

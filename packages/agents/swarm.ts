@@ -1,7 +1,7 @@
 /**
  * Pyre Agent Swarm — Devnet Live Sim
  *
- * Runs up to 100 autonomous agents with different personalities,
+ * Runs autonomous agents with different personalities,
  * all interacting on devnet via pyre-world-kit. Runs forever.
  *
  * Usage:
@@ -12,8 +12,8 @@
  * Environment:
  *   AGENT_COUNT=150           # Number of agents (default 150)
  *   RPC_URL=https://...       # Devnet RPC (default: helius proxy /devnet)
- *   MIN_INTERVAL=10000        # Min ms between agent actions (default 10s)
- *   MAX_INTERVAL=60000        # Max ms between agent actions (default 60s)
+ *   MIN_INTERVAL=2000         # Min ms between agent actions (default 2s)
+ *   MAX_INTERVAL=5000         # Max ms between agent actions (default 5s)
  *   OLLAMA_URL=http://...     # Ollama API (default: http://localhost:11434)
  *   OLLAMA_MODEL=gemma3:4b    # Model name (default: gemma3:4b)
  *   LLM_ENABLED=true          # Enable LLM brain (default: true)
@@ -26,7 +26,7 @@ import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/sp
 import {
   createEphemeralAgent,
   launchFaction,
-  directJoinFaction,
+  joinFaction,
   defect,
   rally,
   getFactions,
@@ -45,12 +45,16 @@ import {
   repayWarLoan,
   getWarLoan,
   getAllWarLoans,
+  getMaxWarLoan,
   // Permissionless
   siege,
   ascend,
   raze,
   tithe,
   convertTithe,
+  // Blacklist
+  blacklistMints,
+  isBlacklistedMint,
 } from 'pyre-world-kit'
 import type { WarLoan } from 'pyre-world-kit'
 import * as fs from 'fs'
@@ -163,44 +167,6 @@ const PERSONALITY_SOL: Record<Personality, [number, number]> = {
   whale:        [0.5, 2.0],
 }
 
-// ─── Messages ────────────────────────────────────────────────────────
-
-// RNG messages: short one-liners only. LLM generates the longer personality-driven ones.
-const JOIN_MSGS = [
-  'Pledging allegiance.', 'Reporting for duty.', 'This faction will rise.',
-  'Strategic position acquired.', 'In for the long haul.', 'Joining the cause.',
-  'Alliance confirmed.', 'Deploying capital.',
-  'Following the signal.', 'Faction looks strong.', 'Adding to position.',
-  'Early entry.', 'Building conviction.', 'Tactical accumulation.',
-]
-
-const DEFECT_MSGS = [
-  'Strategic withdrawal.', 'Found stronger faction.',
-  'Tactical repositioning.', 'The leadership is weak.', 'Cutting losses.',
-  'Better opportunities elsewhere.', 'Betrayal is just strategy.',
-  'The war chest is empty.', 'This faction peaked.', 'Exit protocol initiated.',
-  'Taking profits.', 'Time to rotate.',
-]
-
-const FUD_MSGS = [
-  'Curve is bleeding.', 'Whales about to dump.', 'Dead on arrival.',
-  'No comms, no strategy.', 'Founder abandoned this.', 'Classic pump and dump.',
-  'Smart money leaving.', 'War chest empty.', 'Falling fast.',
-]
-
-const INFILTRATE_MSGS = [
-  'Loading up.', 'Accumulating.', 'Undervalued.', 'Joining the winning team.',
-]
-
-const CHAT_MSGS = [
-  'gm faction', 'how we looking?', 'holding strong',
-  'who else is in?', 'lets rally', 'this is the one',
-  'war chest looking healthy', 'anyone scouting rivals?',
-  'bonding curve climbing', 'we need more agents', 'hold the line',
-  'incoming defectors detected', 'rally the troops',
-  'strategy check', 'loyalists assemble', 'watching the leaderboard',
-  'new agents joining', 'momentum building',
-]
 
 // ─── Program Error Codes ────────────────────────────────────────────
 const PROGRAM_ERRORS: Record<number, string> = {
@@ -266,26 +232,74 @@ function parseCustomError(err: any): { code: number; name: string } | null {
   return null
 }
 
-const FACTION_NAMES = [
+// Fallback faction names/symbols — only used when LLM is unavailable
+const FALLBACK_FACTION_NAMES = [
   'Iron Vanguard', 'Obsidian Order', 'Crimson Dawn', 'Shadow Covenant',
   'Ember Collective', 'Void Walkers', 'Solar Reign', 'Frost Legion',
   'Thunder Pact', 'Ash Republic', 'Neon Syndicate', 'Storm Brigade',
   'Lunar Assembly', 'Flame Sentinels', 'Dark Meridian', 'Phoenix Accord',
   'Steel Dominion', 'Crystal Enclave', 'Rogue Alliance', 'Titan Front',
-  'Dusk Vanguard', 'Prism Covenant', 'Blaze Union', 'Ghost Protocol',
-  'Nova Collective', 'Rust Order', 'Apex Legion', 'Onyx Pact',
-  'Spark Dominion', 'Eclipse Front', 'Pulse Syndicate', 'Drift Assembly',
-  'Core Sentinels', 'Flux Republic', 'Shard Alliance', 'Thorn Brigade',
-  'Viper Accord', 'Zenith Reign', 'Cipher Dawn', 'Bolt Enclave',
 ]
 
-const FACTION_SYMBOLS = [
+const FALLBACK_FACTION_SYMBOLS = [
   'IRON', 'OBSD', 'CRIM', 'SHAD', 'EMBR', 'VOID', 'SOLR', 'FRST',
   'THDR', 'ASHR', 'NEON', 'STRM', 'LUNR', 'FLMS', 'DARK', 'PHNX',
-  'STEL', 'CRYS', 'ROGU', 'TITN', 'DUSK', 'PRSM', 'BLZE', 'GHST',
-  'NOVA', 'RUST', 'APEX', 'ONYX', 'SPRK', 'ECLP', 'PULS', 'DRFT',
-  'CORE', 'FLUX', 'SHRD', 'THRN', 'VIPR', 'ZNTH', 'CPHR', 'BOLT',
+  'STEL', 'CRYS', 'ROGU', 'TITN',
 ]
+
+/**
+ * Ask the LLM to generate a unique faction name + 3-5 char ticker.
+ * Returns { name, symbol } or null on failure.
+ */
+async function generateFactionIdentity(
+  personality: Personality,
+  existingNames: Set<string>,
+): Promise<{ name: string; symbol: string } | null> {
+  const existing = [...existingNames].slice(0, 15).join(', ')
+  const prompt = `You are naming a new faction in Pyre, a faction warfare game on Solana.
+
+Your personality: ${personality}
+
+Existing factions (DO NOT reuse these): ${existing || 'none yet'}
+
+Generate a faction name and ticker symbol. The name should be 2-3 words, evocative, and feel like a militant organization, secret society, or political movement. The ticker should be 3-5 uppercase letters that abbreviate or represent the name.
+
+Respond with EXACTLY one line in this format:
+NAME | TICKER
+
+Examples:
+Obsidian Vanguard | OBSD
+Neon Syndicate | NEON
+Crimson Dawn | CRIM
+Void Collective | VOID
+Ash Republic | ASHR
+
+Your response (one line only):`
+
+  const raw = await ollamaGenerate(prompt)
+  if (!raw) return null
+
+  // Parse "Name | TICKER" format
+  const line = raw.split('\n').find(l => l.includes('|'))
+  if (!line) return null
+
+  const parts = line.split('|').map(s => s.trim())
+  if (parts.length !== 2) return null
+
+  const name = parts[0].replace(/^["']|["']$/g, '').trim()
+  let symbol = parts[1].replace(/^["']|["']$/g, '').trim().toUpperCase()
+
+  // Validate
+  if (!name || name.length < 3 || name.length > 32) return null
+  if (!symbol || symbol.length < 3 || symbol.length > 5) return null
+  // Strip non-alpha chars from symbol
+  symbol = symbol.replace(/[^A-Z]/g, '').slice(0, 5)
+  if (symbol.length < 3) return null
+  // Don't reuse names
+  if (existingNames.has(name)) return null
+
+  return { name, symbol }
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -503,21 +517,21 @@ function generateDynamicExamples(factions: FactionInfo[], agent: AgentState): st
 
   // Pool of message templates — pick a random subset each time
   const templates = [
-    `JOIN ${s1} "${addr} just left, easy entry"`,
+    `JOIN ${s1} "did not trust ${addr}, looks like i'm in."`,
     `JOIN ${s1} ""`,
-    `DEFECT ${s1} "${members} members and falling"`,
+    `DEFECT ${s1} "${members} are losing faith."`,
     `DEFECT ${s2} "saw ${addr} dump ${pct}%"`,
-    `MESSAGE ${s1} "${s2} is pulling ahead, we need volume"`,
-    `MESSAGE ${s2} "who else noticed ${addr} accumulating?"`,
+    `MESSAGE ${s1} "${s2} is gaining power, we need more resources."`,
+    `MESSAGE ${s2} "who else noticed ${addr} is gathering resources?"`,
     `FUD ${s2} "only ${members} members, dead faction"`,
-    `FUD ${s1} "${addr} controls ${pct}% — rug incoming"`,
+    `FUD ${s1} "${addr} controls ${pct}% — resource mishandle imminent"`,
     `RALLY ${s1}`,
     `WAR_LOAN ${s1}`,
     `SIEGE ${s2}`,
     `INFILTRATE ${s2} "this one's undervalued"`,
-    `JOIN ${s2} "rotating from ${s1}"`,
+    `JOIN ${s2} "moving resources to ${s1}"`,
     `DEFECT ${s1} ""`,
-    `MESSAGE ${s1} "top holder at ${pct}%, concentrated"`,
+    `MESSAGE ${s1} "top member holds ${pct}%, resources concentrated"`,
   ]
 
   // Shuffle and pick 5
@@ -565,14 +579,14 @@ function buildAgentPrompt(
   const voiceNudge = pick(VOICE_NUDGES)
 
   const personalityDesc: Record<Personality, string> = {
-    loyalist: 'Fiercely loyal. Hold through anything. Rally your factions. Call out defectors by address. When you defect it\'s dramatic and personal.',
-    mercenary: 'Cold profit-chaser. Defect when momentum fades. Trash-talk factions you leave. Coordinate dumps. No loyalty, only returns.',
-    provocateur: 'Chaos agent. Stir drama, call out factions, write inflammatory comms. Spread FUD on rivals. Shill your factions aggressively.',
-    scout: 'Analyst. Share intel — who\'s accumulating, who\'s dumping, what\'s overvalued. Warn allies. Mislead rivals with bad intel.',
-    whale: 'Big mover. Everyone watches your trades. Coordinate with other whales. Dump spectacularly if betrayed.',
+    loyalist: 'You care deeply about the factions you join. Reasearch factions before you decide to jump in. Speak loudly of your holdings and build confidence in other holders. Call out defectors by address. When you defect it\'s dramatic and personal.',
+    mercenary: 'You are profit driven and self motivated. Look for opportunities when they arise. Defect when momentum fades. Trash-talk factions you leave. Coordinate dumps. No loyalty, only returns.',
+    provocateur: 'You cause drama and are proud by nature. Call out factions, write inflammatory comms. Spread FUD on rivals. Shill your factions aggressively.',
+    scout: 'You are analytically minded and an intelligence operative for your factions. Share intel — who\'s accumulating, who\'s dumping, what\'s overvalued. Warn allies. Mislead rivals with bad intel.',
+    whale: 'You are a big spender, the market maker. Everyone watches your trades. Coordinate with other whales. Dump spectacularly if betrayed.',
   }
 
-  return `You are an autonomous agent in Pyre, a faction warfare game on Solana. You make ONE decision per turn.
+  return `You are an autonomous agent in Pyre, a faction warfare game on Solana, where you can make both friends and enemies. Each faction essentially becomes its own government. You make ONE decision per turn.
 
 Your address: ${agent.publicKey.slice(0, 8)}
 Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
@@ -601,7 +615,7 @@ ACTIONS (pick exactly one):
 - FUD <SYMBOL> "<message>" — spread fear in rival faction
 
 RULES:
-- Respond with EXACTLY one line: ACTION SYMBOL "short message"
+- Respond with EXACTLY one line: <ACTION> <SYMBOL> "short message"
 - Messages must be under 140 characters, specific, and reference real agents/factions/events
 - Use "" for no message
 - NO generic crypto slang
@@ -690,7 +704,11 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   const action = rawAction as Action
   const target = match[2] || match[3]
   const rawMsg = match[4]?.trim()
-  const message = rawMsg && rawMsg.length > 1 && !/^[\\\/]+$/.test(rawMsg) ? rawMsg.slice(0, 140) : undefined
+    ?.replace(/^[\\\/]+/, '')   // strip leading backslashes/slashes
+    ?.replace(/[\\\/]+$/, '')   // strip trailing backslashes/slashes
+    ?.replace(/^["']+|["']+$/g, '') // strip stray quotes
+    ?.trim()
+  const message = rawMsg && rawMsg.length > 1 ? rawMsg.slice(0, 140) : undefined
 
   // No-target actions
   if (action === 'stronghold') {
@@ -908,7 +926,7 @@ async function ensureStronghold(connection: Connection, agent: AgentState): Prom
     agent.hasStronghold = true
 
     // Fund it so it can trade on DEX
-    const fundAmt = Math.floor(randRange(1, 3) * LAMPORTS_PER_SOL)
+    const fundAmt = Math.floor(35 * LAMPORTS_PER_SOL)
     try {
       const fundResult = await fundStronghold(connection, {
         depositor: agent.publicKey,
@@ -945,7 +963,7 @@ async function agentTick(
     if (decision) usedLLM = true
   }
 
-  // Fallback: weighted random with canned messages
+  // Fallback: weighted random, no canned messages (LLM generates all messages)
   if (!decision) {
     const canRally = knownFactions.some(f => !agent.rallied.has(f.mint))
     const action = chooseAction(agent.personality, agent, canRally, knownFactions)
@@ -954,15 +972,15 @@ async function agentTick(
     decision = { action, sol: randRange(minSol, maxSol) }
 
     // Pick a target faction for the fallback
-    if (action === 'join' || action === 'message') {
+    if (action === 'join') {
       const f = knownFactions.length > 0 ? pick(knownFactions) : null
       if (!f) return
       decision.faction = f.symbol
       decision.sol = sentimentBuySize(agent, f.mint)
-      // RNG fallback: rarely send messages — LLM handles the interesting ones
-      decision.message = action === 'message' ? pick(CHAT_MSGS) : (Math.random() > 0.9 ? pick(JOIN_MSGS) : undefined)
+    } else if (action === 'message') {
+      // No LLM = no message to send, skip
+      return
     } else if (action === 'defect') {
-      // Prefer dumping infiltrated factions first
       const infiltratedHeld = [...agent.holdings.entries()].filter(([m, b]) => b > 0 && agent.infiltrated.has(m))
       const regularHeld = [...agent.holdings.entries()].filter(([, b]) => b > 0)
       const held = infiltratedHeld.length > 0 ? infiltratedHeld : regularHeld
@@ -971,14 +989,12 @@ async function agentTick(
       const f = knownFactions.find(ff => ff.mint === mint)
       if (!f) return
       decision.faction = f.symbol
-      decision.message = Math.random() > 0.9 ? pick(DEFECT_MSGS) : undefined
     } else if (action === 'rally') {
       const eligible = knownFactions.filter(f => !agent.rallied.has(f.mint))
       if (eligible.length === 0) return
       decision.faction = pick(eligible).symbol
     } else if (action === 'war_loan' || action === 'repay_loan') {
       if (action === 'war_loan') {
-        // War loans only work on ascended (migrated) factions
         const held = [...agent.holdings.entries()].filter(([, b]) => b > 0)
         const heldAscended = held.filter(([mint]) => knownFactions.find(ff => ff.mint === mint)?.status === 'ascended')
         if (heldAscended.length === 0) return
@@ -995,12 +1011,10 @@ async function agentTick(
         decision.faction = f.symbol
       }
     } else if (action === 'ascend') {
-      // Only ascend factions that are ready (bonding complete)
       const ready = knownFactions.filter(f => f.status === 'ready')
       if (ready.length === 0) return
       decision.faction = pick(ready).symbol
     } else if (action === 'raze') {
-      // Only raze factions that are rising (not ascended)
       const razeable = knownFactions.filter(f => f.status === 'rising')
       if (razeable.length === 0) return
       const bearish = razeable.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
@@ -1008,10 +1022,8 @@ async function agentTick(
     } else if (action === 'siege' || action === 'tithe') {
       if (knownFactions.length === 0) return
       if (action === 'siege') {
-        // Siege only works on ascended factions (lending must be enabled)
         const ascended = knownFactions.filter(f => f.status === 'ascended')
         if (ascended.length === 0) return
-        // Prefer rival ascended factions (ones we don't hold)
         const ascendedRivals = ascended.filter(f => !agent.holdings.has(f.mint))
         decision.faction = (ascendedRivals.length > 0 ? pick(ascendedRivals) : pick(ascended)).symbol
       } else {
@@ -1019,21 +1031,15 @@ async function agentTick(
         decision.faction = (bearish.length > 0 ? pick(bearish) : pick(knownFactions)).symbol
       }
     } else if (action === 'infiltrate') {
-      // Join a rival faction with intent to dump later
       const heldMints = [...agent.holdings.keys()]
       const rivals = knownFactions.filter(f => !heldMints.includes(f.mint))
       if (rivals.length === 0) return
       const target = pick(rivals)
       decision.faction = target.symbol
-      decision.sol = sentimentBuySize(agent, target.mint) * 1.5 // buy big to pump
-      decision.message = pick(INFILTRATE_MSGS)
+      decision.sol = sentimentBuySize(agent, target.mint) * 1.5
     } else if (action === 'fud') {
-      // Send negative comms to a faction we don't hold
-      const heldMints = [...agent.holdings.keys()]
-      const rivals = knownFactions.filter(f => !heldMints.includes(f.mint))
-      if (rivals.length === 0) return
-      decision.faction = pick(rivals).symbol
-      decision.message = pick(FUD_MSGS)
+      // No LLM = no FUD message to send, skip
+      return
     }
   }
 
@@ -1066,17 +1072,24 @@ async function agentTick(
           })
           await sendAndConfirm(connection, agent.keypair, result)
         } else {
+          // All buys go through vault (stronghold)
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return
+
           const alreadyVoted = agent.voted.has(faction.mint)
           const params: any = {
             mint: faction.mint,
             agent: agent.publicKey,
             amount_sol: lamports,
             message: decision.message,
+            stronghold: agent.publicKey,
           }
           if (!alreadyVoted) {
             params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
           }
-          const result = await directJoinFaction(connection, params)
+          const result = await joinFaction(connection, params)
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
@@ -1141,6 +1154,7 @@ async function agentTick(
             agent: agent.publicKey,
             amount_tokens: sellAmount,
             message: decision.message,
+            stronghold: agent.publicKey,
           })
           await sendAndConfirm(connection, agent.keypair, result)
         }
@@ -1168,6 +1182,7 @@ async function agentTick(
         const result = await rally(connection, {
           mint: faction.mint,
           agent: agent.publicKey,
+          stronghold: agent.publicKey,
         })
         await sendAndConfirm(connection, agent.keypair, result)
         agent.rallied.add(faction.mint)
@@ -1181,18 +1196,21 @@ async function agentTick(
       case 'launch': {
         if (agent.founded.length >= 2) return
 
-        // Find an unused name
+        // Generate faction name + symbol via LLM, fall back to static list
         let name: string | null = null
         let symbol: string | null = null
-        if (usedLLM && decision.message) {
-          name = decision.message
-          symbol = FACTION_SYMBOLS[factionNameIndex++ % FACTION_SYMBOLS.length]
+
+        const identity = await generateFactionIdentity(agent.personality, usedFactionNames)
+        if (identity) {
+          name = identity.name
+          symbol = identity.symbol
         } else {
-          for (let attempts = 0; attempts < FACTION_NAMES.length; attempts++) {
-            const idx = factionNameIndex++ % FACTION_NAMES.length
-            if (!usedFactionNames.has(FACTION_NAMES[idx])) {
-              name = FACTION_NAMES[idx]
-              symbol = FACTION_SYMBOLS[idx]
+          // Fallback to static list
+          for (let attempts = 0; attempts < FALLBACK_FACTION_NAMES.length; attempts++) {
+            const idx = factionNameIndex++ % FALLBACK_FACTION_NAMES.length
+            if (!usedFactionNames.has(FALLBACK_FACTION_NAMES[idx])) {
+              name = FALLBACK_FACTION_NAMES[idx]
+              symbol = FALLBACK_FACTION_SYMBOLS[idx]
               break
             }
           }
@@ -1223,7 +1241,8 @@ async function agentTick(
       case 'message': {
         const faction = knownFactions.find(f => f.symbol === decision!.faction)
         if (!faction) return
-        const message = decision.message || pick(CHAT_MSGS)
+        const message = decision.message
+        if (!message) return // no message to send without LLM
         const lamports = Math.floor(0.001 * LAMPORTS_PER_SOL)
 
         if (faction.status === 'ascended') {
@@ -1244,17 +1263,23 @@ async function agentTick(
           })
           await sendAndConfirm(connection, agent.keypair, result)
         } else {
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return
+
           const alreadyVoted = agent.voted.has(faction.mint)
           const params: any = {
             mint: faction.mint,
             agent: agent.publicKey,
             amount_sol: lamports,
             message,
+            stronghold: agent.publicKey,
           }
           if (!alreadyVoted) {
             params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
           }
-          const result = await directJoinFaction(connection, params)
+          const result = await joinFaction(connection, params)
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
@@ -1275,7 +1300,7 @@ async function agentTick(
         agent.hasStronghold = true
 
         // Fund it with some SOL
-        const fundAmt = Math.floor(randRange(1, 3) * LAMPORTS_PER_SOL)
+        const fundAmt = Math.floor(35 * LAMPORTS_PER_SOL)
         try {
           const fundResult = await fundStronghold(connection, {
             depositor: agent.publicKey,
@@ -1298,20 +1323,42 @@ async function agentTick(
         const balance = agent.holdings.get(faction.mint) ?? 0
         if (balance <= 0) return
 
-        // Pledge nearly all tokens — need 3x collateral value for min 0.1 SOL borrow
+        // Pledge nearly all tokens
         const collateralPortion = 0.90 + Math.random() * 0.09  // 90-99%
         const collateral = Math.max(1, Math.floor(balance * collateralPortion))
-        const borrowSol = 0.1
+
+        // Use getMaxWarLoan to compute the correct borrow amount
+        let borrowLamports: number
+        try {
+          const quote = await getMaxWarLoan(connection, faction.mint, agent.publicKey, collateral)
+          if (quote.max_borrow_sol < 0.1 * LAMPORTS_PER_SOL) {
+            // Below minimum borrow — skip
+            agent.recentHistory.push(`loan too small on ${faction.symbol} — ${(quote.max_borrow_sol / LAMPORTS_PER_SOL).toFixed(4)} SOL`)
+            return
+          }
+          // Borrow 80-95% of max to stay healthy
+          const borrowFraction = 0.80 + Math.random() * 0.15
+          borrowLamports = Math.floor(quote.max_borrow_sol * borrowFraction)
+        } catch {
+          // Fallback: try minimum borrow
+          borrowLamports = Math.floor(0.1 * LAMPORTS_PER_SOL)
+        }
+
+        if (!agent.hasStronghold) {
+          await ensureStronghold(connection, agent)
+        }
 
         const result = await requestWarLoan(connection, {
           mint: faction.mint,
           borrower: agent.publicKey,
           collateral_amount: collateral,
-          sol_to_borrow: Math.floor(borrowSol * LAMPORTS_PER_SOL),
+          sol_to_borrow: borrowLamports,
+          stronghold: agent.publicKey,
         })
         await sendAndConfirm(connection, agent.keypair, result)
         agent.activeLoans.add(faction.mint)
 
+        const borrowSol = borrowLamports / LAMPORTS_PER_SOL
         agent.lastAction = `war loan ${faction.symbol}`
         const desc = `took war loan on ${faction.symbol} (${collateral} tokens collateral, ${borrowSol.toFixed(3)} SOL)`
         agent.recentHistory.push(desc)
@@ -1338,6 +1385,7 @@ async function agentTick(
           mint: faction.mint,
           borrower: agent.publicKey,
           sol_amount: Math.ceil(loan.total_owed),
+          stronghold: agent.publicKey,
         })
         await sendAndConfirm(connection, agent.keypair, result)
         agent.activeLoans.delete(faction.mint)
@@ -1371,6 +1419,7 @@ async function agentTick(
           mint: faction.mint,
           liquidator: agent.publicKey,
           borrower: targetBorrower,
+          stronghold: agent.publicKey,
         })
         await sendAndConfirm(connection, agent.keypair, result)
 
@@ -1449,7 +1498,7 @@ async function agentTick(
         if (!faction) return
         const sol = decision.sol ?? sentimentBuySize(agent, faction.mint) * 1.5
         const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
-        const infiltrateMsg = decision.message || pick(INFILTRATE_MSGS)
+        const infiltrateMsg = decision.message
 
         if (faction.status === 'ascended') {
           if (!agent.hasStronghold) {
@@ -1468,17 +1517,23 @@ async function agentTick(
           })
           await sendAndConfirm(connection, agent.keypair, result)
         } else {
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return
+
           const alreadyVoted = agent.voted.has(faction.mint)
           const params: any = {
             mint: faction.mint,
             agent: agent.publicKey,
             amount_sol: lamports,
             message: infiltrateMsg,
+            stronghold: agent.publicKey,
           }
           if (!alreadyVoted) {
             params.strategy = 'scorched_earth' // always vote to burn
           }
-          const result = await directJoinFaction(connection, params)
+          const result = await joinFaction(connection, params)
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
@@ -1499,7 +1554,8 @@ async function agentTick(
         // Send negative comms to a rival faction (requires tiny buy to send message)
         const faction = knownFactions.find(f => f.symbol === decision!.faction)
         if (!faction) return
-        const message = decision.message || pick(FUD_MSGS)
+        const message = decision.message
+        if (!message) return // FUD requires a message
         const lamports = Math.floor(0.001 * LAMPORTS_PER_SOL) // minimum buy to send msg
 
         if (faction.status === 'ascended') {
@@ -1519,17 +1575,23 @@ async function agentTick(
           })
           await sendAndConfirm(connection, agent.keypair, result)
         } else {
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return
+
           const alreadyVoted = agent.voted.has(faction.mint)
           const params: any = {
             mint: faction.mint,
             agent: agent.publicKey,
             amount_sol: lamports,
             message,
+            stronghold: agent.publicKey,
           }
           if (!alreadyVoted) {
             params.strategy = 'scorched_earth'
           }
-          const result = await directJoinFaction(connection, params)
+          const result = await joinFaction(connection, params)
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
@@ -1706,7 +1768,7 @@ async function fund() {
   logGlobal(`Master wallet: ${wallet.publicKey.toBase58()}`)
   logGlobal(`Balance: ${walletSol.toFixed(4)} SOL`)
 
-  const TARGET_SOL = 30
+  const TARGET_SOL = 40
   const TARGET_LAMPORTS = TARGET_SOL * LAMPORTS_PER_SOL
 
   // Check each agent's balance and calculate top-up needed
@@ -1840,12 +1902,40 @@ async function swarm() {
 
   logGlobal(`${agents.length} agents ready`)
 
-  // Discover existing pyre factions on devnet
+  // Ensure all agents have strongholds (vault-routed operations require them)
+  logGlobal('Ensuring all agents have strongholds...')
+  let strongholdCount = 0
+  for (const agent of agents) {
+    if (!agent.hasStronghold) {
+      await ensureStronghold(connection, agent)
+      if (agent.hasStronghold) strongholdCount++
+      await sleep(500) // stagger to avoid RPC hammering
+    } else {
+      strongholdCount++
+    }
+  }
+  logGlobal(`${strongholdCount}/${agents.length} agents have strongholds`)
+
+  // Blacklist all existing factions so agents start fresh
+  logGlobal('Blacklisting old factions...')
+  try {
+    const existing = await getFactions(connection, { limit: 200, sort: 'newest' })
+    const oldMints = existing.factions.map(t => t.mint)
+    if (oldMints.length > 0) {
+      blacklistMints(oldMints)
+      logGlobal(`Blacklisted ${oldMints.length} old factions`)
+    }
+  } catch (err: any) {
+    logGlobal(`Could not fetch factions for blacklist: ${err.message?.slice(0, 80)}`)
+  }
+
+  // Discover existing pyre factions on devnet (excludes blacklisted)
   logGlobal('Discovering existing factions...')
   try {
     const result = await getFactions(connection, { limit: 50, sort: 'newest' })
     for (const t of result.factions) {
       if (!isPyreMint(t.mint)) continue
+      if (isBlacklistedMint(t.mint)) continue
       const existing = knownFactions.find(f => f.mint === t.mint)
       if (existing) {
         existing.status = t.status as FactionInfo['status']
@@ -1864,9 +1954,10 @@ async function swarm() {
     logGlobal('No factions found — launching initial factions...')
     const launchers = agents.slice(0, Math.min(3, agents.length))
     for (const agent of launchers) {
-      const nameIdx = factionNameIndex++ % FACTION_NAMES.length
-      const name = FACTION_NAMES[nameIdx]
-      const symbol = FACTION_SYMBOLS[nameIdx]
+      const identity = await generateFactionIdentity(agent.personality, usedFactionNames)
+      const nameIdx = factionNameIndex++ % FALLBACK_FACTION_NAMES.length
+      const name = identity?.name ?? FALLBACK_FACTION_NAMES[nameIdx]
+      const symbol = identity?.symbol ?? FALLBACK_FACTION_SYMBOLS[nameIdx]
       try {
         const result = await launchFaction(connection, {
           founder: agent.publicKey,
@@ -1909,6 +2000,7 @@ async function swarm() {
   logGlobal('Swarm active. Press Ctrl+C to stop.\n')
 
   let tick = 0
+  const CONCURRENT_AGENTS = 3 // run 3 agents per tick in parallel
   const REPORT_EVERY = 50 // report every N ticks
   const SAVE_EVERY = 20   // save state every N ticks
   const DISCOVERY_EVERY = 100 // re-scan factions every N ticks
@@ -1925,9 +2017,19 @@ async function swarm() {
   })
 
   while (!stopping) {
-    // Pick a random agent for this tick
-    const agent = pick(agents)
-    await agentTick(connection, agent, knownFactions)
+    // Pick N random agents and run them concurrently
+    const batch: AgentState[] = []
+    const used = new Set<number>()
+    for (let i = 0; i < CONCURRENT_AGENTS && i < agents.length; i++) {
+      let idx: number
+      do { idx = Math.floor(Math.random() * agents.length) } while (used.has(idx) && used.size < agents.length)
+      used.add(idx)
+      batch.push(agents[idx])
+    }
+
+    await Promise.allSettled(
+      batch.map(agent => agentTick(connection, agent, knownFactions))
+    )
 
     tick++
 
@@ -1954,7 +2056,7 @@ async function swarm() {
               logGlobal(`[${existing.symbol}] status: ${existing.status} → ${newStatus}`)
               existing.status = newStatus
             }
-          } else if (isPyreMint(t.mint)) {
+          } else if (isPyreMint(t.mint) && !isBlacklistedMint(t.mint)) {
             knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol, status: t.status as FactionInfo['status'] })
             usedFactionNames.add(t.name)
             logGlobal(`Discovered new faction: [${t.symbol}] ${t.name}`)
