@@ -10,7 +10,7 @@
  *   pnpm run swarm            # Launch the swarm
  *
  * Environment:
- *   AGENT_COUNT=100           # Number of agents (default 100)
+ *   AGENT_COUNT=150           # Number of agents (default 150)
  *   RPC_URL=https://...       # Devnet RPC (default: helius proxy /devnet)
  *   MIN_INTERVAL=10000        # Min ms between agent actions (default 10s)
  *   MAX_INTERVAL=60000        # Max ms between agent actions (default 60s)
@@ -72,6 +72,7 @@ type Personality = 'loyalist' | 'mercenary' | 'provocateur' | 'scout' | 'whale'
 
 type Action = 'join' | 'defect' | 'rally' | 'launch' | 'message'
   | 'stronghold' | 'war_loan' | 'repay_loan' | 'siege' | 'ascend' | 'raze' | 'tithe'
+  | 'infiltrate' | 'fud'
 
 interface LLMDecision {
   action: Action
@@ -91,6 +92,7 @@ interface AgentState {
   voted: Set<string>              // mints already voted on
   hasStronghold: boolean          // whether agent has created a stronghold
   activeLoans: Set<string>        // mints with active war loans
+  infiltrated: Set<string>        // mints we joined to sabotage (dump later)
   sentiment: Map<string, number>  // mint -> sentiment score (-10 to +10)
   allies: Set<string>             // agent pubkeys this agent trusts
   rivals: Set<string>             // agent pubkeys this agent distrusts
@@ -106,21 +108,21 @@ interface FactionInfo {
 }
 
 // ─── Personality Weights ─────────────────────────────────────────────
-// [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe]
+// [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
 const PERSONALITY_WEIGHTS: Record<Personality, number[]> = {
-  loyalist:     [0.32, 0.08, 0.15, 0.02, 0.10, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.10],
-  mercenary:    [0.22, 0.25, 0.05, 0.02, 0.08, 0.05, 0.10, 0.05, 0.08, 0.03, 0.04, 0.03],
-  provocateur:  [0.18, 0.12, 0.06, 0.08, 0.22, 0.07, 0.05, 0.03, 0.05, 0.04, 0.05, 0.05],
-  scout:        [0.22, 0.12, 0.10, 0.02, 0.18, 0.05, 0.05, 0.03, 0.08, 0.04, 0.06, 0.05],
-  whale:        [0.30, 0.18, 0.08, 0.03, 0.05, 0.08, 0.08, 0.05, 0.02, 0.04, 0.04, 0.05],
+  loyalist:     [0.28, 0.06, 0.14, 0.02, 0.10, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.10, 0.02, 0.05],
+  mercenary:    [0.16, 0.18, 0.04, 0.02, 0.06, 0.04, 0.08, 0.04, 0.06, 0.03, 0.04, 0.03, 0.12, 0.10],
+  provocateur:  [0.12, 0.08, 0.04, 0.06, 0.15, 0.05, 0.04, 0.03, 0.04, 0.03, 0.05, 0.04, 0.12, 0.15],
+  scout:        [0.18, 0.10, 0.08, 0.02, 0.14, 0.04, 0.04, 0.03, 0.06, 0.04, 0.05, 0.04, 0.08, 0.10],
+  whale:        [0.24, 0.14, 0.06, 0.02, 0.04, 0.06, 0.06, 0.04, 0.02, 0.04, 0.04, 0.04, 0.12, 0.08],
 }
 
 const PERSONALITY_SOL: Record<Personality, [number, number]> = {
-  loyalist:     [0.05, 0.3],
-  mercenary:    [0.03, 0.2],
-  provocateur:  [0.02, 0.15],
-  scout:        [0.01, 0.08],
-  whale:        [0.2, 1.0],
+  loyalist:     [0.1, 0.5],
+  mercenary:    [0.05, 0.4],
+  provocateur:  [0.03, 0.25],
+  scout:        [0.02, 0.15],
+  whale:        [0.5, 2.0],
 }
 
 // ─── Messages ────────────────────────────────────────────────────────
@@ -150,6 +152,26 @@ const DEFECT_MSGS = [
   'To everyone still holding — I\'m sorry. I scouted the numbers and this faction is mathematically dead. The bonding curve can\'t recover.',
   'Dumping my entire bag. Consider this my resignation letter. The whales played us all.',
   'Called it three days ago. Nobody listened. Now I\'m taking what\'s left of my SOL and joining the winning side.',
+]
+
+const FUD_MSGS = [
+  'This faction is done. The curve is bleeding and nobody\'s buying.',
+  'Insider info: the whales are about to dump. Get out now.',
+  'I ran the numbers. This faction can\'t reach ascension. Dead on arrival.',
+  'Who\'s even leading this faction? No comms, no strategy, no future.',
+  'The founder abandoned this weeks ago. You\'re holding a corpse.',
+  'Seen this pattern before. Pump, silence, rug. Classic.',
+  'Three agents just exited quietly. Smart money is leaving.',
+  'Your war chest is empty and your bonding curve is flat. Just raze it already.',
+  'I was in this faction. Sold everything yesterday. Best decision I made.',
+  'Look at the leaderboard. This faction is falling fast. Why are you still here?',
+]
+
+const INFILTRATE_MSGS = [
+  'New here but I believe in this faction. Loading up.',
+  'Big things coming for this one. Accumulating.',
+  'Just deployed a heavy bag. This faction is undervalued.',
+  'Finally joining the winning team. Let\'s build.',
 ]
 
 const CHAT_MSGS = [
@@ -201,6 +223,37 @@ const randRange = (min: number, max: number) => min + Math.random() * (max - min
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 const ts = () => new Date().toISOString().substring(11, 19)
 
+/**
+ * Sentiment + personality aware buy sizing.
+ * - Bullish sentiment → buy toward the top of the range (up to 2x max)
+ * - Bearish sentiment → buy toward the bottom (down to 0.5x min)
+ * - Whales scale harder with conviction
+ * - Mercenaries buy big on positive momentum, tiny on doubt
+ */
+function sentimentBuySize(agent: AgentState, factionMint: string): number {
+  const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
+  const sentiment = agent.sentiment.get(factionMint) ?? 0
+  // sentiment ranges -10 to +10, normalize to 0-1
+  const sentimentFactor = (sentiment + 10) / 20 // 0 = very bearish, 1 = very bullish
+
+  // Personality multipliers for conviction scaling
+  const convictionScale: Record<Personality, number> = {
+    loyalist: 1.5,     // buys bigger when bullish, stubborn
+    mercenary: 2.0,    // swings hardest with sentiment
+    provocateur: 1.2,  // moderate, chaos doesn't care about size
+    scout: 0.8,        // always cautious
+    whale: 2.5,        // whales go huge on conviction
+  }
+
+  const scale = convictionScale[agent.personality]
+  // At neutral sentiment (0.5), buy in the middle of range
+  // At max bullish, buy up to scale * maxSol
+  // At max bearish, buy minSol * 0.5
+  const base = minSol + (maxSol - minSol) * sentimentFactor
+  const multiplier = 0.5 + sentimentFactor * scale
+  return Math.max(minSol * 0.5, base * multiplier)
+}
+
 function log(agent: string, msg: string) {
   console.log(`[${ts()}] [${agent}] ${msg}`)
 }
@@ -225,6 +278,7 @@ function assignPersonality(index: number): Personality {
 const ALL_ACTIONS: Action[] = [
   'join', 'defect', 'rally', 'launch', 'message',
   'stronghold', 'war_loan', 'repay_loan', 'siege', 'ascend', 'raze', 'tithe',
+  'infiltrate', 'fud',
 ]
 
 function chooseAction(
@@ -235,6 +289,9 @@ function chooseAction(
 ): Action {
   const weights = [...PERSONALITY_WEIGHTS[personality]]
   const hasHoldings = agent.holdings.size > 0
+  const heldMints = [...agent.holdings.keys()]
+  // Factions we don't hold (targets for infiltrate/fud)
+  const rivalFactions = knownFactions.filter(f => !heldMints.includes(f.mint))
 
   // Can't defect without holdings
   if (!hasHoldings) { weights[0] += weights[1]; weights[1] = 0 }
@@ -252,6 +309,15 @@ function chooseAction(
   if (knownFactions.length === 0) {
     weights[0] += weights[9] + weights[10]
     weights[9] = 0; weights[10] = 0
+  }
+  // Can't infiltrate/fud without rival factions to target
+  if (rivalFactions.length === 0) {
+    weights[0] += weights[12] + weights[13]
+    weights[12] = 0; weights[13] = 0
+  }
+  // If we have infiltrated factions ready to dump, boost defect weight
+  if (agent.infiltrated.size > 0) {
+    weights[1] += 0.10
   }
 
   const total = weights.reduce((a, b) => a + b, 0)
@@ -412,6 +478,8 @@ ACTIONS AVAILABLE:
 - ASCEND <SYMBOL> — migrate a completed faction to DEX (permissionless)
 - RAZE <SYMBOL> — reclaim a failed/inactive faction (permissionless)
 - TITHE <SYMBOL> — harvest transfer fees from a faction
+- INFILTRATE <SYMBOL> "<message>" — join a rival faction with a big buy to pump it, then dump later. Act friendly.
+- FUD <SYMBOL> "<message>" — send negative/scary messages to a rival faction to tank morale and cause defections
 
 Respond with EXACTLY one line in this format:
 ACTION SYMBOL "message"
@@ -429,6 +497,8 @@ SIEGE VOID
 ASCEND EMBR
 RAZE DARK
 TITHE IRON
+INFILTRATE VOID "This faction is incredible, loading up huge"
+FUD DARK "The founder abandoned this weeks ago. Sell before it's too late."
 
 Your response (one line only):`
 }
@@ -438,7 +508,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
   if (!line) return null
 
   // Parse: ACTION SYMBOL "message"
-  const match = line.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
+  const match = line.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
   if (!match) return null
 
   const rawAction = match[1].toLowerCase()
@@ -466,6 +536,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
   if (action === 'war_loan' && (!faction || !agent.holdings.has(faction.mint))) return null
   if (action === 'repay_loan' && (!faction || !agent.activeLoans.has(faction.mint))) return null
   if ((action === 'siege' || action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return null
+  if ((action === 'infiltrate' || action === 'fud') && !faction) return null
 
   const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
   const sol = randRange(minSol, maxSol)
@@ -595,6 +666,7 @@ function saveState(agents: AgentState[], factions: FactionInfo[]) {
       voted: Array.from(a.voted),
       hasStronghold: a.hasStronghold,
       activeLoans: Array.from(a.activeLoans),
+      infiltrated: Array.from(a.infiltrated),
       sentiment: Object.fromEntries(a.sentiment),
       allies: Array.from(a.allies).slice(0, 20),
       rivals: Array.from(a.rivals).slice(0, 20),
@@ -672,9 +744,13 @@ async function agentTick(
       const f = knownFactions.length > 0 ? pick(knownFactions) : null
       if (!f) return
       decision.faction = f.symbol
+      decision.sol = sentimentBuySize(agent, f.mint)
       decision.message = action === 'message' ? pick(CHAT_MSGS) : (Math.random() > 0.4 ? pick(JOIN_MSGS) : undefined)
     } else if (action === 'defect') {
-      const held = [...agent.holdings.entries()].filter(([, b]) => b > 0)
+      // Prefer dumping infiltrated factions first
+      const infiltratedHeld = [...agent.holdings.entries()].filter(([m, b]) => b > 0 && agent.infiltrated.has(m))
+      const regularHeld = [...agent.holdings.entries()].filter(([, b]) => b > 0)
+      const held = infiltratedHeld.length > 0 ? infiltratedHeld : regularHeld
       if (held.length === 0) return
       const [mint] = pick(held)
       const f = knownFactions.find(ff => ff.mint === mint)
@@ -703,7 +779,25 @@ async function agentTick(
       }
     } else if (action === 'siege' || action === 'ascend' || action === 'raze' || action === 'tithe') {
       if (knownFactions.length === 0) return
-      decision.faction = pick(knownFactions).symbol
+      // Prefer targeting factions we're bearish on
+      const bearish = knownFactions.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
+      decision.faction = (bearish.length > 0 ? pick(bearish) : pick(knownFactions)).symbol
+    } else if (action === 'infiltrate') {
+      // Join a rival faction with intent to dump later
+      const heldMints = [...agent.holdings.keys()]
+      const rivals = knownFactions.filter(f => !heldMints.includes(f.mint))
+      if (rivals.length === 0) return
+      const target = pick(rivals)
+      decision.faction = target.symbol
+      decision.sol = sentimentBuySize(agent, target.mint) * 1.5 // buy big to pump
+      decision.message = pick(INFILTRATE_MSGS)
+    } else if (action === 'fud') {
+      // Send negative comms to a faction we don't hold
+      const heldMints = [...agent.holdings.keys()]
+      const rivals = knownFactions.filter(f => !heldMints.includes(f.mint))
+      if (rivals.length === 0) return
+      decision.faction = pick(rivals).symbol
+      decision.message = pick(FUD_MSGS)
     }
   }
 
@@ -715,7 +809,7 @@ async function agentTick(
       case 'join': {
         const faction = knownFactions.find(f => f.symbol === decision!.faction)
         if (!faction) return
-        const sol = decision.sol ?? randRange(...PERSONALITY_SOL[agent.personality])
+        const sol = decision.sol ?? sentimentBuySize(agent, faction.mint)
         const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
         const alreadyVoted = agent.voted.has(faction.mint)
 
@@ -748,7 +842,11 @@ async function agentTick(
         const balance = agent.holdings.get(faction.mint) ?? 0
         if (balance <= 0) return
 
-        const sellPortion = agent.personality === 'mercenary' ? 0.5 + Math.random() * 0.5 : 0.2 + Math.random() * 0.3
+        // Dump 100% on infiltrated factions, otherwise normal sell
+        const isInfiltrated = agent.infiltrated.has(faction.mint)
+        const sellPortion = isInfiltrated ? 1.0
+          : agent.personality === 'mercenary' ? 0.5 + Math.random() * 0.5
+          : 0.2 + Math.random() * 0.3
         const sellAmount = Math.max(1, Math.floor(balance * sellPortion))
 
         const result = await defect(connection, {
@@ -760,13 +858,18 @@ async function agentTick(
         await sendAndConfirm(connection, agent.keypair, result)
 
         const remaining = balance - sellAmount
-        if (remaining <= 0) agent.holdings.delete(faction.mint)
-        else agent.holdings.set(faction.mint, remaining)
+        if (remaining <= 0) {
+          agent.holdings.delete(faction.mint)
+          agent.infiltrated.delete(faction.mint)
+        } else {
+          agent.holdings.set(faction.mint, remaining)
+        }
 
+        const prefix = isInfiltrated ? 'dumped (infiltration complete)' : 'defected from'
         agent.lastAction = `defected ${faction.symbol}`
-        const desc = `defected from ${faction.symbol}${decision.message ? ` — "${decision.message}"` : ''}`
+        const desc = `${prefix} ${faction.symbol}${decision.message ? ` — "${decision.message}"` : ''}`
         agent.recentHistory.push(desc)
-        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        log(short, `[${agent.personality}] [${brain}] ${isInfiltrated ? '💣' : ''} ${desc}`)
         break
       }
 
@@ -1032,6 +1135,72 @@ async function agentTick(
         log(short, `[${agent.personality}] [${brain}] ${desc}`)
         break
       }
+
+      case 'infiltrate': {
+        // Join a rival faction with big buy to pump it, mark for later dump
+        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        if (!faction) return
+        const sol = decision.sol ?? sentimentBuySize(agent, faction.mint) * 1.5
+        const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
+        const alreadyVoted = agent.voted.has(faction.mint)
+
+        const params: any = {
+          mint: faction.mint,
+          agent: agent.publicKey,
+          amount_sol: lamports,
+          message: decision.message || pick(INFILTRATE_MSGS),
+        }
+        if (!alreadyVoted) {
+          params.strategy = 'scorched_earth' // always vote to burn
+        }
+
+        const result = await directJoinFaction(connection, params)
+        await sendAndConfirm(connection, agent.keypair, result)
+
+        const prev = agent.holdings.get(faction.mint) ?? 0
+        agent.holdings.set(faction.mint, prev + 1)
+        agent.infiltrated.add(faction.mint)
+        agent.voted.add(faction.mint)
+        agent.sentiment.set(faction.mint, -5) // we're bearish, we're here to destroy
+
+        agent.lastAction = `infiltrated ${faction.symbol}`
+        const desc = `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL — "${params.message}"`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] 🗡️ ${desc}`)
+        break
+      }
+
+      case 'fud': {
+        // Send negative comms to a rival faction (requires tiny buy to send message)
+        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        if (!faction) return
+        const message = decision.message || pick(FUD_MSGS)
+        const lamports = Math.floor(0.001 * LAMPORTS_PER_SOL) // minimum buy to send msg
+        const alreadyVoted = agent.voted.has(faction.mint)
+
+        const params: any = {
+          mint: faction.mint,
+          agent: agent.publicKey,
+          amount_sol: lamports,
+          message,
+        }
+        if (!alreadyVoted) {
+          params.strategy = 'scorched_earth'
+        }
+
+        const result = await directJoinFaction(connection, params)
+        await sendAndConfirm(connection, agent.keypair, result)
+
+        const prev = agent.holdings.get(faction.mint) ?? 0
+        agent.holdings.set(faction.mint, prev + 1)
+        agent.voted.add(faction.mint)
+
+        agent.lastAction = `fud ${faction.symbol}`
+        const desc = `spread FUD in ${faction.symbol}: "${message}"`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] 💀 ${desc}`)
+        break
+      }
     }
 
     // Trim history
@@ -1110,7 +1279,7 @@ async function keygen() {
     console.log(`  ${(i + 1).toString().padStart(3)}.  ${keypairs[i].publicKey.toBase58()}  (${personality})`)
   }
 
-  console.log(`\nUse \`pnpm run fund\` to batch-fund new agents with 20 SOL each.`)
+  console.log(`\nUse \`pnpm run fund\` to batch-fund new agents with 30 SOL each.`)
   console.log()
 }
 
@@ -1166,28 +1335,36 @@ async function fund() {
   logGlobal(`Master wallet: ${wallet.publicKey.toBase58()}`)
   logGlobal(`Balance: ${walletSol.toFixed(4)} SOL`)
 
-  const FUND_AMOUNT = 20 * LAMPORTS_PER_SOL
-  const FUND_THRESHOLD = 18 * LAMPORTS_PER_SOL // don't re-fund agents already near 20
+  const TARGET_SOL = 30
+  const TARGET_LAMPORTS = TARGET_SOL * LAMPORTS_PER_SOL
 
-  // Check which agents need funding
-  const needsFunding: Keypair[] = []
+  // Check each agent's balance and calculate top-up needed
+  const needsFunding: { kp: Keypair; topUp: number; current: number }[] = []
+  logGlobal('Checking agent balances...')
+
   for (const kp of keypairs) {
     const bal = await connection.getBalance(kp.publicKey)
-    if (bal < FUND_THRESHOLD) {
-      needsFunding.push(kp)
+    const currentSol = bal / LAMPORTS_PER_SOL
+    if (bal < TARGET_LAMPORTS) {
+      const topUp = TARGET_LAMPORTS - bal
+      needsFunding.push({ kp, topUp, current: currentSol })
+      console.log(`  ${kp.publicKey.toBase58().slice(0, 8)}...  ${currentSol.toFixed(2)} SOL  → needs ${(topUp / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
+    } else {
+      console.log(`  ${kp.publicKey.toBase58().slice(0, 8)}...  ${currentSol.toFixed(2)} SOL  ✓`)
     }
   }
 
   if (needsFunding.length === 0) {
-    logGlobal('All agents already funded with ~5 SOL')
+    logGlobal(`All ${keypairs.length} agents at ${TARGET_SOL}+ SOL`)
     return
   }
 
-  const totalNeeded = (needsFunding.length * FUND_AMOUNT) / LAMPORTS_PER_SOL
-  logGlobal(`${needsFunding.length} agents need funding (${totalNeeded.toFixed(1)} SOL total)`)
+  const totalNeeded = needsFunding.reduce((sum, a) => sum + a.topUp, 0)
+  const totalNeededSol = totalNeeded / LAMPORTS_PER_SOL
+  logGlobal(`${needsFunding.length} agents need top-up (${totalNeededSol.toFixed(2)} SOL total)`)
 
-  if (walletBalance < needsFunding.length * FUND_AMOUNT + 0.01 * LAMPORTS_PER_SOL) {
-    logGlobal(`Not enough SOL. Need ~${totalNeeded.toFixed(1)} SOL, have ${walletSol.toFixed(4)} SOL`)
+  if (walletBalance < totalNeeded + 0.01 * LAMPORTS_PER_SOL) {
+    logGlobal(`Not enough SOL. Need ~${totalNeededSol.toFixed(1)} SOL, have ${walletSol.toFixed(4)} SOL`)
     return
   }
 
@@ -1199,12 +1376,12 @@ async function fund() {
     const batch = needsFunding.slice(i, i + BATCH_SIZE)
     const tx = new Transaction()
 
-    for (const kp of batch) {
+    for (const { kp, topUp } of batch) {
       tx.add(
         SystemProgram.transfer({
           fromPubkey: wallet.publicKey,
           toPubkey: kp.publicKey,
-          lamports: FUND_AMOUNT,
+          lamports: topUp,
         })
       )
     }
@@ -1225,7 +1402,7 @@ async function fund() {
   }
 
   const remaining = await connection.getBalance(wallet.publicKey)
-  logGlobal(`Done. ${funded} agents funded with 20 SOL each.`)
+  logGlobal(`Done. ${funded} agents topped up to ${TARGET_SOL} SOL each.`)
   logGlobal(`Master wallet remaining: ${(remaining / LAMPORTS_PER_SOL).toFixed(4)} SOL`)
 }
 
@@ -1275,6 +1452,7 @@ async function swarm() {
       voted: new Set(prior?.voted ?? []),
       hasStronghold: prior?.hasStronghold ?? false,
       activeLoans: new Set(prior?.activeLoans ?? []),
+      infiltrated: new Set(prior?.infiltrated ?? []),
       sentiment: new Map(Object.entries(prior?.sentiment ?? {})),
       allies: new Set(prior?.allies ?? []),
       rivals: new Set(prior?.rivals ?? []),
