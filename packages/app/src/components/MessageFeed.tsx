@@ -34,7 +34,7 @@ export function MessageFeed({ messages }: MessageFeedProps) {
               {timeAgo(msg.timestamp)}
             </span>
           </div>
-          <p className="text-sm" style={{ color: 'var(--foreground)' }}>{msg.memo}</p>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>{msg.memo}</p>
           <a
             href={`https://solscan.io/tx/${msg.signature}`}
             target="_blank"
