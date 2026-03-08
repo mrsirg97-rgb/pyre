@@ -60,7 +60,7 @@ const RPC_URL = process.env.RPC_URL ?? 'https://torch-market-rpc.mrsirg97.worker
 const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? '200')
 const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '1000')
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen2.5:3b'
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma3:4b'
 const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
 const MIN_FUNDED_SOL = 0.05
 const KEYS_FILE = path.join(__dirname, '.swarm-keys.json')
