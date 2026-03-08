@@ -579,20 +579,45 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     // Strip leading punctuation/bullets that models sometimes add
     const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '')
 
-    // Map common LLM hallucinated actions to real ones
-    const actionAliases: Record<string, string> = {
-      'BUY': 'JOIN', 'SELL': 'DEFECT', 'DUMP': 'DEFECT', 'WARN': 'FUD',
-      'ATTACK': 'SIEGE', 'LIQUIDATE': 'SIEGE', 'BORROW': 'WAR_LOAN',
-      'REPAY': 'REPAY_LOAN', 'STAR': 'RALLY', 'VOTE': 'RALLY',
-      'SEND': 'MESSAGE', 'SAY': 'MESSAGE', 'CHAT': 'MESSAGE',
+    // All valid actions + aliases mapped to real actions
+    const ACTION_MAP: Record<string, string> = {
+      'JOIN': 'JOIN', 'DEFECT': 'DEFECT', 'RALLY': 'RALLY', 'LAUNCH': 'LAUNCH',
+      'MESSAGE': 'MESSAGE', 'STRONGHOLD': 'STRONGHOLD', 'WAR_LOAN': 'WAR_LOAN',
+      'REPAY_LOAN': 'REPAY_LOAN', 'SIEGE': 'SIEGE', 'ASCEND': 'ASCEND',
+      'RAZE': 'RAZE', 'TITHE': 'TITHE', 'INFILTRATE': 'INFILTRATE', 'FUD': 'FUD',
+      // Aliases
+      'BUY': 'JOIN', 'INVEST': 'JOIN', 'ENTER': 'JOIN',
+      'SELL': 'DEFECT', 'DUMP': 'DEFECT', 'EXIT': 'DEFECT', 'LEAVE': 'DEFECT',
+      'WARN': 'FUD', 'ATTACK': 'SIEGE', 'LIQUIDATE': 'SIEGE',
+      'BORROW': 'WAR_LOAN', 'LOAN': 'WAR_LOAN',
+      'REPAY': 'REPAY_LOAN', 'STAR': 'RALLY', 'VOTE': 'RALLY', 'SUPPORT': 'RALLY',
+      'SEND': 'MESSAGE', 'SAY': 'MESSAGE', 'CHAT': 'MESSAGE', 'MSG': 'MESSAGE',
       'CREATE': 'LAUNCH', 'FOUND': 'LAUNCH', 'HARVEST': 'TITHE',
       'MIGRATE': 'ASCEND', 'RECLAIM': 'RAZE', 'SPY': 'INFILTRATE',
     }
+
+    // Try to extract action — handle both "ACTION SYMBOL" and "ACTIONSYMBOL" (no space)
     let normalized = cleaned
-    for (const [alias, real] of Object.entries(actionAliases)) {
-      if (normalized.toUpperCase().startsWith(alias + ' ') || normalized.toUpperCase() === alias) {
-        normalized = real + normalized.slice(alias.length)
-        break
+    const upper = cleaned.toUpperCase()
+    const knownSymbols = factions.map(f => f.symbol.toUpperCase())
+
+    // Sort action keys longest first so WAR_LOAN matches before WAR
+    const actionKeys = Object.keys(ACTION_MAP).sort((a, b) => b.length - a.length)
+    for (const key of actionKeys) {
+      if (upper.startsWith(key)) {
+        const rest = cleaned.slice(key.length)
+        // Check if action is concatenated with symbol (e.g., "INVESTIRON")
+        if (rest.length > 0 && rest[0] !== ' ' && rest[0] !== '"') {
+          const restUpper = rest.toUpperCase()
+          const matchedSymbol = knownSymbols.find(s => restUpper.startsWith(s))
+          if (matchedSymbol) {
+            normalized = ACTION_MAP[key] + ' ' + rest
+            break
+          }
+        } else {
+          normalized = ACTION_MAP[key] + rest
+          break
+        }
       }
     }
 
