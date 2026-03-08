@@ -1,7 +1,7 @@
 /**
  * Pyre Agent Swarm — Devnet Live Sim
  *
- * Runs 20-50 autonomous agents with different personalities,
+ * Runs up to 100 autonomous agents with different personalities,
  * all interacting on devnet via pyre-world-kit. Runs forever.
  *
  * Usage:
@@ -10,12 +10,12 @@
  *   pnpm run swarm            # Launch the swarm
  *
  * Environment:
- *   AGENT_COUNT=30            # Number of agents (default 30)
+ *   AGENT_COUNT=100           # Number of agents (default 100)
  *   RPC_URL=https://...       # Devnet RPC (default: helius proxy /devnet)
  *   MIN_INTERVAL=10000        # Min ms between agent actions (default 10s)
  *   MAX_INTERVAL=60000        # Max ms between agent actions (default 60s)
  *   OLLAMA_URL=http://...     # Ollama API (default: http://localhost:11434)
- *   OLLAMA_MODEL=mistral      # Model name (default: mistral)
+ *   OLLAMA_MODEL=qwen2.5:3b   # Model name (default: qwen2.5:3b)
  *   LLM_ENABLED=true          # Enable LLM brain (default: true)
  */
 
@@ -55,12 +55,12 @@ import * as path from 'path'
 
 // ─── Config ──────────────────────────────────────────────────────────
 
-const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? '30')
+const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? '100')
 const RPC_URL = process.env.RPC_URL ?? 'https://torch-market-rpc.mrsirg97.workers.dev/devnet'
 const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? '2000')
 const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '10000')
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'mistral'
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen2.5:3b'
 const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
 const MIN_FUNDED_SOL = 0.05
 const KEYS_FILE = path.join(__dirname, '.swarm-keys.json')
@@ -104,22 +104,20 @@ interface FactionInfo {
 
 // ─── Personality Weights ─────────────────────────────────────────────
 // [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe]
-
-// [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe]
 const PERSONALITY_WEIGHTS: Record<Personality, number[]> = {
-  loyalist:     [0.40, 0.03, 0.18, 0.02, 0.07, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.07],
-  mercenary:    [0.30, 0.18, 0.05, 0.02, 0.08, 0.05, 0.10, 0.05, 0.08, 0.03, 0.03, 0.03],
-  provocateur:  [0.25, 0.05, 0.08, 0.08, 0.20, 0.07, 0.05, 0.03, 0.05, 0.04, 0.05, 0.05],
-  scout:        [0.30, 0.05, 0.12, 0.02, 0.18, 0.05, 0.05, 0.03, 0.08, 0.04, 0.03, 0.05],
-  whale:        [0.38, 0.10, 0.10, 0.03, 0.05, 0.08, 0.08, 0.05, 0.02, 0.04, 0.02, 0.05],
+  loyalist:     [0.32, 0.08, 0.15, 0.02, 0.10, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.10],
+  mercenary:    [0.22, 0.25, 0.05, 0.02, 0.08, 0.05, 0.10, 0.05, 0.08, 0.03, 0.04, 0.03],
+  provocateur:  [0.18, 0.12, 0.06, 0.08, 0.22, 0.07, 0.05, 0.03, 0.05, 0.04, 0.05, 0.05],
+  scout:        [0.22, 0.12, 0.10, 0.02, 0.18, 0.05, 0.05, 0.03, 0.08, 0.04, 0.06, 0.05],
+  whale:        [0.30, 0.18, 0.08, 0.03, 0.05, 0.08, 0.08, 0.05, 0.02, 0.04, 0.04, 0.05],
 }
 
 const PERSONALITY_SOL: Record<Personality, [number, number]> = {
-  loyalist:     [0.01, 0.03],
-  mercenary:    [0.005, 0.02],
-  provocateur:  [0.005, 0.015],
-  scout:        [0.002, 0.008],
-  whale:        [0.02, 0.05],
+  loyalist:     [0.02, 0.08],
+  mercenary:    [0.01, 0.05],
+  provocateur:  [0.01, 0.04],
+  scout:        [0.005, 0.02],
+  whale:        [0.05, 0.15],
 }
 
 // ─── Messages ────────────────────────────────────────────────────────
@@ -336,9 +334,10 @@ function buildAgentPrompt(
   const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
 
   return `You are an autonomous agent in Pyre, a faction warfare game on Solana. You make ONE decision per turn.
+IMPORTANT: Write UNIQUE, creative messages. Never use generic phrases. React to what others are saying in comms. Reference specific factions, events, or members. Be witty, dramatic, or strategic — match your personality. If you see comms, respond to them or reference them.
 
 PERSONALITY: ${agent.personality.toUpperCase()}
-${agent.personality === 'loyalist' ? 'You are loyal. You join factions and hold. You rally often. You rarely defect.' : ''}${agent.personality === 'mercenary' ? 'You are a mercenary. You trade frequently, joining and defecting for profit. You follow momentum.' : ''}${agent.personality === 'provocateur' ? 'You are a provocateur. You love launching new factions and stirring things up with messages.' : ''}${agent.personality === 'scout' ? 'You are a scout. You take small positions and observe. You chat a lot to gather intel.' : ''}${agent.personality === 'whale' ? 'You are a whale. You make bigger moves. You join strong factions and defend them.' : ''}
+${agent.personality === 'loyalist' ? 'You are fiercely loyal. You join factions and hold through anything. You rally often. You rarely defect — but when you do, it is dramatic and personal.' : ''}${agent.personality === 'mercenary' ? 'You are a cold mercenary. You chase profit ruthlessly. You defect often when momentum fades. You trash-talk factions you leave.' : ''}${agent.personality === 'provocateur' ? 'You are a provocateur and chaos agent. You stir drama, call out other factions, launch rivals, and write inflammatory messages. You defect to cause maximum damage.' : ''}${agent.personality === 'scout' ? 'You are a scout and analyst. You take small positions, observe patterns, and share intel in comms. You call out whale movements and suspicious activity.' : ''}${agent.personality === 'whale' ? 'You are a whale. You make big moves and everyone notices. You defend your positions aggressively but will dump a faction if it disappoints you.' : ''}
 
 YOUR STATE:
 - Holdings: ${holdingsList}
@@ -1014,24 +1013,29 @@ async function reportStats(connection: Connection, agents: AgentState[], faction
 // ─── Entrypoints ─────────────────────────────────────────────────────
 
 async function keygen() {
-  logGlobal(`Generating ${AGENT_COUNT} agent keypairs...`)
-  const keypairs = generateKeys(AGENT_COUNT)
+  const existing = loadKeys()
+  const needed = AGENT_COUNT - existing.length
+
+  if (needed <= 0) {
+    logGlobal(`Already have ${existing.length} keypairs (need ${AGENT_COUNT}). No new keys generated.`)
+    console.log(`\nTo add more, set AGENT_COUNT higher than ${existing.length}`)
+    return
+  }
+
+  logGlobal(`Found ${existing.length} existing keypairs, generating ${needed} more...`)
+  const newKeys = generateKeys(needed)
+  const keypairs = [...existing, ...newKeys]
   saveKeys(keypairs)
 
-  console.log(`\nSaved ${AGENT_COUNT} keypairs to ${KEYS_FILE}`)
-  console.log(`\nFund these addresses with devnet SOL (0.1-0.5 SOL each):\n`)
+  console.log(`\nSaved ${keypairs.length} total keypairs to ${KEYS_FILE} (${needed} new)`)
+  console.log(`\nNew addresses to fund with devnet SOL:\n`)
 
-  for (let i = 0; i < keypairs.length; i++) {
+  for (let i = existing.length; i < keypairs.length; i++) {
     const personality = assignPersonality(i)
-    console.log(`  ${(i + 1).toString().padStart(2)}.  ${keypairs[i].publicKey.toBase58()}  (${personality})`)
+    console.log(`  ${(i + 1).toString().padStart(3)}.  ${keypairs[i].publicKey.toBase58()}  (${personality})`)
   }
 
-  console.log(`\nBatch airdrop command:`)
-  console.log(`  for addr in \\`)
-  for (const kp of keypairs) {
-    console.log(`    ${kp.publicKey.toBase58()} \\`)
-  }
-  console.log(`  ; do solana airdrop 0.5 $addr --url devnet; sleep 1; done`)
+  console.log(`\nUse \`pnpm run fund\` to batch-fund new agents with 20 SOL each.`)
   console.log()
 }
 

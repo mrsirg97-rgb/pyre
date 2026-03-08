@@ -5,4 +5,4 @@ node_modules
 
 # Agent swarm keys/state (contain private keys)
 packages/agents/.swarm-keys.json
-pacakges/agents/.swarm-state.json
+packages/agents/.swarm-state.json
