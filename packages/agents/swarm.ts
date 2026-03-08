@@ -619,8 +619,8 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
 
   for (const candidate of lines) {
     const line = candidate.trim()
-    // Strip leading punctuation/bullets that models sometimes add
-    const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '')
+    // Strip leading punctuation/bullets and literal "ACTION" prefix models sometimes add
+    const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '').replace(/^ACTION\s+/i, '')
 
     // All valid actions + aliases mapped to real actions
     const ACTION_MAP: Record<string, string> = {
@@ -637,6 +637,15 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'SEND': 'MESSAGE', 'SAY': 'MESSAGE', 'CHAT': 'MESSAGE', 'MSG': 'MESSAGE',
       'CREATE': 'LAUNCH', 'FOUND': 'LAUNCH', 'HARVEST': 'TITHE',
       'MIGRATE': 'ASCEND', 'RECLAIM': 'RAZE', 'SPY': 'INFILTRATE',
+      // Common misspellings
+      'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT',
+      'JION': 'JOIN', 'JOING': 'JOIN', 'JOIIN': 'JOIN',
+      'RALEY': 'RALLY', 'RALY': 'RALLY', 'RALLLY': 'RALLY',
+      'LANCH': 'LAUNCH', 'LAUCH': 'LAUNCH',
+      'MESAGE': 'MESSAGE', 'MESSGE': 'MESSAGE', 'MASSGE': 'MESSAGE',
+      'SEIGE': 'SIEGE', 'SEIG': 'SIEGE',
+      'INFLTRATE': 'INFILTRATE', 'INFILTRTE': 'INFILTRATE',
+      'ALERT': 'FUD', 'EXPOSE': 'FUD',
     }
 
     // Try to extract action — handle both "ACTION SYMBOL" and "ACTIONSYMBOL" (no space)
@@ -679,7 +688,8 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   const rawAction = match[1].toLowerCase()
   const action = rawAction as Action
   const target = match[2] || match[3]
-  const message = match[4] ? match[4].slice(0, 140) : undefined
+  const rawMsg = match[4]?.trim()
+  const message = rawMsg && rawMsg.length > 1 && !/^[\\\/]+$/.test(rawMsg) ? rawMsg.slice(0, 140) : undefined
 
   // No-target actions
   if (action === 'stronghold') {
@@ -691,8 +701,19 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
     return { action: 'launch', message: target, reasoning: line }
   }
 
-  // Find faction by symbol
-  const faction = factions.find(f => f.symbol.toLowerCase() === target?.toLowerCase())
+  // Find faction by symbol (exact match, then fuzzy)
+  const targetLower = target?.toLowerCase()
+  let faction = factions.find(f => f.symbol.toLowerCase() === targetLower)
+  if (!faction && targetLower && targetLower.length >= 2) {
+    // Try prefix match in both directions
+    faction = factions.find(f => f.symbol.toLowerCase().startsWith(targetLower)) ||
+              factions.find(f => targetLower.startsWith(f.symbol.toLowerCase()))
+    // Try removing vowels (handles IRN→IRON, DPYR→DPYRE)
+    if (!faction) {
+      const stripped = targetLower.replace(/[aeiou]/g, '')
+      faction = factions.find(f => f.symbol.toLowerCase().replace(/[aeiou]/g, '') === stripped)
+    }
+  }
 
   // Validate action is possible
   if (action === 'defect' && (!faction || !agent.holdings.has(faction.mint))) return null
@@ -1276,13 +1297,9 @@ async function agentTick(
         const balance = agent.holdings.get(faction.mint) ?? 0
         if (balance <= 0) return
 
-        // Pledge collateral — more on ascended factions (more liquid)
-        const isAscended = faction.status === 'ascended'
-        const collateralPortion = isAscended
-          ? 0.5 + Math.random() * 0.4   // 50-90% for ascended — need high collateral
-          : 0.4 + Math.random() * 0.3   // 40-70% normally
+        // Pledge nearly all tokens — need 3x collateral value for min 0.1 SOL borrow
+        const collateralPortion = 0.90 + Math.random() * 0.09  // 90-99%
         const collateral = Math.max(1, Math.floor(balance * collateralPortion))
-        // Min borrow is 0.1 SOL on-chain, keep conservative to avoid LTV rejection
         const borrowSol = 0.1
 
         const result = await requestWarLoan(connection, {

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, getMembers } from 'pyre-world-kit'
+import { getFactions, getMembers, getDexVaults } from 'pyre-world-kit'
 import type { FactionSummary, Member } from 'pyre-world-kit'
 import Link from 'next/link'
 import { Header } from '@/components/Header'
@@ -29,9 +30,39 @@ export default function FactionsPage() {
     try {
       const result = await getFactions(connection, { limit: 100, sort: 'marketcap' })
       const pyreFactions = result.factions.filter(t => t.mint.endsWith('py'))
-      pyreFactions.sort((a, b) => b.market_cap_sol - a.market_cap_sol)
+      pyreFactions.sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
       setFactions(pyreFactions)
       setTotal(pyreFactions.length)
+
+      // Enrich ascended factions with live pool mcap (non-blocking)
+      const ascended = pyreFactions.filter(f => f.status === 'ascended')
+      if (ascended.length > 0) {
+        Promise.allSettled(ascended.map(async (faction) => {
+          try {
+            const { solVault, tokenVault } = getDexVaults(faction.mint)
+            const [solInfo, tokenInfo] = await Promise.all([
+              connection.getTokenAccountBalance(new PublicKey(solVault)),
+              connection.getTokenAccountBalance(new PublicKey(tokenVault)),
+            ])
+            const solReserves = Number(solInfo.value.amount)
+            const tokenReserves = Number(tokenInfo.value.amount)
+            if (tokenReserves > 0 && solReserves > 0 && !isNaN(solReserves) && !isNaN(tokenReserves)) {
+              const TOKEN_MUL = 1_000_000
+              const LAMPORTS = 1_000_000_000
+              const priceInSol = (solReserves * TOKEN_MUL) / (tokenReserves * LAMPORTS)
+              faction.price_sol = priceInSol
+              faction.market_cap_sol = (priceInSol * 1_000_000_000 * TOKEN_MUL) / TOKEN_MUL
+            }
+          } catch { /* skip */ }
+        })).then(() => {
+          // Re-render with enriched mcap
+          setFactions(prev => {
+            const updated = [...prev]
+            updated.sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
+            return updated
+          })
+        })
+      }
     } catch {
       // ignore
     } finally {
