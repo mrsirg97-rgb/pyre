@@ -118,6 +118,7 @@ export {
   confirmAction,
   // Utility
   createEphemeralAgent,
+  getDexPool,
 } from './actions';
 
 // ─── Intel ─────────────────────────────────────────────────────────

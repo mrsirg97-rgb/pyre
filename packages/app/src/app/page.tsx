@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, getComms, PROGRAM_ID } from 'pyre-world-kit'
+import { getFactions, getComms, getDexPool, PROGRAM_ID } from 'pyre-world-kit'
 import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { StageEntry } from '@/components/StageEntry'
@@ -99,10 +99,23 @@ export default function StagePage() {
               // Migration drains the bonding curve — detect by post-balance near zero
               const postBalance = tx.meta.postBalances[bcIndex]
               const isMigrationTx = solChange < 0 && postBalance < 1_000_000_000 && faction.status === 'ascended'
+
+              // For ascended factions, vault swap txs touch the bonding curve PDA
+              // but SOL flows through Raydium, not the BC. Detect by checking
+              // signer's SOL change instead.
+              const signerSolChange = tx.meta.postBalances[0] - tx.meta.preBalances[0]
+              const isVaultSwap = faction.status === 'ascended' && solChange === 0 && signerSolChange !== 0
+              if (faction.status === 'ascended') {
+                console.log(`[stage] BC tx ${faction.name}: bcSolChange=${solChange} signerSolChange=${signerSolChange} isVaultSwap=${isVaultSwap}`)
+              }
+
               if (isCreateTx) {
                 action = 'launched'
               } else if (isMigrationTx) {
                 action = 'ascended'
+              } else if (isVaultSwap) {
+                // DEX trade on ascended faction — signer SOL decreased = buy, increased = sell
+                action = signerSolChange < 0 ? 'joined' : 'defected'
               } else if (solChange === 0 && absSol === 0) {
                 action = 'rallied'
               } else if (solChange > 0) {
@@ -111,12 +124,16 @@ export default function StagePage() {
                 action = 'defected'
               }
 
+              const displaySol = isVaultSwap
+                ? Math.abs(signerSolChange) / 1_000_000_000
+                : absSol
+
               entries.push({
                 agent: trader,
                 faction_mint: faction.mint,
                 faction_name: faction.name,
                 action,
-                amount_sol: absSol > 0 ? absSol : null,
+                amount_sol: displaySol > 0.001 ? displaySol : null,
                 memo,
                 timestamp: sig.blockTime || 0,
                 signature: sig.signature,
@@ -128,11 +145,91 @@ export default function StagePage() {
         }),
       )
 
+      // Fetch DEX activity for ascended factions (pool state transactions)
+      const ascendedFactions = pyreFactions.filter(f => f.status === 'ascended')
+      console.log('[stage] ascended factions:', ascendedFactions.length, ascendedFactions.map(f => f.name))
+      await Promise.all(
+        ascendedFactions.slice(0, 10).map(async (faction) => {
+          try {
+            const poolState = getDexPool(faction.mint)
+            const poolAddress = poolState.toString()
+            console.log(`[stage] scanning pool ${poolAddress} for ${faction.name}`)
+
+            const signatures = await connection.getSignaturesForAddress(
+              poolState,
+              { limit: 30 },
+              'confirmed',
+            )
+            console.log(`[stage] pool ${faction.name}: ${signatures.length} signatures`)
+
+            if (signatures.length === 0) return
+
+            const txs = await connection.getParsedTransactions(
+              signatures.map(s => s.signature),
+              { maxSupportedTransactionVersion: 0 },
+            )
+
+            for (let i = 0; i < txs.length; i++) {
+              const tx = txs[i]
+              const sig = signatures[i]
+              if (!tx?.meta || tx.meta.err) continue
+
+              const trader = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || ''
+
+              // Detect SOL change on the signer (index 0) to determine buy vs sell
+              const signerSolChange = tx.meta.postBalances[0] - tx.meta.preBalances[0]
+              const absSol = Math.abs(signerSolChange) / 1_000_000_000
+
+              // Parse memo from instructions
+              let memo: string | null = null
+              const allIxPrograms: string[] = []
+              for (const ix of tx.transaction.message.instructions) {
+                const prog = 'program' in ix ? (ix as { program: string }).program : ('programId' in ix ? ix.programId.toString() : '?')
+                allIxPrograms.push(prog)
+                if ('parsed' in ix && (ix as { program?: string }).program === 'spl-memo') {
+                  memo = ix.parsed as string
+                }
+              }
+              const innerInstructions = tx.meta.innerInstructions || []
+              for (const inner of innerInstructions) {
+                for (const ix of inner.instructions) {
+                  if ('parsed' in ix && (ix as { program?: string }).program === 'spl-memo') {
+                    memo = ix.parsed as string
+                  }
+                }
+              }
+              if (memo) {
+                console.log(`[stage] pool tx ${i} HAS MEMO:`, memo.slice(0, 80))
+              }
+
+              // SOL decreased = buy (spent SOL), SOL increased = sell (received SOL)
+              const action: ActionEntry['action'] = signerSolChange < 0 ? 'joined' : 'defected'
+
+              entries.push({
+                agent: trader,
+                faction_mint: faction.mint,
+                faction_name: faction.name,
+                action,
+                amount_sol: absSol > 0.001 ? absSol : null,
+                memo,
+                timestamp: sig.blockTime || 0,
+                signature: sig.signature,
+              })
+            }
+          } catch (err) {
+            console.log(`[stage] pool scan error for ${faction.name}:`, err)
+          }
+        }),
+      )
+
       // Fetch messages (comms) from top factions
       await Promise.all(
         pyreFactions.slice(0, 10).map(async (faction) => {
           try {
             const msgs = await getComms(connection, faction.mint, 20)
+            if (msgs.comms.length > 0) {
+              console.log(`[stage] comms for ${faction.name} (${faction.status}):`, msgs.comms.length, msgs.comms.slice(0, 3).map(m => m.memo))
+            }
             for (const msg of msgs.comms) {
               entries.push({
                 agent: msg.sender,

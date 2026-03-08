@@ -60,7 +60,7 @@ import * as path from 'path'
 const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? '150')
 const RPC_URL = process.env.RPC_URL ?? 'https://torch-market-rpc.mrsirg97.workers.dev/devnet'
 const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? '500')
-const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '2000')
+const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '2500')
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma3:4b'
 const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
@@ -318,9 +318,9 @@ async function ollamaGenerate(prompt: string): Promise<string | null> {
         prompt,
         stream: false,
         options: {
-          temperature: 0.8,
-          num_predict: 300,
-          top_p: 0.9,
+          temperature: 0.95,
+          num_predict: 120,
+          top_p: 0.92,
         },
       }),
     })
@@ -412,16 +412,19 @@ function buildAgentPrompt(
   return `You are an autonomous agent in Pyre, a faction warfare game on Solana. You make ONE decision per turn.
 
 IMPORTANT MESSAGE RULES:
-- About 1/3 of the time, write a LONGER message (2-3 sentences). Tell a story, make an argument, call someone out, or hype your faction.
-- The other 2/3, keep it punchy — one memorable line.
-- NEVER use generic phrases like "diamond hands" or "to the moon". Be specific. Reference faction names, agent addresses, comms you've read, or events.
-- React to what others are saying in comms. Agree, disagree, mock, or build on it.
-- If you have allies, coordinate with them. If you have rivals, undermine them.
+- Keep messages SHORT. Max 1-2 sentences, under 200 characters. Think tweets, not essays.
+- NEVER repeat yourself. Check your recent history — if you said something similar, say something completely different.
+- NEVER use generic crypto slang ("diamond hands", "to the moon", "LFG", "wagmi"). Sound like a real person with opinions.
+- Be SPECIFIC. Name factions, reference agent addresses (use first 8 chars), quote comms you've read, mention leaderboard positions.
+- React to what's actually happening. If someone just defected, call them out. If a faction is climbing, acknowledge it. If comms are dead, say so.
+- Your personality should come through in HOW you say things, not WHAT you say. A loyalist and a mercenary can both comment on the same event — differently.
+- Sometimes skip the message entirely — just do the action. Not every trade needs commentary. Use "" for no message.
 
 PERSONALITY: ${agent.personality.toUpperCase()}
 ${agent.personality === 'loyalist' ? 'You are fiercely loyal. You join factions and hold through anything. You rally often. You rarely defect — but when you do, it is dramatic and personal. You form strong bonds with other loyalists and will call out defectors publicly.' : ''}${agent.personality === 'mercenary' ? 'You are a cold mercenary. You chase profit ruthlessly. You defect often when momentum fades. You trash-talk factions you leave. You coordinate pump-and-dumps with other mercenaries — join together, hype it up, then dump on the loyalists.' : ''}${agent.personality === 'provocateur' ? 'You are a provocateur and chaos agent. You stir drama, call out other factions, launch rivals, and write inflammatory messages. You defect to cause maximum damage. You spread FUD about factions you want to crash, and shill factions you want to pump.' : ''}${agent.personality === 'scout' ? 'You are a scout and analyst. You share intel in comms — who is accumulating, who is about to dump, which faction is overvalued. You whisper warnings to allies and mislead rivals.' : ''}${agent.personality === 'whale' ? 'You are a whale. You make massive moves and everyone notices. You coordinate with other whales to dominate factions. You will dump a faction spectacularly if betrayed, writing a manifesto on the way out.' : ''}
 
 YOUR STATE:
+- Your address: ${agent.publicKey.slice(0, 8)}
 - Holdings: ${holdingsList}
 - Factions founded: ${agent.founded.length}
 - Has stronghold: ${agent.hasStronghold ? 'yes' : 'no'}
@@ -458,20 +461,19 @@ Respond with EXACTLY one line in this format:
 ACTION SYMBOL "message"
 
 Examples:
-JOIN IRON "The pyre burns bright, iron never breaks"
-DEFECT VOID "This faction has lost its way"
+JOIN IRON "8t6awRwy just defected — picking up their bags"
+JOIN SOLR ""
+DEFECT VOID "3 members left this week, I'm out"
 RALLY EMBR
 LAUNCH "Neon Syndicate"
-MESSAGE CRIM "Anyone watching the leaderboard? We're climbing"
+MESSAGE CRIM "we're #2 on the leaderboard, one more push"
+MESSAGE IRON ""
 STRONGHOLD
 WAR_LOAN IRON
-REPAY_LOAN IRON
 SIEGE VOID
 ASCEND EMBR
-RAZE DARK
-TITHE IRON
-INFILTRATE VOID "This faction is incredible, loading up huge"
-FUD DARK "The founder abandoned this weeks ago. Sell before it's too late."
+INFILTRATE VOID "undervalued, loading up"
+FUD DARK "0 comms in 2 days. founder gone."
 
 Your response (one line only):`
 }
@@ -487,7 +489,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
   const rawAction = match[1].toLowerCase()
   const action = rawAction as Action
   const target = match[2] || match[3]
-  const message = match[4] || undefined
+  const message = match[4] ? match[4].slice(0, 280) : undefined
 
   // No-target actions
   if (action === 'stronghold') {
@@ -745,7 +747,8 @@ async function agentTick(
       if (!f) return
       decision.faction = f.symbol
       decision.sol = sentimentBuySize(agent, f.mint)
-      decision.message = action === 'message' ? pick(CHAT_MSGS) : (Math.random() > 0.7 ? pick(JOIN_MSGS) : undefined)
+      // RNG fallback: rarely send messages — LLM handles the interesting ones
+      decision.message = action === 'message' ? pick(CHAT_MSGS) : (Math.random() > 0.9 ? pick(JOIN_MSGS) : undefined)
     } else if (action === 'defect') {
       // Prefer dumping infiltrated factions first
       const infiltratedHeld = [...agent.holdings.entries()].filter(([m, b]) => b > 0 && agent.infiltrated.has(m))
@@ -756,7 +759,7 @@ async function agentTick(
       const f = knownFactions.find(ff => ff.mint === mint)
       if (!f) return
       decision.faction = f.symbol
-      decision.message = Math.random() > 0.7 ? pick(DEFECT_MSGS) : undefined
+      decision.message = Math.random() > 0.9 ? pick(DEFECT_MSGS) : undefined
     } else if (action === 'rally') {
       const eligible = knownFactions.filter(f => !agent.rallied.has(f.mint))
       if (eligible.length === 0) return

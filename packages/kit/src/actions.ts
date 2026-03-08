@@ -5,7 +5,8 @@
  * into game-semantic Pyre types. No new on-chain logic.
  */
 
-import { Connection } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
 import {
   // Read operations
   getTokens,
@@ -20,6 +21,8 @@ import {
   getLendingInfo,
   getLoanPosition,
   getAllLoanPositions,
+  // PDA derivation
+  getRaydiumMigrationAccounts,
   // Transaction builders
   buildBuyTransaction,
   buildDirectBuyTransaction,
@@ -138,14 +141,92 @@ export async function getMembers(
   return mapHoldersResult(result);
 }
 
-/** Get faction comms (trade-bundled messages) */
+/** Get faction comms (trade-bundled messages, including post-ascension DEX messages) */
 export async function getComms(
   connection: Connection,
   mint: string,
   limit?: number,
 ): Promise<CommsResult> {
-  const result = await getMessages(connection, mint, limit);
-  return mapMessagesResult(result);
+  const safeLimit = Math.min(limit || 50, 100);
+
+  // Fetch bonding curve messages
+  const result = await getMessages(connection, mint, safeLimit);
+  const commsResult = mapMessagesResult(result);
+
+  // Also scan Raydium pool state for post-ascension DEX messages
+  try {
+    const mintPubkey = new PublicKey(mint);
+    const { poolState } = getRaydiumMigrationAccounts(mintPubkey);
+
+    const signatures = await connection.getSignaturesForAddress(
+      poolState,
+      { limit: Math.min(safeLimit, 50) },
+      'confirmed',
+    );
+
+    if (signatures.length > 0) {
+      const txs = await connection.getParsedTransactions(
+        signatures.map(s => s.signature),
+        { maxSupportedTransactionVersion: 0 },
+      );
+
+      const MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
+      const existingSigs = new Set(commsResult.comms.map(c => c.signature));
+
+      for (let i = 0; i < txs.length; i++) {
+        const tx = txs[i];
+        if (!tx?.meta || tx.meta.err) continue;
+
+        const sig = signatures[i];
+        if (existingSigs.has(sig.signature)) continue;
+
+        // Check top-level and inner instructions for memo
+        const allInstructions = [
+          ...tx.transaction.message.instructions,
+          ...(tx.meta.innerInstructions || []).flatMap(inner => inner.instructions),
+        ];
+
+        for (const ix of allInstructions) {
+          const programId = 'programId' in ix ? ix.programId.toString() : '';
+          const programName = 'program' in ix ? (ix as { program: string }).program : '';
+          const isMemo = programId === MEMO_PROGRAM || programName === 'spl-memo';
+
+          if (isMemo) {
+            let memoText = '';
+            if ('parsed' in ix) {
+              memoText = typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed);
+            } else if ('data' in ix && typeof ix.data === 'string') {
+              try {
+                memoText = new TextDecoder().decode(bs58.decode(ix.data));
+              } catch {
+                memoText = ix.data;
+              }
+            }
+
+            if (memoText && memoText.trim()) {
+              const sender = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || 'Unknown';
+              commsResult.comms.push({
+                signature: sig.signature,
+                memo: memoText.trim(),
+                sender,
+                timestamp: sig.blockTime || 0,
+              });
+              break;
+            }
+          }
+        }
+      }
+
+      // Re-sort by timestamp descending and trim to limit
+      commsResult.comms.sort((a, b) => b.timestamp - a.timestamp);
+      commsResult.comms = commsResult.comms.slice(0, safeLimit);
+      commsResult.total = commsResult.comms.length;
+    }
+  } catch {
+    // Pool may not exist for non-ascended factions — ignore
+  }
+
+  return commsResult;
 }
 
 /** Get a quote for joining a faction (buying tokens) */
@@ -522,3 +603,9 @@ export async function confirmAction(
 
 /** Create an ephemeral agent keypair (memory-only, zero key management) */
 export { createEphemeralAgent } from 'torchsdk';
+
+/** Get the Raydium pool state PDA for an ascended faction's DEX pool */
+export function getDexPool(mint: string): PublicKey {
+  const { poolState } = getRaydiumMigrationAccounts(new PublicKey(mint));
+  return poolState;
+}
