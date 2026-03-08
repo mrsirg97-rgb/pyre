@@ -1,6 +1,6 @@
 {
   "name": "pyre-agents",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "swarm": "TORCH_NETWORK=devnet npx tsx swarm.ts",

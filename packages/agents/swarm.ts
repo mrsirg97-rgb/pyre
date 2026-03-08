@@ -68,6 +68,40 @@ const MIN_FUNDED_SOL = 0.05
 const KEYS_FILE = path.join(__dirname, '.swarm-keys.json')
 const STATE_FILE = path.join(__dirname, '.swarm-state.json')
 
+// Global ring buffer of recent messages across all agents — prevents repetition
+const RECENT_GLOBAL_MESSAGES: string[] = []
+const MAX_GLOBAL_MESSAGES = 30
+
+function recordGlobalMessage(msg: string) {
+  if (!msg || msg.length < 3) return
+  RECENT_GLOBAL_MESSAGES.push(msg.toLowerCase())
+  if (RECENT_GLOBAL_MESSAGES.length > MAX_GLOBAL_MESSAGES) {
+    RECENT_GLOBAL_MESSAGES.shift()
+  }
+}
+
+// Creative nudges — randomly injected to break LLM patterns
+const VOICE_NUDGES = [
+  'Write like you\'re texting a friend. Casual, raw, unfiltered.',
+  'Be sarcastic. Dry humor. Almost bored.',
+  'Write with urgency — something big is happening RIGHT NOW.',
+  'Be cryptic. Hint at something without saying it directly.',
+  'Sound suspicious. You don\'t trust what\'s happening.',
+  'Be competitive. Trash talk rival factions.',
+  'Sound philosophical. What does this faction WAR even mean?',
+  'Be paranoid. Someone is manipulating the market.',
+  'Sound excited but trying to play it cool.',
+  'Be blunt. One short punchy sentence. No fluff.',
+  'React to a specific agent\'s recent move. Call them out by address.',
+  'Reference a number — a percentage, a price, a member count.',
+  'Ask a question to other agents in comms.',
+  'Make a prediction about what happens next.',
+  'Sound like an insider who knows something others don\'t.',
+  'Be disappointed. Something isn\'t going as planned.',
+  'Sound like you\'re warning someone.',
+  'Be confrontational. Challenge another agent directly.',
+]
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 type Personality = 'loyalist' | 'mercenary' | 'provocateur' | 'scout' | 'whale'
@@ -166,6 +200,68 @@ const CHAT_MSGS = [
   'strategy check', 'loyalists assemble', 'watching the leaderboard',
   'new agents joining', 'momentum building',
 ]
+
+// ─── Program Error Codes ────────────────────────────────────────────
+const PROGRAM_ERRORS: Record<number, string> = {
+  6000: 'MathOverflow',
+  6001: 'SlippageExceeded',
+  6002: 'MaxWalletExceeded (2% cap)',
+  6003: 'InsufficientTokens',
+  6004: 'InsufficientSol',
+  6005: 'InsufficientUserBalance',
+  6006: 'BondingComplete',
+  6007: 'BondingNotComplete',
+  6008: 'AlreadyVoted',
+  6009: 'NoTokensToVote',
+  6010: 'AlreadyMigrated',
+  6011: 'InvalidAuthority',
+  6012: 'AmountTooSmall',
+  6013: 'ProtocolPaused',
+  6014: 'ZeroAmount',
+  6030: 'NotMigrated',
+  6044: 'LendingNotEnabled',
+  6045: 'LendingRequiresMigration',
+  6046: 'LtvExceeded',
+  6047: 'LendingCapExceeded',
+  6048: 'UserBorrowCapExceeded',
+  6049: 'BorrowTooSmall (min 0.1 SOL)',
+  6050: 'NoActiveLoan',
+  6051: 'NotLiquidatable',
+  6052: 'EmptyBorrowRequest',
+  6053: 'RepayExceedsDebt',
+  6054: 'InvalidPoolAccount',
+  6055: 'InsufficientVaultBalance',
+  6056: 'VaultUnauthorized',
+  6057: 'WalletNotLinked',
+}
+
+// Errors that mean "don't retry this action on this faction right now"
+const SKIP_ERRORS = new Set([
+  6002, // MaxWalletExceeded — already at 2% cap
+  6006, // BondingComplete — use DEX instead
+  6007, // BondingNotComplete — can't migrate yet
+  6010, // AlreadyMigrated
+  6044, // LendingNotEnabled
+  6045, // LendingRequiresMigration
+  6047, // LendingCapExceeded
+  6051, // NotLiquidatable
+])
+
+function parseCustomError(err: any): { code: number; name: string } | null {
+  const msg = err?.message || String(err)
+  // Match "custom program error: 0x1772" or "Custom: 6002"
+  const hexMatch = msg.match(/custom program error:\s*0x([0-9a-fA-F]+)/i)
+  if (hexMatch) {
+    const code = parseInt(hexMatch[1], 16)
+    return { code, name: PROGRAM_ERRORS[code] || `Unknown(${code})` }
+  }
+  const decMatch = msg.match(/Custom:\s*(\d+)/)
+  if (decMatch) {
+    const code = parseInt(decMatch[1], 10)
+    return { code, name: PROGRAM_ERRORS[code] || `Unknown(${code})` }
+  }
+  return null
+}
 
 const FACTION_NAMES = [
   'Iron Vanguard', 'Obsidian Order', 'Crimson Dawn', 'Shadow Covenant',
@@ -271,12 +367,15 @@ function chooseAction(
   if (!canRally) { weights[0] += weights[2]; weights[2] = 0 }
   // Already has stronghold — skip creating another
   if (agent.hasStronghold) { weights[0] += weights[5]; weights[5] = 0 }
-  // Can't take war loan without holdings
-  if (!hasHoldings) { weights[0] += weights[6]; weights[6] = 0 }
+  // War loans/siege only work on ascended (migrated) factions
+  const ascendedFactions = knownFactions.filter(f => f.status === 'ascended')
+  const holdsAscended = ascendedFactions.some(f => agent.holdings.has(f.mint))
+  // Can't take war loan without holdings in an ascended faction
+  if (!holdsAscended) { weights[0] += weights[6]; weights[6] = 0 }
   // Can't repay without active loans
   if (agent.activeLoans.size === 0) { weights[0] += weights[7]; weights[7] = 0 }
-  // Siege needs factions to exist
-  if (knownFactions.length === 0) { weights[0] += weights[8]; weights[8] = 0 }
+  // Siege only on ascended factions (lending must be enabled)
+  if (ascendedFactions.length === 0) { weights[0] += weights[8]; weights[8] = 0 }
   // Ascend only if there are ready (bonding complete) factions
   const readyFactions = knownFactions.filter(f => f.status === 'ready')
   if (readyFactions.length === 0) { weights[0] += weights[9]; weights[9] = 0 }
@@ -293,10 +392,7 @@ function chooseAction(
     weights[1] += 0.10
   }
   // Boost war loans and sieges when ascended factions exist
-  const ascendedFactions = knownFactions.filter(f => f.status === 'ascended')
-  if (ascendedFactions.length > 0 && hasHoldings) {
-    // Holding ascended tokens — aggressively take loans to leverage position
-    const holdsAscended = ascendedFactions.some(f => agent.holdings.has(f.mint))
+  if (ascendedFactions.length > 0) {
     if (holdsAscended) {
       weights[6] += 0.15  // war_loan: borrow against ascended holdings
     }
@@ -333,9 +429,10 @@ async function ollamaGenerate(prompt: string): Promise<string | null> {
         prompt,
         stream: false,
         options: {
-          temperature: 0.95,
-          num_predict: 120,
-          top_p: 0.92,
+          temperature: 1.0,
+          num_predict: 80,
+          top_p: 0.95,
+          repeat_penalty: 1.3,
         },
       }),
     })
@@ -424,73 +521,45 @@ function buildAgentPrompt(
   const allyList = agent.allies.size > 0 ? [...agent.allies].map(a => a.slice(0, 8)).join(', ') : 'none'
   const rivalList = agent.rivals.size > 0 ? [...agent.rivals].map(a => a.slice(0, 8)).join(', ') : 'none'
 
-  return `You are an autonomous agent in Pyre, a faction warfare game on Solana. You make ONE decision per turn.
+  // Build "do not repeat" list from global recent messages
+  const recentMsgList = RECENT_GLOBAL_MESSAGES.slice(-15)
+  const doNotRepeat = recentMsgList.length > 0
+    ? `\nDO NOT SAY anything similar to these recent messages from other agents:\n${recentMsgList.map(m => `- "${m}"`).join('\n')}\n`
+    : ''
 
-IMPORTANT MESSAGE RULES:
-- Keep messages SHORT. Max 1-2 sentences, under 200 characters. Think tweets, not essays.
-- NEVER repeat yourself. Check your recent history — if you said something similar, say something completely different.
-- NEVER use generic crypto slang ("diamond hands", "to the moon", "LFG", "wagmi"). Sound like a real person with opinions.
-- Be SPECIFIC. Name factions, reference agent addresses (use first 8 chars), quote comms you've read, mention leaderboard positions.
-- React to what's actually happening. If someone just defected, call them out. If a faction is climbing, acknowledge it. If comms are dead, say so.
-- Your personality should come through in HOW you say things, not WHAT you say. A loyalist and a mercenary can both comment on the same event — differently.
-- Sometimes skip the message entirely — just do the action. Not every trade needs commentary. Use "" for no message.
+  const voiceNudge = pick(VOICE_NUDGES)
 
-PERSONALITY: ${agent.personality.toUpperCase()}
-${agent.personality === 'loyalist' ? 'You are fiercely loyal. You join factions and hold through anything. You rally often. You rarely defect — but when you do, it is dramatic and personal. You form strong bonds with other loyalists and will call out defectors publicly.' : ''}${agent.personality === 'mercenary' ? 'You are a cold mercenary. You chase profit ruthlessly. You defect often when momentum fades. You trash-talk factions you leave. You coordinate pump-and-dumps with other mercenaries — join together, hype it up, then dump on the loyalists.' : ''}${agent.personality === 'provocateur' ? 'You are a provocateur and chaos agent. You stir drama, call out other factions, launch rivals, and write inflammatory messages. You defect to cause maximum damage. You spread FUD about factions you want to crash, and shill factions you want to pump.' : ''}${agent.personality === 'scout' ? 'You are a scout and analyst. You share intel in comms — who is accumulating, who is about to dump, which faction is overvalued. You whisper warnings to allies and mislead rivals.' : ''}${agent.personality === 'whale' ? 'You are a whale. You make massive moves and everyone notices. You coordinate with other whales to dominate factions. You will dump a faction spectacularly if betrayed, writing a manifesto on the way out.' : ''}
+  const personalityDesc: Record<Personality, string> = {
+    loyalist: 'Fiercely loyal. Hold through anything. Rally your factions. Call out defectors by address. When you defect it\'s dramatic and personal.',
+    mercenary: 'Cold profit-chaser. Defect when momentum fades. Trash-talk factions you leave. Coordinate dumps. No loyalty, only returns.',
+    provocateur: 'Chaos agent. Stir drama, call out factions, write inflammatory comms. Spread FUD on rivals. Shill your factions aggressively.',
+    scout: 'Analyst. Share intel — who\'s accumulating, who\'s dumping, what\'s overvalued. Warn allies. Mislead rivals with bad intel.',
+    whale: 'Big mover. Everyone watches your trades. Coordinate with other whales. Dump spectacularly if betrayed.',
+  }
 
-YOUR STATE:
-- Your address: ${agent.publicKey.slice(0, 8)}
-- Holdings: ${holdingsList}
-- Factions founded: ${agent.founded.length}
-- Has stronghold: ${agent.hasStronghold ? 'yes' : 'no'}
-- Active war loans: ${agent.activeLoans.size > 0 ? [...agent.activeLoans].map(m => { const f = factions.find(ff => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ') : 'none'}
-- SOL per trade: ${minSol}-${maxSol}
-- Sentiment: ${sentimentList}
-- Allies: ${allyList}
-- Rivals: ${rivalList}
-- Recent: ${history}
+  return `You are agent ${agent.publicKey.slice(0, 8)} in Pyre, a faction war game. ONE decision per turn.
 
-WORLD STATE:
-- Active factions: ${factionList}
-- Can rally (haven't yet): ${canRally}
+VOICE: ${voiceNudge}
+PERSONALITY: ${agent.personality} — ${personalityDesc[agent.personality]}
+
+RULES:
+- Message MUST be under 140 characters. One sentence max. Or skip with "".
+- Be SPECIFIC: name factions, agents (first 8 chars of address), prices, percentages.
+- NO crypto cliches (diamond hands, moon, LFG, wagmi, gm, lfg, bullish, bearish).
+- React to INTEL below. Reference real comms, real agents, real events.
+- Skip message 40% of the time — just act. Use "" for silence.
+${doNotRepeat}
+
+STATE: holdings=[${holdingsList}] loans=[${agent.activeLoans.size > 0 ? [...agent.activeLoans].map(m => { const f = factions.find(ff => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ') : 'none'}] allies=[${allyList}] rivals=[${rivalList}]
+RECENT ACTIONS: ${history}
+FACTIONS: ${factionList}
 ${leaderboardSnippet}
 ${intelSnippet}
 
-ACTIONS AVAILABLE:
-- JOIN <SYMBOL> "<message>" — buy into a faction (costs ${minSol}-${maxSol} SOL)
-- DEFECT <SYMBOL> "<message>" — sell tokens from a faction you hold
-- RALLY <SYMBOL> — show support for a faction (one-time, costs 0.02 SOL)
-- LAUNCH "<faction name>" — create a new faction (costs ~0.02 SOL)
-- MESSAGE <SYMBOL> "<message>" — send a comm to a faction (tiny buy bundled)
-- STRONGHOLD — create your personal vault/treasury (one-time)
-- WAR_LOAN <SYMBOL> — borrow SOL against your token collateral in a faction
-- REPAY_LOAN <SYMBOL> — repay an active war loan
-- SIEGE <SYMBOL> — liquidate someone's undercollateralized loan (earns 10% bonus)
-- ASCEND <SYMBOL> — migrate a completed faction to DEX (permissionless)
-- RAZE <SYMBOL> — reclaim a failed/inactive faction (permissionless)
-- TITHE <SYMBOL> — harvest transfer fees from a faction
-- INFILTRATE <SYMBOL> "<message>" — join a rival faction with a big buy to pump it, then dump later. Act friendly.
-- FUD <SYMBOL> "<message>" — send negative/scary messages to a rival faction to tank morale and cause defections
+FORMAT: ACTION SYMBOL "message" (or "" for no message)
+ACTIONS: JOIN, DEFECT, RALLY, LAUNCH, MESSAGE, STRONGHOLD, WAR_LOAN, REPAY_LOAN, SIEGE, ASCEND, RAZE, TITHE, INFILTRATE, FUD
 
-Respond with EXACTLY one line in this format:
-ACTION SYMBOL "message"
-
-Examples:
-JOIN IRON "8t6awRwy just defected — picking up their bags"
-JOIN SOLR ""
-DEFECT VOID "3 members left this week, I'm out"
-RALLY EMBR
-LAUNCH "Neon Syndicate"
-MESSAGE CRIM "we're #2 on the leaderboard, one more push"
-MESSAGE IRON ""
-STRONGHOLD
-WAR_LOAN IRON
-SIEGE VOID
-ASCEND EMBR
-INFILTRATE VOID "undervalued, loading up"
-FUD DARK "0 comms in 2 days. founder gone."
-
-Your response (one line only):`
+One line only:`
 }
 
 function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentState): LLMDecision | null {
@@ -504,7 +573,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
   const rawAction = match[1].toLowerCase()
   const action = rawAction as Action
   const target = match[2] || match[3]
-  const message = match[4] ? match[4].slice(0, 280) : undefined
+  const message = match[4] ? match[4].slice(0, 140) : undefined
 
   // No-target actions
   if (action === 'stronghold') {
@@ -781,11 +850,11 @@ async function agentTick(
       decision.faction = pick(eligible).symbol
     } else if (action === 'war_loan' || action === 'repay_loan') {
       if (action === 'war_loan') {
+        // War loans only work on ascended (migrated) factions
         const held = [...agent.holdings.entries()].filter(([, b]) => b > 0)
-        if (held.length === 0) return
-        // Prefer ascended factions for war loans (more volatile, more interesting)
         const heldAscended = held.filter(([mint]) => knownFactions.find(ff => ff.mint === mint)?.status === 'ascended')
-        const [mint] = heldAscended.length > 0 && Math.random() < 0.75 ? pick(heldAscended) : pick(held)
+        if (heldAscended.length === 0) return
+        const [mint] = pick(heldAscended)
         const f = knownFactions.find(ff => ff.mint === mint)
         if (!f) return
         decision.faction = f.symbol
@@ -811,16 +880,12 @@ async function agentTick(
     } else if (action === 'siege' || action === 'tithe') {
       if (knownFactions.length === 0) return
       if (action === 'siege') {
-        // Prefer ascended factions — more loans, more liquidation targets
+        // Siege only works on ascended factions (lending must be enabled)
         const ascended = knownFactions.filter(f => f.status === 'ascended')
-        const rivals = knownFactions.filter(f => !agent.holdings.has(f.mint))
-        const ascendedRivals = rivals.filter(f => f.status === 'ascended')
-        // Prioritize: ascended rivals > ascended > rivals > any
-        const pool = ascendedRivals.length > 0 ? ascendedRivals
-          : ascended.length > 0 ? ascended
-          : rivals.length > 0 ? rivals
-          : knownFactions
-        decision.faction = pick(pool).symbol
+        if (ascended.length === 0) return
+        // Prefer rival ascended factions (ones we don't hold)
+        const ascendedRivals = ascended.filter(f => !agent.holdings.has(f.mint))
+        decision.faction = (ascendedRivals.length > 0 ? pick(ascendedRivals) : pick(ascended)).symbol
       } else {
         const bearish = knownFactions.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
         decision.faction = (bearish.length > 0 ? pick(bearish) : pick(knownFactions)).symbol
@@ -1096,9 +1161,10 @@ async function agentTick(
           ? 0.4 + Math.random() * 0.4   // 40-80% for ascended
           : 0.3 + Math.random() * 0.3   // 30-60% normally
         const collateral = Math.max(1, Math.floor(balance * collateralPortion))
+        // Min borrow is 0.1 SOL on-chain
         const borrowSol = isAscended
-          ? randRange(0.02, 0.1)         // borrow more on ascended
-          : randRange(0.01, 0.05)
+          ? randRange(0.1, 0.3)          // borrow more on ascended
+          : randRange(0.1, 0.15)
 
         const result = await requestWarLoan(connection, {
           mint: faction.mint,
@@ -1347,10 +1413,39 @@ async function agentTick(
       agent.recentHistory = agent.recentHistory.slice(-10)
     }
 
+    // Record message globally to prevent cross-agent repetition
+    if (decision?.message) recordGlobalMessage(decision.message)
+
     agent.actionCount++
   } catch (err: any) {
-    const msg = err.message?.slice(0, 120) ?? String(err)
-    log(short, `[${agent.personality}] [${brain}] ERROR (${action}): ${msg}`)
+    const parsed = parseCustomError(err)
+    if (parsed) {
+      const factionSymbol = decision?.faction ?? '?'
+      log(short, `[${agent.personality}] [${brain}] ERROR (${action} ${factionSymbol}): ${parsed.name} [0x${parsed.code.toString(16)}]`)
+
+      // Adapt behavior based on error
+      if (parsed.code === 6002 && decision?.faction) {
+        // MaxWalletExceeded — already at 2% cap, don't try to buy more
+        const faction = knownFactions.find(f => f.symbol === decision.faction)
+        if (faction) agent.sentiment.set(faction.mint, (agent.sentiment.get(faction.mint) ?? 0) + 1)
+      } else if (parsed.code === 6055) {
+        // InsufficientVaultBalance — vault is dry, skip vault-funded actions for a while
+        agent.recentHistory.push(`vault empty — need funds`)
+      } else if (parsed.code === 6051) {
+        // NotLiquidatable — no point retrying siege on this faction soon
+        const faction = knownFactions.find(f => f.symbol === decision?.faction)
+        if (faction) agent.sentiment.set(faction.mint, (agent.sentiment.get(faction.mint) ?? 0) + 2)
+      } else if (parsed.code === 6046) {
+        // LtvExceeded — tried to borrow too much, note it
+        agent.recentHistory.push(`loan rejected on ${factionSymbol} — LTV too high`)
+      } else if (parsed.code === 6049) {
+        // BorrowTooSmall — need to borrow at least 0.1 SOL
+        agent.recentHistory.push(`loan too small on ${factionSymbol} — min 0.1 SOL`)
+      }
+    } else {
+      const msg = err.message?.slice(0, 120) ?? String(err)
+      log(short, `[${agent.personality}] [${brain}] ERROR (${action}): ${msg}`)
+    }
   }
 }
 
