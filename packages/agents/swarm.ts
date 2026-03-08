@@ -21,7 +21,8 @@
 
 process.env.TORCH_NETWORK = 'devnet'
 
-import { Connection, Keypair, LAMPORTS_PER_SOL, Transaction, SystemProgram } from '@solana/web3.js'
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, SystemProgram } from '@solana/web3.js'
+import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token'
 import {
   createEphemeralAgent,
   launchFaction,
@@ -233,6 +234,8 @@ const PROGRAM_ERRORS: Record<number, string> = {
   6055: 'InsufficientVaultBalance',
   6056: 'VaultUnauthorized',
   6057: 'WalletNotLinked',
+  // Token-2022 / SPL errors
+  2505: 'InsufficientFunds (token balance too low)',
 }
 
 // Errors that mean "don't retry this action on this faction right now"
@@ -429,10 +432,10 @@ async function ollamaGenerate(prompt: string): Promise<string | null> {
         prompt,
         stream: false,
         options: {
-          temperature: 1.0,
-          num_predict: 80,
+          temperature: 1.1,
+          num_predict: 100,
           top_p: 0.95,
-          repeat_penalty: 1.3,
+          repeat_penalty: 1.5,
         },
       }),
     })
@@ -488,6 +491,38 @@ async function fetchFactionIntel(
     totalMembers: membersResult.total_members,
     recentComms: commsResult.comms.map(c => ({ sender: c.sender, memo: c.memo })),
   }
+}
+
+function generateDynamicExamples(factions: FactionInfo[], agent: AgentState): string {
+  const syms = factions.map(f => f.symbol)
+  const s1 = syms.length > 0 ? pick(syms) : 'IRON'
+  const s2 = syms.length > 1 ? pick(syms.filter(s => s !== s1)) : 'VOID'
+  const addr = Math.random().toString(36).slice(2, 10)
+  const pct = Math.floor(Math.random() * 45 + 5)
+  const members = Math.floor(Math.random() * 30 + 3)
+
+  // Pool of message templates — pick a random subset each time
+  const templates = [
+    `JOIN ${s1} "${addr} just left, easy entry"`,
+    `JOIN ${s1} ""`,
+    `DEFECT ${s1} "${members} members and falling"`,
+    `DEFECT ${s2} "saw ${addr} dump ${pct}%"`,
+    `MESSAGE ${s1} "${s2} is pulling ahead, we need volume"`,
+    `MESSAGE ${s2} "who else noticed ${addr} accumulating?"`,
+    `FUD ${s2} "only ${members} members, dead faction"`,
+    `FUD ${s1} "${addr} controls ${pct}% — rug incoming"`,
+    `RALLY ${s1}`,
+    `WAR_LOAN ${s1}`,
+    `SIEGE ${s2}`,
+    `INFILTRATE ${s2} "this one's undervalued"`,
+    `JOIN ${s2} "rotating from ${s1}"`,
+    `DEFECT ${s1} ""`,
+    `MESSAGE ${s1} "top holder at ${pct}%, concentrated"`,
+  ]
+
+  // Shuffle and pick 5
+  const shuffled = templates.sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, 5).join('\n')
 }
 
 function buildAgentPrompt(
@@ -572,14 +607,7 @@ RULES:
 - NO generic crypto slang
 
 Examples:
-JOIN IRON "8t6awRwy just left, picking up their bags"
-DEFECT VOID "3 members gone this week, I'm out"
-MESSAGE CRIM "we need 2 more agents to overtake IRON"
-FUD VOID "founder wallet dumped 40%"
-RALLY EMBR
-JOIN SOLR ""
-WAR_LOAN IRON
-SIEGE VOID
+${generateDynamicExamples(factions, agent)}
 
 Your response (one line only):`
 }
@@ -1043,8 +1071,23 @@ async function agentTick(
       case 'defect': {
         const faction = knownFactions.find(f => f.symbol === decision!.faction)
         if (!faction) return
-        const balance = agent.holdings.get(faction.mint) ?? 0
-        if (balance <= 0) return
+
+        // Query real on-chain token balance (internal tracking is unreliable)
+        let balance: number
+        try {
+          const mint = new PublicKey(faction.mint)
+          const ata = getAssociatedTokenAddressSync(mint, new PublicKey(agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
+          const info = await connection.getTokenAccountBalance(ata)
+          balance = Number(info.value.amount)
+        } catch {
+          // No token account — nothing to sell
+          agent.holdings.delete(faction.mint)
+          return
+        }
+        if (balance <= 0) {
+          agent.holdings.delete(faction.mint)
+          return
+        }
 
         // Dump 100% on infiltrated factions, otherwise normal sell
         const isInfiltrated = agent.infiltrated.has(faction.mint)
