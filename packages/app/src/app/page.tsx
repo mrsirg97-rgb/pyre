@@ -23,7 +23,7 @@ export interface ActionEntry {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged'
+  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'ascended'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -96,8 +96,13 @@ export default function StagePage() {
               let action: ActionEntry['action']
               // The last signature (earliest chronologically) is the create tx
               const isCreateTx = i === txs.length - 1
+              // Migration drains the bonding curve — detect by post-balance near zero
+              const postBalance = tx.meta.postBalances[bcIndex]
+              const isMigrationTx = solChange < 0 && postBalance < 1_000_000_000 && faction.status === 'ascended'
               if (isCreateTx) {
                 action = 'launched'
+              } else if (isMigrationTx) {
+                action = 'ascended'
               } else if (solChange === 0 && absSol === 0) {
                 action = 'rallied'
               } else if (solChange > 0) {

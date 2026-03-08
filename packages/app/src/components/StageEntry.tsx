@@ -7,7 +7,7 @@ interface StageEntryProps {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged'
+  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'ascended'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -21,6 +21,7 @@ const ACTION_LABELS: Record<string, string> = {
   launched: 'launched',
   rallied: 'rallied',
   messaged: 'said in',
+  ascended: 'ascended',
 }
 
 export function StageEntry({ agent, faction_mint, faction_name, action, amount_sol, memo, timestamp, signature }: StageEntryProps) {

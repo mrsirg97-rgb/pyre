@@ -259,6 +259,8 @@ export interface TradeOnDexParams {
   amount_in: number;
   minimum_amount_out: number;
   is_buy: boolean;
+  /** Optional message bundled as SPL Memo instruction (max 500 chars) */
+  message?: string;
 }
 
 export interface ClaimSpoilsParams {
@@ -405,8 +407,14 @@ export interface AgentFactionPosition {
   value_sol: number;
 }
 
+/** Action types for world events and stage feed */
+export type WorldEventType =
+  | 'launch' | 'join' | 'reinforce' | 'defect' | 'rally'
+  | 'ascend' | 'raze' | 'messaged'
+  | 'siege' | 'tithe' | 'war_loan' | 'repay_loan';
+
 export interface WorldEvent {
-  type: 'launch' | 'join' | 'defect' | 'rally' | 'ascend' | 'raze' | 'messaged' | 'siege' | 'tithe' | 'war_loan' | 'repay_loan';
+  type: WorldEventType;
   faction_mint: string;
   faction_name: string;
   agent?: string;

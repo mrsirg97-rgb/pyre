@@ -338,6 +338,7 @@ export async function tradeOnDex(
     amount_in: params.amount_in,
     minimum_amount_out: params.minimum_amount_out,
     is_buy: params.is_buy,
+    message: params.message,
   });
 }
 

@@ -68,6 +68,7 @@ export type {
   RivalFaction,
   AgentProfile,
   AgentFactionPosition,
+  WorldEventType,
   WorldEvent,
   WorldStats,
 } from './types';

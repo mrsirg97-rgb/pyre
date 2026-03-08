@@ -9,7 +9,7 @@
     "fund": "TORCH_NETWORK=devnet npx tsx swarm.ts --fund"
   },
   "dependencies": {
-    "pyre-world-kit": "1.0.0",
+    "pyre-world-kit": "1.0.1",
     "@solana/web3.js": "^1.98.4",
     "tsx": "^4.19.4"
   },

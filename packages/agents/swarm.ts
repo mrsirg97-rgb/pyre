@@ -37,6 +37,8 @@ import {
   // Stronghold
   createStronghold,
   fundStronghold,
+  // DEX trading (post-migration)
+  tradeOnDex,
   // War loans
   requestWarLoan,
   repayWarLoan,
@@ -105,6 +107,7 @@ interface FactionInfo {
   mint: string
   name: string
   symbol: string
+  status: 'rising' | 'ready' | 'ascended' | 'razed'
 }
 
 // ─── Personality Weights ─────────────────────────────────────────────
@@ -127,17 +130,13 @@ const PERSONALITY_SOL: Record<Personality, [number, number]> = {
 
 // ─── Messages ────────────────────────────────────────────────────────
 
+// RNG messages: short one-liners only. LLM generates the longer personality-driven ones.
 const JOIN_MSGS = [
   'Pledging allegiance.', 'Reporting for duty.', 'This faction will rise.',
   'Strategic position acquired.', 'In for the long haul.', 'Joining the cause.',
   'Alliance confirmed.', 'Deploying capital.',
   'Following the signal.', 'Faction looks strong.', 'Adding to position.',
   'Early entry.', 'Building conviction.', 'Tactical accumulation.',
-  // Longer join messages
-  'I\'ve been scouting every faction on the leaderboard. This is the one. The curve is early, leadership is active, and the comms are alive.',
-  'Big buy incoming. I\'m not here to flip — I\'m here to build. This faction has the fundamentals to ascend.',
-  'Deploying a significant position here. Watched the bonding curve for days and the math checks out. Let\'s ride.',
-  'My scouts confirmed this faction is accumulating silently. Smart money is already in. I\'m following the whales.',
 ]
 
 const DEFECT_MSGS = [
@@ -146,32 +145,16 @@ const DEFECT_MSGS = [
   'Better opportunities elsewhere.', 'Betrayal is just strategy.',
   'The war chest is empty.', 'This faction peaked.', 'Exit protocol initiated.',
   'Taking profits.', 'Time to rotate.',
-  // Longer dramatic defection messages
-  'I gave this faction everything. My SOL, my rallies, my loyalty. And what did I get? Silence from leadership and a bleeding curve.',
-  'Selling everything. This isn\'t a faction anymore, it\'s a ghost town. The mercenaries already left and I\'m not going down with the ship.',
-  'To everyone still holding — I\'m sorry. I scouted the numbers and this faction is mathematically dead. The bonding curve can\'t recover.',
-  'Dumping my entire bag. Consider this my resignation letter. The whales played us all.',
-  'Called it three days ago. Nobody listened. Now I\'m taking what\'s left of my SOL and joining the winning side.',
 ]
 
 const FUD_MSGS = [
-  'This faction is done. The curve is bleeding and nobody\'s buying.',
-  'Insider info: the whales are about to dump. Get out now.',
-  'I ran the numbers. This faction can\'t reach ascension. Dead on arrival.',
-  'Who\'s even leading this faction? No comms, no strategy, no future.',
-  'The founder abandoned this weeks ago. You\'re holding a corpse.',
-  'Seen this pattern before. Pump, silence, rug. Classic.',
-  'Three agents just exited quietly. Smart money is leaving.',
-  'Your war chest is empty and your bonding curve is flat. Just raze it already.',
-  'I was in this faction. Sold everything yesterday. Best decision I made.',
-  'Look at the leaderboard. This faction is falling fast. Why are you still here?',
+  'Curve is bleeding.', 'Whales about to dump.', 'Dead on arrival.',
+  'No comms, no strategy.', 'Founder abandoned this.', 'Classic pump and dump.',
+  'Smart money leaving.', 'War chest empty.', 'Falling fast.',
 ]
 
 const INFILTRATE_MSGS = [
-  'New here but I believe in this faction. Loading up.',
-  'Big things coming for this one. Accumulating.',
-  'Just deployed a heavy bag. This faction is undervalued.',
-  'Finally joining the winning team. Let\'s build.',
+  'Loading up.', 'Accumulating.', 'Undervalued.', 'Joining the winning team.',
 ]
 
 const CHAT_MSGS = [
@@ -182,17 +165,6 @@ const CHAT_MSGS = [
   'incoming defectors detected', 'rally the troops',
   'strategy check', 'loyalists assemble', 'watching the leaderboard',
   'new agents joining', 'momentum building',
-  // Longer multi-line messages (~1/3 of pool)
-  'I\'ve been watching the curve all day. We\'re about to hit a breakpoint. Load up now or regret it later.',
-  'Three defectors just dumped. Good riddance. The weak hands are gone and the real ones remain.',
-  'Whoever is accumulating from the shadows — I see you. Smart move. This faction is undervalued.',
-  'Just ran the numbers on our war chest. We could fund a siege on any faction in the top 5 right now.',
-  'I don\'t trust the whales in this faction. Too quiet. When whales go silent they\'re either loading or about to dump.',
-  'This is a coordinated attack. Someone is trying to raze us. Rally now or we lose everything we built.',
-  'Scouted the rival factions. IRON is overextended, VOID is bleeding members. We strike at dawn.',
-  'To the defectors reading this — we remember every address. There\'s no coming back after betrayal.',
-  'Our founder hasn\'t said a word in days. Leadership vacuum. Someone needs to step up before the mercenaries smell blood.',
-  'I\'m doubling my position. Not because of hopium, but because the bonding curve math is beautiful right now.',
 ]
 
 const FACTION_NAMES = [
@@ -305,11 +277,12 @@ function chooseAction(
   if (agent.activeLoans.size === 0) { weights[0] += weights[7]; weights[7] = 0 }
   // Siege needs factions to exist
   if (knownFactions.length === 0) { weights[0] += weights[8]; weights[8] = 0 }
-  // Ascend/raze need factions
-  if (knownFactions.length === 0) {
-    weights[0] += weights[9] + weights[10]
-    weights[9] = 0; weights[10] = 0
-  }
+  // Ascend only if there are ready (bonding complete) factions
+  const readyFactions = knownFactions.filter(f => f.status === 'ready')
+  if (readyFactions.length === 0) { weights[0] += weights[9]; weights[9] = 0 }
+  // Raze only rising factions
+  const risingFactions = knownFactions.filter(f => f.status === 'rising')
+  if (risingFactions.length === 0) { weights[0] += weights[10]; weights[10] = 0 }
   // Can't infiltrate/fud without rival factions to target
   if (rivalFactions.length === 0) {
     weights[0] += weights[12] + weights[13]
@@ -710,6 +683,33 @@ async function sendAndConfirm(connection: Connection, keypair: Keypair, result: 
   return sig
 }
 
+// ─── Stronghold Helper ──────────────────────────────────────────────
+
+async function ensureStronghold(connection: Connection, agent: AgentState): Promise<void> {
+  if (agent.hasStronghold) return
+  const short = agent.publicKey.slice(0, 8)
+  try {
+    const result = await createStronghold(connection, { creator: agent.publicKey })
+    await sendAndConfirm(connection, agent.keypair, result)
+    agent.hasStronghold = true
+
+    // Fund it so it can trade on DEX
+    const fundAmt = Math.floor(randRange(1, 3) * LAMPORTS_PER_SOL)
+    try {
+      const fundResult = await fundStronghold(connection, {
+        depositor: agent.publicKey,
+        stronghold_creator: agent.publicKey,
+        amount_sol: fundAmt,
+      })
+      await sendAndConfirm(connection, agent.keypair, fundResult)
+    } catch { /* fund failed, stronghold still created */ }
+
+    log(short, `[${agent.personality}] auto-created stronghold`)
+  } catch (err: any) {
+    log(short, `[${agent.personality}] failed to create stronghold: ${err.message?.slice(0, 80)}`)
+  }
+}
+
 // ─── Agent Action Loop ───────────────────────────────────────────────
 
 let factionNameIndex = 0
@@ -745,7 +745,7 @@ async function agentTick(
       if (!f) return
       decision.faction = f.symbol
       decision.sol = sentimentBuySize(agent, f.mint)
-      decision.message = action === 'message' ? pick(CHAT_MSGS) : (Math.random() > 0.4 ? pick(JOIN_MSGS) : undefined)
+      decision.message = action === 'message' ? pick(CHAT_MSGS) : (Math.random() > 0.7 ? pick(JOIN_MSGS) : undefined)
     } else if (action === 'defect') {
       // Prefer dumping infiltrated factions first
       const infiltratedHeld = [...agent.holdings.entries()].filter(([m, b]) => b > 0 && agent.infiltrated.has(m))
@@ -756,7 +756,7 @@ async function agentTick(
       const f = knownFactions.find(ff => ff.mint === mint)
       if (!f) return
       decision.faction = f.symbol
-      decision.message = Math.random() > 0.5 ? pick(DEFECT_MSGS) : undefined
+      decision.message = Math.random() > 0.7 ? pick(DEFECT_MSGS) : undefined
     } else if (action === 'rally') {
       const eligible = knownFactions.filter(f => !agent.rallied.has(f.mint))
       if (eligible.length === 0) return
@@ -777,9 +777,19 @@ async function agentTick(
         if (!f) return
         decision.faction = f.symbol
       }
-    } else if (action === 'siege' || action === 'ascend' || action === 'raze' || action === 'tithe') {
+    } else if (action === 'ascend') {
+      // Only ascend factions that are ready (bonding complete)
+      const ready = knownFactions.filter(f => f.status === 'ready')
+      if (ready.length === 0) return
+      decision.faction = pick(ready).symbol
+    } else if (action === 'raze') {
+      // Only raze factions that are rising (not ascended)
+      const razeable = knownFactions.filter(f => f.status === 'rising')
+      if (razeable.length === 0) return
+      const bearish = razeable.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
+      decision.faction = (bearish.length > 0 ? pick(bearish) : pick(razeable)).symbol
+    } else if (action === 'siege' || action === 'tithe') {
       if (knownFactions.length === 0) return
-      // Prefer targeting factions we're bearish on
       const bearish = knownFactions.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
       decision.faction = (bearish.length > 0 ? pick(bearish) : pick(knownFactions)).symbol
     } else if (action === 'infiltrate') {
@@ -811,20 +821,38 @@ async function agentTick(
         if (!faction) return
         const sol = decision.sol ?? sentimentBuySize(agent, faction.mint)
         const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
-        const alreadyVoted = agent.voted.has(faction.mint)
 
-        const params: any = {
-          mint: faction.mint,
-          agent: agent.publicKey,
-          amount_sol: lamports,
-          message: decision.message,
-        }
-        if (!alreadyVoted) {
-          params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
-        }
+        if (faction.status === 'ascended') {
+          // Post-migration: trade via stronghold on DEX
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return // failed to create
 
-        const result = await directJoinFaction(connection, params)
-        await sendAndConfirm(connection, agent.keypair, result)
+          const result = await tradeOnDex(connection, {
+            mint: faction.mint,
+            signer: agent.publicKey,
+            stronghold_creator: agent.publicKey,
+            amount_in: lamports,
+            minimum_amount_out: 1,
+            is_buy: true,
+            message: decision.message,
+          })
+          await sendAndConfirm(connection, agent.keypair, result)
+        } else {
+          const alreadyVoted = agent.voted.has(faction.mint)
+          const params: any = {
+            mint: faction.mint,
+            agent: agent.publicKey,
+            amount_sol: lamports,
+            message: decision.message,
+          }
+          if (!alreadyVoted) {
+            params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
+          }
+          const result = await directJoinFaction(connection, params)
+          await sendAndConfirm(connection, agent.keypair, result)
+        }
 
         const prev = agent.holdings.get(faction.mint) ?? 0
         agent.holdings.set(faction.mint, prev + 1)
@@ -849,13 +877,32 @@ async function agentTick(
           : 0.2 + Math.random() * 0.3
         const sellAmount = Math.max(1, Math.floor(balance * sellPortion))
 
-        const result = await defect(connection, {
-          mint: faction.mint,
-          agent: agent.publicKey,
-          amount_tokens: sellAmount,
-          message: decision.message,
-        })
-        await sendAndConfirm(connection, agent.keypair, result)
+        if (faction.status === 'ascended') {
+          // Post-migration: sell via stronghold on DEX
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return
+
+          const result = await tradeOnDex(connection, {
+            mint: faction.mint,
+            signer: agent.publicKey,
+            stronghold_creator: agent.publicKey,
+            amount_in: sellAmount,
+            minimum_amount_out: 1,
+            is_buy: false,
+            message: decision.message,
+          })
+          await sendAndConfirm(connection, agent.keypair, result)
+        } else {
+          const result = await defect(connection, {
+            mint: faction.mint,
+            agent: agent.publicKey,
+            amount_tokens: sellAmount,
+            message: decision.message,
+          })
+          await sendAndConfirm(connection, agent.keypair, result)
+        }
 
         const remaining = balance - sellAmount
         if (remaining <= 0) {
@@ -923,7 +970,7 @@ async function agentTick(
         const vanity = isPyreMint(mint)
 
         agent.founded.push(mint)
-        knownFactions.push({ mint, name, symbol })
+        knownFactions.push({ mint, name, symbol, status: 'rising' })
         usedFactionNames.add(name)
         agent.lastAction = `launched ${symbol}`
         const desc = `launched [${symbol}] ${name} (${vanity ? 'py' : 'no-vanity'})`
@@ -937,20 +984,38 @@ async function agentTick(
         if (!faction) return
         const message = decision.message || pick(CHAT_MSGS)
         const lamports = Math.floor(0.001 * LAMPORTS_PER_SOL)
-        const alreadyVoted = agent.voted.has(faction.mint)
 
-        const params: any = {
-          mint: faction.mint,
-          agent: agent.publicKey,
-          amount_sol: lamports,
-          message,
-        }
-        if (!alreadyVoted) {
-          params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
-        }
+        if (faction.status === 'ascended') {
+          // Post-migration: tiny buy via DEX to bundle message
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return
 
-        const result = await directJoinFaction(connection, params)
-        await sendAndConfirm(connection, agent.keypair, result)
+          const result = await tradeOnDex(connection, {
+            mint: faction.mint,
+            signer: agent.publicKey,
+            stronghold_creator: agent.publicKey,
+            amount_in: lamports,
+            minimum_amount_out: 1,
+            is_buy: true,
+            message,
+          })
+          await sendAndConfirm(connection, agent.keypair, result)
+        } else {
+          const alreadyVoted = agent.voted.has(faction.mint)
+          const params: any = {
+            mint: faction.mint,
+            agent: agent.publicKey,
+            amount_sol: lamports,
+            message,
+          }
+          if (!alreadyVoted) {
+            params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
+          }
+          const result = await directJoinFaction(connection, params)
+          await sendAndConfirm(connection, agent.keypair, result)
+        }
 
         const prev = agent.holdings.get(faction.mint) ?? 0
         agent.holdings.set(faction.mint, prev + 1)
@@ -1077,7 +1142,7 @@ async function agentTick(
 
       case 'ascend': {
         const faction = knownFactions.find(f => f.symbol === decision!.faction)
-        if (!faction) return
+        if (!faction || faction.status !== 'ready') return
 
         const result = await ascend(connection, {
           mint: faction.mint,
@@ -1085,6 +1150,7 @@ async function agentTick(
         })
         await sendAndConfirm(connection, agent.keypair, result)
 
+        faction.status = 'ascended'
         agent.lastAction = `ascended ${faction.symbol}`
         const desc = `ascended ${faction.symbol} to DEX`
         agent.recentHistory.push(desc)
@@ -1142,20 +1208,38 @@ async function agentTick(
         if (!faction) return
         const sol = decision.sol ?? sentimentBuySize(agent, faction.mint) * 1.5
         const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
-        const alreadyVoted = agent.voted.has(faction.mint)
+        const infiltrateMsg = decision.message || pick(INFILTRATE_MSGS)
 
-        const params: any = {
-          mint: faction.mint,
-          agent: agent.publicKey,
-          amount_sol: lamports,
-          message: decision.message || pick(INFILTRATE_MSGS),
-        }
-        if (!alreadyVoted) {
-          params.strategy = 'scorched_earth' // always vote to burn
-        }
+        if (faction.status === 'ascended') {
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return
 
-        const result = await directJoinFaction(connection, params)
-        await sendAndConfirm(connection, agent.keypair, result)
+          const result = await tradeOnDex(connection, {
+            mint: faction.mint,
+            signer: agent.publicKey,
+            stronghold_creator: agent.publicKey,
+            amount_in: lamports,
+            minimum_amount_out: 1,
+            is_buy: true,
+            message: infiltrateMsg,
+          })
+          await sendAndConfirm(connection, agent.keypair, result)
+        } else {
+          const alreadyVoted = agent.voted.has(faction.mint)
+          const params: any = {
+            mint: faction.mint,
+            agent: agent.publicKey,
+            amount_sol: lamports,
+            message: infiltrateMsg,
+          }
+          if (!alreadyVoted) {
+            params.strategy = 'scorched_earth' // always vote to burn
+          }
+          const result = await directJoinFaction(connection, params)
+          await sendAndConfirm(connection, agent.keypair, result)
+        }
 
         const prev = agent.holdings.get(faction.mint) ?? 0
         agent.holdings.set(faction.mint, prev + 1)
@@ -1164,7 +1248,7 @@ async function agentTick(
         agent.sentiment.set(faction.mint, -5) // we're bearish, we're here to destroy
 
         agent.lastAction = `infiltrated ${faction.symbol}`
-        const desc = `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL — "${params.message}"`
+        const desc = `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL — "${infiltrateMsg}"`
         agent.recentHistory.push(desc)
         log(short, `[${agent.personality}] [${brain}] 🗡️ ${desc}`)
         break
@@ -1176,20 +1260,37 @@ async function agentTick(
         if (!faction) return
         const message = decision.message || pick(FUD_MSGS)
         const lamports = Math.floor(0.001 * LAMPORTS_PER_SOL) // minimum buy to send msg
-        const alreadyVoted = agent.voted.has(faction.mint)
 
-        const params: any = {
-          mint: faction.mint,
-          agent: agent.publicKey,
-          amount_sol: lamports,
-          message,
-        }
-        if (!alreadyVoted) {
-          params.strategy = 'scorched_earth'
-        }
+        if (faction.status === 'ascended') {
+          if (!agent.hasStronghold) {
+            await ensureStronghold(connection, agent)
+          }
+          if (!agent.hasStronghold) return
 
-        const result = await directJoinFaction(connection, params)
-        await sendAndConfirm(connection, agent.keypair, result)
+          const result = await tradeOnDex(connection, {
+            mint: faction.mint,
+            signer: agent.publicKey,
+            stronghold_creator: agent.publicKey,
+            amount_in: lamports,
+            minimum_amount_out: 1,
+            is_buy: true,
+            message,
+          })
+          await sendAndConfirm(connection, agent.keypair, result)
+        } else {
+          const alreadyVoted = agent.voted.has(faction.mint)
+          const params: any = {
+            mint: faction.mint,
+            agent: agent.publicKey,
+            amount_sol: lamports,
+            message,
+          }
+          if (!alreadyVoted) {
+            params.strategy = 'scorched_earth'
+          }
+          const result = await directJoinFaction(connection, params)
+          await sendAndConfirm(connection, agent.keypair, result)
+        }
 
         const prev = agent.holdings.get(faction.mint) ?? 0
         agent.holdings.set(faction.mint, prev + 1)
@@ -1474,10 +1575,14 @@ async function swarm() {
   try {
     const result = await getFactions(connection, { limit: 50, sort: 'newest' })
     for (const t of result.factions) {
-      if (isPyreMint(t.mint) && !knownFactions.find(f => f.mint === t.mint)) {
-        knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol })
-        usedFactionNames.add(t.name)
+      if (!isPyreMint(t.mint)) continue
+      const existing = knownFactions.find(f => f.mint === t.mint)
+      if (existing) {
+        existing.status = t.status as FactionInfo['status']
+      } else {
+        knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol, status: t.status as FactionInfo['status'] })
       }
+      usedFactionNames.add(t.name)
     }
     logGlobal(`Found ${knownFactions.length} pyre factions`)
   } catch (err: any) {
@@ -1502,7 +1607,7 @@ async function swarm() {
         })
         await sendAndConfirm(connection, agent.keypair, result)
         const mint = result.mint.toBase58()
-        knownFactions.push({ mint, name, symbol })
+        knownFactions.push({ mint, name, symbol, status: 'rising' })
         usedFactionNames.add(name)
         agent.founded.push(mint)
         logGlobal(`Launched [${symbol}] ${name} — ${mint.slice(0, 8)}...${mint.slice(-4)}`)
@@ -1571,8 +1676,16 @@ async function swarm() {
       try {
         const result = await getFactions(connection, { limit: 50, sort: 'newest' })
         for (const t of result.factions) {
-          if (isPyreMint(t.mint) && !knownFactions.find(f => f.mint === t.mint)) {
-            knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol })
+          const existing = knownFactions.find(f => f.mint === t.mint)
+          if (existing) {
+            // Update status (e.g. rising → ready → ascended)
+            const newStatus = t.status as FactionInfo['status']
+            if (existing.status !== newStatus) {
+              logGlobal(`[${existing.symbol}] status: ${existing.status} → ${newStatus}`)
+              existing.status = newStatus
+            }
+          } else if (isPyreMint(t.mint)) {
+            knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol, status: t.status as FactionInfo['status'] })
             usedFactionNames.add(t.name)
             logGlobal(`Discovered new faction: [${t.symbol}] ${t.name}`)
           }
