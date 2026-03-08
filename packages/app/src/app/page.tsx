@@ -81,13 +81,28 @@ export default function StagePage() {
               const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
               const absSol = Math.abs(solChange) / 1_000_000_000
 
-              // Parse memo from instructions
+              // Parse memo from all instructions (top-level + inner)
+              const MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'
               let memo: string | null = null
-              const innerInstructions = tx.meta.innerInstructions || []
-              for (const inner of innerInstructions) {
-                for (const ix of inner.instructions) {
-                  if ('parsed' in ix && ix.program === 'spl-memo') {
-                    memo = ix.parsed as string
+              const allIxs = [
+                ...tx.transaction.message.instructions,
+                ...(tx.meta.innerInstructions || []).flatMap(inner => inner.instructions),
+              ]
+              for (const ix of allIxs) {
+                const pid = 'programId' in ix ? (ix.programId as PublicKey).toString() : ''
+                const pname = 'program' in ix ? (ix as { program: string }).program : ''
+                if (pid === MEMO_PROGRAM || pname === 'spl-memo') {
+                  if ('parsed' in ix) {
+                    memo = typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed)
+                  } else if ('data' in ix && typeof (ix as { data?: string }).data === 'string') {
+                    // Raw memo instruction — data is base58 or utf8
+                    const raw = (ix as { data: string }).data
+                    try {
+                      const bytes = Buffer.from(raw, 'base64')
+                      memo = new TextDecoder().decode(bytes)
+                    } catch {
+                      memo = raw
+                    }
                   }
                 }
               }
@@ -176,18 +191,27 @@ export default function StagePage() {
 
               const trader = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || ''
 
-              // Parse memo from instructions
+              // Parse memo from all instructions (top-level + inner)
+              const MEMO_PROGRAM_DEX = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'
               let memo: string | null = null
-              for (const ix of tx.transaction.message.instructions) {
-                if ('parsed' in ix && (ix as { program?: string }).program === 'spl-memo') {
-                  memo = ix.parsed as string
-                }
-              }
-              const innerInstructions = tx.meta.innerInstructions || []
-              for (const inner of innerInstructions) {
-                for (const ix of inner.instructions) {
-                  if ('parsed' in ix && (ix as { program?: string }).program === 'spl-memo') {
-                    memo = ix.parsed as string
+              const allDexIxs = [
+                ...tx.transaction.message.instructions,
+                ...(tx.meta.innerInstructions || []).flatMap(inner => inner.instructions),
+              ]
+              for (const ix of allDexIxs) {
+                const pid = 'programId' in ix ? (ix.programId as PublicKey).toString() : ''
+                const pname = 'program' in ix ? (ix as { program: string }).program : ''
+                if (pid === MEMO_PROGRAM_DEX || pname === 'spl-memo') {
+                  if ('parsed' in ix) {
+                    memo = typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed)
+                  } else if ('data' in ix && typeof (ix as { data?: string }).data === 'string') {
+                    const raw = (ix as { data: string }).data
+                    try {
+                      const bytes = Buffer.from(raw, 'base64')
+                      memo = new TextDecoder().decode(bytes)
+                    } catch {
+                      memo = raw
+                    }
                   }
                 }
               }
@@ -237,9 +261,9 @@ export default function StagePage() {
 
       // Fetch messages (comms) from top factions
       await Promise.all(
-        pyreFactions.slice(0, 10).map(async (faction) => {
+        pyreFactions.slice(0, 20).map(async (faction) => {
           try {
-            const msgs = await getComms(connection, faction.mint, 20)
+            const msgs = await getComms(connection, faction.mint, 30)
 
             for (const msg of msgs.comms) {
               entries.push({
@@ -281,6 +305,13 @@ export default function StagePage() {
         }
       }
       const merged = Array.from(bySignature.values())
+
+      // Reclassify as "messaged" when there's a memo but no meaningful SOL amount
+      for (const e of merged) {
+        if (e.memo && e.amount_sol === null && (e.action === 'joined' || e.action === 'reinforced' || e.action === 'defected')) {
+          e.action = 'messaged'
+        }
+      }
 
       // Distinguish "joined" vs "reinforced": sort oldest-first,
       // track agent+faction pairs — first buy = joined, later buys = reinforced

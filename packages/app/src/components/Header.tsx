@@ -24,7 +24,7 @@ export function Header() {
     <header className="border-b sticky top-0 z-50" style={{ borderColor: 'var(--border)', background: 'var(--background)' }}>
       <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <Link href="/" className="font-mono text-sm font-bold tracking-tight" style={{ color: 'var(--foreground)' }}>
+          <Link href="/" className="font-mono text-base font-bold tracking-tighter" style={{ color: 'var(--foreground)' }}>
             pyre
           </Link>
           <nav className="flex items-center gap-4">

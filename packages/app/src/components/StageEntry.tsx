@@ -25,15 +25,26 @@ const ACTION_LABELS: Record<string, string> = {
   tithed: 'tithed',
 }
 
+const ACTION_COLORS: Record<string, string> = {
+  joined: 'var(--success)',
+  reinforced: 'var(--success)',
+  defected: 'var(--danger)',
+  launched: 'var(--accent)',
+  rallied: 'var(--muted)',
+  messaged: 'var(--muted)',
+  ascended: 'var(--accent)',
+  tithed: 'var(--muted)',
+}
+
 export function StageEntry({ agent, faction_mint, faction_name, action, amount_sol, memo, timestamp, signature }: StageEntryProps) {
   return (
-    <div className="border-b" style={{ borderColor: 'var(--border)', padding: '0.5rem'}}>
+    <div className="border-b" style={{ borderColor: 'var(--border)', padding: '0.5rem' }}>
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-1.5 min-w-0 flex-wrap">
           <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>
             {shortenAddress(agent)}
           </span>
-          <span className="text-xs" style={{ color: 'var(--muted)' }}>
+          <span className="text-xs font-medium" style={{ color: ACTION_COLORS[action] || 'var(--muted)' }}>
             {ACTION_LABELS[action] || action}
           </span>
           <Link
@@ -44,17 +55,17 @@ export function StageEntry({ agent, faction_mint, faction_name, action, amount_s
             {faction_name}
           </Link>
           {amount_sol !== null && (
-            <span className="text-xs" style={{ color: 'var(--muted)' }}>
+            <span className="font-mono text-xs" style={{ color: 'var(--muted)' }}>
               {fmtSol(amount_sol)} SOL
             </span>
           )}
         </div>
-        <span className="text-xs flex-shrink-0" style={{ color: 'var(--muted)' }}>
+        <span className="font-mono text-xs flex-shrink-0" style={{ color: 'var(--muted)' }}>
           {timeAgo(timestamp)}
         </span>
       </div>
       {memo && (
-        <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>{memo}</p>
+        <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--muted)' }}>{memo}</p>
       )}
     </div>
   )

@@ -1,19 +1,20 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: var(--font-inter);
-  --font-mono: var(--font-jetbrains-mono);
+@theme inline {
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-space-mono);
 }
 
 :root {
-  --background: #0c0c0c;
-  --foreground: #e0e0e0;
+  --background: #0a0a0a;
+  --foreground: #e8e8e8;
   --muted: #888;
   --border: rgba(255, 255, 255, 0.08);
-  --surface: rgba(255, 255, 255, 0.03);
-  --surface-hover: rgba(255, 255, 255, 0.06);
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.08);
   --success: #4ade80;
   --danger: #f87171;
+  --accent: #a78bfa;
 }
 
 [data-theme="light"] {
@@ -25,6 +26,7 @@
   --surface-hover: rgba(0, 0, 0, 0.05);
   --success: #16a34a;
   --danger: #dc2626;
+  --accent: #7c3aed;
 }
 
 * {
@@ -36,13 +38,14 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-space-grotesk), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
 }
 
 /* Wallet adapter overrides */
 .wallet-adapter-button {
-  font-family: var(--font-sans), system-ui, sans-serif !important;
+  font-family: var(--font-space-grotesk), system-ui, sans-serif !important;
   font-size: 12px !important;
   height: 32px !important;
   padding: 0 12px !important;
@@ -50,6 +53,7 @@ body {
   background: var(--surface) !important;
   border: none !important;
   color: var(--foreground) !important;
+  letter-spacing: -0.01em !important;
 }
 
 .wallet-adapter-button:hover {
