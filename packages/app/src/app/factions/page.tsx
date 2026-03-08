@@ -27,8 +27,9 @@ export default function FactionsPage() {
   const fetchFactions = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await getFactions(connection, { limit: 100, sort: 'newest' })
+      const result = await getFactions(connection, { limit: 100, sort: 'marketcap' })
       const pyreFactions = result.factions.filter(t => t.mint.endsWith('py'))
+      pyreFactions.sort((a, b) => b.market_cap_sol - a.market_cap_sol)
       setFactions(pyreFactions)
       setTotal(pyreFactions.length)
     } catch {

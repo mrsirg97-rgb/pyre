@@ -119,7 +119,39 @@ export async function getFactions(
     sort: params.sort,
   } : undefined;
   const result = await getTokens(connection, sdkParams);
-  return mapTokenListResult(result);
+  const listResult = mapTokenListResult(result);
+
+  // Enrich ascended factions with live pool price (list endpoint only has stale bonding curve mcap)
+  const ascended = listResult.factions.filter(f => f.status === 'ascended');
+  if (ascended.length > 0) {
+    await Promise.all(ascended.map(async (faction) => {
+      try {
+        const mint = new PublicKey(faction.mint);
+        const raydium = getRaydiumMigrationAccounts(mint);
+        const [vault0Info, vault1Info] = await Promise.all([
+          connection.getTokenAccountBalance(raydium.token0Vault),
+          connection.getTokenAccountBalance(raydium.token1Vault),
+        ]);
+        const vault0 = Number(vault0Info.value.amount);
+        const vault1 = Number(vault1Info.value.amount);
+        const solReserves = raydium.isWsolToken0 ? vault0 : vault1;
+        const tokenReserves = raydium.isWsolToken0 ? vault1 : vault0;
+        if (tokenReserves > 0) {
+          // solReserves in lamports, tokenReserves in base units (10^6)
+          const LAMPORTS = 1_000_000_000;
+          const TOKEN_MUL = 1_000_000;
+          const priceInSol = (solReserves * TOKEN_MUL) / (tokenReserves * LAMPORTS);
+          const TOTAL_SUPPLY = 1_000_000_000 * TOKEN_MUL;
+          faction.price_sol = priceInSol;
+          faction.market_cap_sol = (priceInSol * TOTAL_SUPPLY) / TOKEN_MUL;
+        }
+      } catch {
+        // Pool may not exist yet — keep stale values
+      }
+    }));
+  }
+
+  return listResult;
 }
 
 /** Get detailed info for a single faction */
@@ -148,37 +180,38 @@ export async function getComms(
   limit?: number,
 ): Promise<CommsResult> {
   const safeLimit = Math.min(limit || 50, 100);
+  const MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
 
-  // Fetch bonding curve messages
-  const result = await getMessages(connection, mint, safeLimit);
-  const commsResult = mapMessagesResult(result);
+  // Fetch bonding curve messages AND pool state messages in parallel
+  const bondingCommsPromise = getMessages(connection, mint, safeLimit)
+    .then(r => mapMessagesResult(r))
+    .catch(() => ({ comms: [], total: 0 } as CommsResult));
 
-  // Also scan Raydium pool state for post-ascension DEX messages
-  try {
-    const mintPubkey = new PublicKey(mint);
-    const { poolState } = getRaydiumMigrationAccounts(mintPubkey);
+  const poolCommsPromise = (async (): Promise<CommsResult> => {
+    try {
+      const mintPubkey = new PublicKey(mint);
+      const { poolState } = getRaydiumMigrationAccounts(mintPubkey);
 
-    const signatures = await connection.getSignaturesForAddress(
-      poolState,
-      { limit: Math.min(safeLimit, 50) },
-      'confirmed',
-    );
+      const signatures = await connection.getSignaturesForAddress(
+        poolState,
+        { limit: Math.min(safeLimit, 50) },
+        'confirmed',
+      );
 
-    if (signatures.length > 0) {
+      if (signatures.length === 0) return { comms: [], total: 0 };
+
       const txs = await connection.getParsedTransactions(
         signatures.map(s => s.signature),
         { maxSupportedTransactionVersion: 0 },
       );
 
-      const MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
-      const existingSigs = new Set(commsResult.comms.map(c => c.signature));
+      const comms: CommsResult['comms'] = [];
 
       for (let i = 0; i < txs.length; i++) {
         const tx = txs[i];
         if (!tx?.meta || tx.meta.err) continue;
 
         const sig = signatures[i];
-        if (existingSigs.has(sig.signature)) continue;
 
         // Check top-level and inner instructions for memo
         const allInstructions = [
@@ -205,7 +238,7 @@ export async function getComms(
 
             if (memoText && memoText.trim()) {
               const sender = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || 'Unknown';
-              commsResult.comms.push({
+              comms.push({
                 signature: sig.signature,
                 memo: memoText.trim(),
                 sender,
@@ -217,16 +250,31 @@ export async function getComms(
         }
       }
 
-      // Re-sort by timestamp descending and trim to limit
-      commsResult.comms.sort((a, b) => b.timestamp - a.timestamp);
-      commsResult.comms = commsResult.comms.slice(0, safeLimit);
-      commsResult.total = commsResult.comms.length;
+      return { comms, total: comms.length };
+    } catch {
+      return { comms: [], total: 0 };
     }
-  } catch {
-    // Pool may not exist for non-ascended factions — ignore
+  })();
+
+  const [bondingResult, poolResult] = await Promise.all([bondingCommsPromise, poolCommsPromise]);
+
+  // Merge, dedupe by signature, sort newest first, trim to limit
+  const seen = new Set<string>();
+  const allComms: CommsResult['comms'] = [];
+
+  for (const c of [...bondingResult.comms, ...poolResult.comms]) {
+    if (!seen.has(c.signature)) {
+      seen.add(c.signature);
+      allComms.push(c);
+    }
   }
 
-  return commsResult;
+  allComms.sort((a, b) => b.timestamp - a.timestamp);
+
+  return {
+    comms: allComms.slice(0, safeLimit),
+    total: allComms.length,
+  };
 }
 
 /** Get a quote for joining a faction (buying tokens) */

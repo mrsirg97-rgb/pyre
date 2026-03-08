@@ -109,7 +109,7 @@ export default function FactionPage() {
                   <span>{faction.status}</span>
                   <span>{faction.price_sol.toFixed(6)} SOL</span>
                   <span>mcap {faction.market_cap_sol.toFixed(2)}</span>
-                  <span>{Math.round(faction.progress_percent)}%</span>
+                  <span>{faction.status === 'ascended' || faction.status === 'ready' ? '100' : Math.round(faction.progress_percent)}%</span>
                   <span>{faction.rallies} rallies</span>
                   <span>founder {shortenAddress(faction.founder)}</span>
                 </div>
