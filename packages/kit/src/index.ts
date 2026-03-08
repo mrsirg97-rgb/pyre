@@ -119,6 +119,7 @@ export {
   // Utility
   createEphemeralAgent,
   getDexPool,
+  getDexVaults,
 } from './actions';
 
 // ─── Intel ─────────────────────────────────────────────────────────

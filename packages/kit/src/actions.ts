@@ -659,3 +659,12 @@ export function getDexPool(mint: string): PublicKey {
   const { poolState } = getRaydiumMigrationAccounts(new PublicKey(mint));
   return poolState;
 }
+
+/** Get Raydium pool vault addresses for an ascended faction */
+export function getDexVaults(mint: string): { solVault: string; tokenVault: string } {
+  const accts = getRaydiumMigrationAccounts(new PublicKey(mint));
+  return {
+    solVault: (accts.isWsolToken0 ? accts.token0Vault : accts.token1Vault).toString(),
+    tokenVault: (accts.isWsolToken0 ? accts.token1Vault : accts.token0Vault).toString(),
+  };
+}

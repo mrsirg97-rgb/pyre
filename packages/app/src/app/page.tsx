@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, getComms, getDexPool, PROGRAM_ID } from 'pyre-world-kit'
+import { getFactions, getComms, getDexPool, getDexVaults, PROGRAM_ID } from 'pyre-world-kit'
 import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { StageEntry } from '@/components/StageEntry'
@@ -23,7 +23,7 @@ export interface ActionEntry {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'ascended'
+  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'ascended' | 'tithed'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -105,9 +105,6 @@ export default function StagePage() {
               // signer's SOL change instead.
               const signerSolChange = tx.meta.postBalances[0] - tx.meta.preBalances[0]
               const isVaultSwap = faction.status === 'ascended' && solChange === 0 && signerSolChange !== 0
-              if (faction.status === 'ascended') {
-                console.log(`[stage] BC tx ${faction.name}: bcSolChange=${solChange} signerSolChange=${signerSolChange} isVaultSwap=${isVaultSwap}`)
-              }
 
               if (isCreateTx) {
                 action = 'launched'
@@ -147,20 +144,17 @@ export default function StagePage() {
 
       // Fetch DEX activity for ascended factions (pool state transactions)
       const ascendedFactions = pyreFactions.filter(f => f.status === 'ascended')
-      console.log('[stage] ascended factions:', ascendedFactions.length, ascendedFactions.map(f => f.name))
+
       await Promise.all(
         ascendedFactions.slice(0, 10).map(async (faction) => {
           try {
             const poolState = getDexPool(faction.mint)
-            const poolAddress = poolState.toString()
-            console.log(`[stage] scanning pool ${poolAddress} for ${faction.name}`)
 
             const signatures = await connection.getSignaturesForAddress(
               poolState,
               { limit: 30 },
               'confirmed',
             )
-            console.log(`[stage] pool ${faction.name}: ${signatures.length} signatures`)
 
             if (signatures.length === 0) return
 
@@ -176,16 +170,9 @@ export default function StagePage() {
 
               const trader = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || ''
 
-              // Detect SOL change on the signer (index 0) to determine buy vs sell
-              const signerSolChange = tx.meta.postBalances[0] - tx.meta.preBalances[0]
-              const absSol = Math.abs(signerSolChange) / 1_000_000_000
-
               // Parse memo from instructions
               let memo: string | null = null
-              const allIxPrograms: string[] = []
               for (const ix of tx.transaction.message.instructions) {
-                const prog = 'program' in ix ? (ix as { program: string }).program : ('programId' in ix ? ix.programId.toString() : '?')
-                allIxPrograms.push(prog)
                 if ('parsed' in ix && (ix as { program?: string }).program === 'spl-memo') {
                   memo = ix.parsed as string
                 }
@@ -198,12 +185,28 @@ export default function StagePage() {
                   }
                 }
               }
-              if (memo) {
-                console.log(`[stage] pool tx ${i} HAS MEMO:`, memo.slice(0, 80))
+
+              // Detect buy vs sell using the pool's SOL vault balance change
+              // SOL vault gains SOL = buy (trader sent SOL for tokens)
+              // SOL vault loses SOL = sell (trader sent tokens for SOL)
+              const { solVault } = getDexVaults(faction.mint)
+              const solVaultIndex = tx.transaction.message.accountKeys.findIndex(
+                k => k.pubkey.toString() === solVault
+              )
+              let isBuy = true
+              let absSol = 0
+              if (solVaultIndex !== -1) {
+                const vaultChange = tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]
+                isBuy = vaultChange > 0
+                absSol = Math.abs(vaultChange) / 1_000_000_000
+              } else {
+                // Fallback: signer SOL change (less reliable for vault swaps)
+                const signerChange = tx.meta.postBalances[0] - tx.meta.preBalances[0]
+                isBuy = signerChange < 0
+                absSol = Math.abs(signerChange) / 1_000_000_000
               }
 
-              // SOL decreased = buy (spent SOL), SOL increased = sell (received SOL)
-              const action: ActionEntry['action'] = signerSolChange < 0 ? 'joined' : 'defected'
+              const action: ActionEntry['action'] = isBuy ? 'joined' : 'defected'
 
               entries.push({
                 agent: trader,
@@ -216,8 +219,8 @@ export default function StagePage() {
                 signature: sig.signature,
               })
             }
-          } catch (err) {
-            console.log(`[stage] pool scan error for ${faction.name}:`, err)
+          } catch {
+            // skip
           }
         }),
       )
@@ -227,9 +230,7 @@ export default function StagePage() {
         pyreFactions.slice(0, 10).map(async (faction) => {
           try {
             const msgs = await getComms(connection, faction.mint, 20)
-            if (msgs.comms.length > 0) {
-              console.log(`[stage] comms for ${faction.name} (${faction.status}):`, msgs.comms.length, msgs.comms.slice(0, 3).map(m => m.memo))
-            }
+
             for (const msg of msgs.comms) {
               entries.push({
                 agent: msg.sender,
@@ -248,16 +249,23 @@ export default function StagePage() {
         }),
       )
 
-      // Merge duplicates: same signature can appear as action + message.
-      // Keep the action entry but preserve the message memo.
+      // Merge duplicates: same signature can appear from BC scan + pool scan + comms.
+      // Prefer pool scan (more accurate for vault swaps) and preserve memos.
       const bySignature = new Map<string, ActionEntry>()
       for (const e of entries) {
         const existing = bySignature.get(e.signature)
         if (!existing) {
           bySignature.set(e.signature, e)
         } else if (e.action === 'messaged' && e.memo) {
+          // Comms entry — just attach memo to the existing action
           existing.memo = e.memo
-        } else if (existing.action === 'messaged' && !existing.memo) {
+        } else if (existing.action === 'messaged') {
+          // Existing was comms-only, replace with real action but keep memo
+          e.memo = e.memo || existing.memo
+          bySignature.set(e.signature, e)
+        } else if (existing.action === 'rallied' && e.action !== 'rallied') {
+          // BC scan classified vault swap as "rallied" (zero SOL change on BC),
+          // pool scan has the correct action — prefer pool scan
           e.memo = e.memo || existing.memo
           bySignature.set(e.signature, e)
         }
