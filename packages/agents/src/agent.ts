@@ -237,7 +237,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'JION': 'JOIN', 'JOING': 'JOIN', 'JOIIN': 'JOIN',
       'RALEY': 'RALLY', 'RALY': 'RALLY', 'RALLLY': 'RALLY',
       'LANCH': 'LAUNCH', 'LAUCH': 'LAUNCH',
-      'MESAGE': 'MESSAGE', 'MESSGE': 'MESSAGE', 'MASSGE': 'MESSAGE',
+      'MESAGE': 'MESSAGE', 'MESSGE': 'MESSAGE', 'MASSGE': 'MESSAGE', 'MESS': 'MESSAGE', 'MESSENGER': 'MESSAGE',
       'SEIGE': 'SIEGE', 'SEIG': 'SIEGE',
       'INFLTRATE': 'INFILTRATE', 'INFILTRTE': 'INFILTRATE',
       'ALERT': 'FUD', 'EXPOSE': 'FUD',
