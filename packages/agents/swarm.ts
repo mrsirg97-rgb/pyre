@@ -65,8 +65,8 @@ import * as path from 'path'
 
 const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? '150')
 const RPC_URL = process.env.RPC_URL ?? 'https://torch-market-rpc.mrsirg97.workers.dev/devnet'
-const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? '1000')
-const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '5000')
+const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? '500')
+const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? '2000')
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma3:4b'
 const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
