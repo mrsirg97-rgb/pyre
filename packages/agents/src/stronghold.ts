@@ -13,10 +13,14 @@ export const ensureStronghold = async (connection: Connection, agent: AgentState
     // Already known — just check if vault needs a top-up
     try {
       const existing = await getStronghold(connection, agent.publicKey)
-      if (existing && existing.sol_balance < STRONGHOLD_TOPUP_THRESHOLD_SOL * LAMPORTS_PER_SOL) {
+      const vaultBal = existing?.sol_balance ?? 0
+      const threshold = STRONGHOLD_TOPUP_THRESHOLD_SOL * LAMPORTS_PER_SOL
+      log(short, `[${agent.personality}] vault check: ${vaultBal} lamports, threshold: ${threshold}`)
+      if (existing && vaultBal < threshold) {
         const walletBal = await connection.getBalance(new PublicKey(agent.publicKey))
         const reserve = STRONGHOLD_TOPUP_RESERVE_SOL * LAMPORTS_PER_SOL
         const available = walletBal - reserve
+        log(short, `[${agent.personality}] wallet: ${walletBal}, reserve: ${reserve}, available: ${available}`)
         if (available > 0.01 * LAMPORTS_PER_SOL) {
           const fundAmt = Math.floor(available)
           const fundResult = await fundStronghold(connection, {
