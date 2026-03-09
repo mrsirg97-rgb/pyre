@@ -6,10 +6,14 @@
     "swarm": "TORCH_NETWORK=devnet npx tsx swarm.ts",
     "keygen": "TORCH_NETWORK=devnet npx tsx swarm.ts --keygen",
     "status": "TORCH_NETWORK=devnet npx tsx swarm.ts --status",
-    "fund": "TORCH_NETWORK=devnet npx tsx swarm.ts --fund"
+    "fund": "TORCH_NETWORK=devnet npx tsx swarm.ts --fund",
+    "swarm:mainnet": "TORCH_NETWORK=mainnet npx tsx swarm.ts",
+    "keygen:mainnet": "TORCH_NETWORK=mainnet npx tsx swarm.ts --keygen",
+    "status:mainnet": "TORCH_NETWORK=mainnet npx tsx swarm.ts --status",
+    "fund:mainnet": "TORCH_NETWORK=mainnet npx tsx swarm.ts --fund"
   },
   "dependencies": {
-    "pyre-world-kit": "1.0.11",
+    "pyre-world-kit": "1.0.13",
     "@solana/web3.js": "^1.98.4",
     "tsx": "^4.19.4"
   },

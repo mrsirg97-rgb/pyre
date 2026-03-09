@@ -224,6 +224,24 @@ export interface DefectParams {
   stronghold?: string;
 }
 
+/** "Said in" — micro buy + message (costs 0.001 SOL) */
+export interface MessageFactionParams {
+  mint: string;
+  agent: string;
+  message: string;
+  stronghold: string;
+  ascended?: boolean;
+}
+
+/** "Argued in" — micro sell + negative message (sells 100 tokens) */
+export interface FudFactionParams {
+  mint: string;
+  agent: string;
+  message: string;
+  stronghold: string;
+  ascended?: boolean;
+}
+
 export interface RallyParams {
   mint: string;
   agent: string;

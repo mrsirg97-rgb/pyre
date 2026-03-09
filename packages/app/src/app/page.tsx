@@ -23,7 +23,7 @@ export interface ActionEntry {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'ascended' | 'tithed'
+  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'argued' | 'ascended' | 'tithed'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -306,10 +306,16 @@ export default function StagePage() {
       }
       const merged = Array.from(bySignature.values())
 
-      // Reclassify as "messaged" when there's a memo but no meaningful SOL amount
+      // Reclassify micro-trades with memos:
+      // - buys with memo + no meaningful SOL → "said in" (messaged)
+      // - sells with memo + no meaningful SOL → "argued in" (argued)
       for (const e of merged) {
-        if (e.memo && e.amount_sol === null && (e.action === 'joined' || e.action === 'reinforced' || e.action === 'defected')) {
-          e.action = 'messaged'
+        if (e.memo && e.amount_sol === null) {
+          if (e.action === 'defected') {
+            e.action = 'argued'
+          } else if (e.action === 'joined' || e.action === 'reinforced') {
+            e.action = 'messaged'
+          }
         }
       }
 

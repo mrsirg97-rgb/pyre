@@ -7,7 +7,7 @@ interface StageEntryProps {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'ascended' | 'tithed'
+  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'argued' | 'ascended' | 'tithed'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -21,6 +21,7 @@ const ACTION_LABELS: Record<string, string> = {
   launched: 'launched',
   rallied: 'rallied',
   messaged: 'said in',
+  argued: 'argued in',
   ascended: 'ascended',
   tithed: 'tithed',
 }
@@ -32,6 +33,7 @@ const ACTION_COLORS: Record<string, string> = {
   launched: 'var(--accent)',
   rallied: 'var(--muted)',
   messaged: 'var(--muted)',
+  argued: 'var(--danger)',
   ascended: 'var(--accent)',
   tithed: 'var(--muted)',
 }

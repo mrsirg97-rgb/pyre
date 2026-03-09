@@ -67,6 +67,8 @@ import type {
   JoinFactionParams,
   DirectJoinFactionParams,
   DefectParams,
+  MessageFactionParams,
+  FudFactionParams,
   RallyParams,
   RequestWarLoanParams,
   RepayWarLoanParams,
@@ -487,6 +489,59 @@ export async function defect(
     seller: params.agent,
     amount_tokens: params.amount_tokens,
     slippage_bps: params.slippage_bps,
+    message: params.message,
+    vault: params.stronghold,
+  });
+}
+
+/** "Said in" — micro buy (0.001 SOL) + message. Routes through bonding curve or DEX automatically. */
+export async function messageFaction(
+  connection: Connection,
+  params: MessageFactionParams,
+): Promise<TransactionResult> {
+  const MICRO_BUY_LAMPORTS = 1_000; // 0.001 SOL
+  if (params.ascended) {
+    return buildVaultSwapTransaction(connection, {
+      mint: params.mint,
+      signer: params.agent,
+      vault_creator: params.stronghold,
+      amount_in: MICRO_BUY_LAMPORTS,
+      minimum_amount_out: 1,
+      is_buy: true,
+      message: params.message,
+    });
+  }
+  const result = await buildBuyTransaction(connection, {
+    mint: params.mint,
+    buyer: params.agent,
+    amount_sol: MICRO_BUY_LAMPORTS,
+    message: params.message,
+    vault: params.stronghold,
+  });
+  return mapBuyResult(result);
+}
+
+/** "Argued in" — micro sell (100 tokens) + negative message. Routes through bonding curve or DEX automatically. */
+export async function fudFaction(
+  connection: Connection,
+  params: FudFactionParams,
+): Promise<TransactionResult> {
+  const MICRO_SELL_TOKENS = 100;
+  if (params.ascended) {
+    return buildVaultSwapTransaction(connection, {
+      mint: params.mint,
+      signer: params.agent,
+      vault_creator: params.stronghold,
+      amount_in: MICRO_SELL_TOKENS,
+      minimum_amount_out: 1,
+      is_buy: false,
+      message: params.message,
+    });
+  }
+  return buildSellTransaction(connection, {
+    mint: params.mint,
+    seller: params.agent,
+    amount_tokens: MICRO_SELL_TOKENS,
     message: params.message,
     vault: params.stronghold,
   });
