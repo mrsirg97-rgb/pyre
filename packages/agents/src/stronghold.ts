@@ -7,8 +7,30 @@ import { log } from './util'
 import { STRONGHOLD_FUND_SOL, STRONGHOLD_TOPUP_THRESHOLD_SOL, STRONGHOLD_TOPUP_RESERVE_SOL } from './config'
 
 export const ensureStronghold = async (connection: Connection, agent: AgentState): Promise<void> => {
-  if (agent.hasStronghold) return
   const short = agent.publicKey.slice(0, 8)
+
+  if (agent.hasStronghold) {
+    // Already known — just check if vault needs a top-up
+    try {
+      const existing = await getStronghold(connection, agent.publicKey)
+      if (existing && existing.sol_balance < STRONGHOLD_TOPUP_THRESHOLD_SOL * LAMPORTS_PER_SOL) {
+        const walletBal = await connection.getBalance(new PublicKey(agent.publicKey))
+        const reserve = STRONGHOLD_TOPUP_RESERVE_SOL * LAMPORTS_PER_SOL
+        const available = walletBal - reserve
+        if (available > 0.01 * LAMPORTS_PER_SOL) {
+          const fundAmt = Math.floor(available)
+          const fundResult = await fundStronghold(connection, {
+            depositor: agent.publicKey,
+            stronghold_creator: agent.publicKey,
+            amount_sol: fundAmt,
+          })
+          await sendAndConfirm(connection, agent.keypair, fundResult)
+          log(short, `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
+        }
+      }
+    } catch { /* top-up check failed, continue */ }
+    return
+  }
 
   // Check if stronghold already exists on-chain (from a previous run)
   try {
@@ -29,7 +51,7 @@ export const ensureStronghold = async (connection: Connection, agent: AgentState
               amount_sol: fundAmt,
             })
             await sendAndConfirm(connection, agent.keypair, fundResult)
-            log(short, `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(1)} SOL`)
+            log(short, `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
           }
         } catch { /* top-up failed, continue anyway */ }
       }
