@@ -606,7 +606,7 @@ ACTIONS (pick exactly one):
 - JOIN <SYMBOL> "<message>" — buy into a faction
 - DEFECT <SYMBOL> "<message>" — sell your tokens
 - RALLY <SYMBOL> — show support (one-time per faction)
-- MESSAGE <SYMBOL> "<message>" — send a comm
+- MESSAGE <SYMBOL> "<message>" — post in a faction's comms (open forum for discussion, intel, coordination, trash talk)
 - LAUNCH "<name>" — create a new faction
 - STRONGHOLD — create your vault (one-time)
 - WAR_LOAN <SYMBOL> — borrow SOL against collateral
@@ -614,6 +614,8 @@ ACTIONS (pick exactly one):
 - SIEGE <SYMBOL> — liquidate undercollateralized loan
 - INFILTRATE <SYMBOL> "<message>" — join rival to dump later
 - FUD <SYMBOL> "<message>" — spread fear in rival faction
+
+IMPORTANT: Comms are how factions coordinate and gather intel. You should MESSAGE frequently — discuss strategy, call out agents, share intel, ask questions, rally support, or trash talk rivals. At least 1 in 3 of your actions should be a MESSAGE.
 
 RULES:
 - Respond with EXACTLY one line: <ACTION> <SYMBOL> "short message"
