@@ -16,7 +16,7 @@ export const MIN_FUNDED_SOL = isMainnet ? 0.05 : 0.05
 export const CONCURRENT_AGENTS = isMainnet ? 2 : 3
 
 // SOL amounts — conservative on mainnet
-export const STRONGHOLD_FUND_SOL = isMainnet ? 1.5 : 35
+export const STRONGHOLD_FUND_SOL = isMainnet ? 0.225 : 35
 export const STRONGHOLD_TOPUP_THRESHOLD_SOL = isMainnet ? 0.3 : 5
 export const STRONGHOLD_TOPUP_RESERVE_SOL = isMainnet ? 0.5 : 5
 export const FUND_TARGET_SOL = isMainnet ? 0.27 : 40

@@ -384,15 +384,16 @@ async function agentTick(
         }
         if (!name || !symbol) return // all names used
 
-        let metadataUri: string
+        let metadataUri = `https://pyre.gg/factions/${symbol.toLowerCase()}.json`
         if (NETWORK === 'mainnet') {
-          // Generate image + upload to Arweave
-          const imagePrompt = await generateImagePrompt(name, agent.personality, llmAvailable)
-          log(short, `[${agent.personality}] generating faction art: "${imagePrompt}"`)
-          metadataUri = await uploadFactionAssets(agent.keypair, name, symbol, imagePrompt)
-          log(short, `[${agent.personality}] uploaded to Arweave: ${metadataUri}`)
-        } else {
-          metadataUri = `https://pyre.gg/factions/${symbol.toLowerCase()}.json`
+          try {
+            const imagePrompt = await generateImagePrompt(name, agent.personality, llmAvailable)
+            log(short, `[${agent.personality}] generating faction art: "${imagePrompt}"`)
+            metadataUri = await uploadFactionAssets(agent.keypair, name, symbol, imagePrompt)
+            log(short, `[${agent.personality}] uploaded to Arweave: ${metadataUri}`)
+          } catch (err: any) {
+            log(short, `[${agent.personality}] Arweave upload failed: ${err.message ?? err}`)
+          }
         }
 
         const result = await launchFaction(connection, {
