@@ -110,7 +110,33 @@ import { buildCreateFactionTransaction, isPyreMint } from './vanity';
 // Mints from previous swarm runs. Agents should skip these and only
 // interact with freshly launched factions.
 
-const BLACKLISTED_MINTS = new Set<string>();
+const DEFAULT_BLACKLIST = [
+  'E1SgYPW6JXhw5BabrvJkr6L2PyvfFenYaoCTePazyNpy','6jWsyDC87RmfrZZRjuxSAxvUxE665HGZwZ2Z8j5z9epy',
+  '6J8PLgFxHb98cNURP2Yt2SKwgnUeEXpN6Us2kxaMz1py','5A297UyPQstxWpJyydDnFvn2zN8whCEYdqvnfB5bF9py',
+  '8XdWfSKLJusAcRrYzK3bWJ7dy46AkbU8qxF3B55uSfpy','7ZYrKcJbFFbG36keCYRvfc1j1HScQmJW1zRV3wVVD4py',
+  'ERQPyG2oqx5bdyuY2Nnm5ZbZY2zcB46TfUxqpzYWH5py','JCvpK3kTnh2EdQG71mqE8ZXcvzLU5EJNG5vgGZme4wpy',
+  '9RDFkGSjKpjHtXZ25uuug2MN5P7oSjzkLg16HcrKy3py','2kWcX1ZetV4jUtBPbKKk265q4gS4nuut2kc1MbaZDfpy',
+  '3r9FnQim6GToR7NkY5om8igUNu7gfpq5fk2qtv3bV5py','2498F79s1Ghyj3J4VhV1qy5hhznnM53ZwzTXM9iscopy',
+  '5VpotyDyc8QKKqLuzu8pfhtEa9gsRG1ww58DbqJUgTpy','GXi1opahTkavPfAqfUhkoUJRBjPoAmAMVW87kdbDwNpy',
+  'GKFAokGiyhXGXxUPgwQEo8fE5nBjRdJcVX6LVj7SgPpy','EKFVwfNk1xzqhpyFJSMNw8KDcLRemvqxiGoSyfRtBspy',
+  'GsZLHVt3mTwus5krUcifBWS52xMQSuXSy3RpPhEFtvpy','9azKjXnt2w4RB5ykVcyaicWSssmxoapZ9SSQLMZc4Epy',
+  'BaLwryyMrqhtsMrELkrTSdWF9UYuNdjW4413hrQqbtpy','5p9ibszMVe79mm95M8uubS6WttXem2xZfh3mWmBdvUpy',
+  'CTvoAmTggJcBTnbxcfy91Y1c6t6fU5xq3SRtYh3TgEpy','2kqVCdQS9KSv2kxLiytGZfcLsx5xwKQT6rHTg4V18hpy',
+  'zV7XZcvY8DVk4scKUiw7GGN4L3eBPSXuD7Q1NPxfspy','3UhzKfdU1wgnEN2VCykRURw88qVVqeu3ejRkUnjmhRpy',
+  'FRaS3dAdr1zo6u811XBVGUp9K2mSdQ2yG8qW4qP5hapy','4NHzWVP7hzZhd9LhTrbyxzsSnT8EmNSYVP1DpAKXHYpy',
+  'Yt2rdfp6uzS7L52df3LPmetLoy3GvKChYJ4Lmvk6gpy','9Ejju29KHPWMpda4WpFsJ6ZDHVUqNWyMZHteEisgw9py',
+  '2zPC4A7WR2cMNDfBzERp49fEbTBCyqXPKhcrgz3hWcpy','7jBAriydb1qRy7Wg4WAz8woHP4pVxZJSnF7vw95tVQpy',
+  'HvPWKuMFpG3zAdkPMbaadyo78VoJbAMtpXaBYMK1Aqpy','GyNw9bkqz2rhR66Xx7P4p11PFBrjPi2r6XoCg5gPAdpy',
+  '6HveNEes9xtkkchb76JgjWWQ61sbXjESy2vr3A7Maipy','8E3GETvTkTTaCLpzkyHJTnuNMfmGvzUEgAYnurZuLZpy',
+  'AeApaJqppwjW9S2KeZGPZpmg1kAdxZHkFRnXPZc8Kjpy','8FfteyAMQm96upu4w6cJvE5T8RcMKRf5keJMdXbukXpy',
+  'BrEj2Q9XE13WesRU1u8USiprv2DkpBcJfaqQeqQ6grpy','Dtki37mAB3DiTW1bp8LnZQyv54UuC68Yo5pGZkPdVSpy',
+  '77UzTntZ7ThyXhN4hVvSx7m6tjit8uCw6U2LVQHPSqpy','ASV9kiC6vEpZy3X7xVExuyG257KHKd3Hutbji8AVRUpy',
+  'Fc1V6KcxSriJkUNeDLqz8w5Sm4mp1s8gxornZVLcHEpy','FEizyHEUoYenqfpF87kqiGnq3w1R2TReodEfsnTrrfpy',
+  'DmwgcVHoJxKeRiij5LtedY9LWDpqoqa3hGfUyVgBkgpy','GUGz1Em5KZ57aKFqEBSd4Y4Vb6WxBd3H2b16fPCC6upy',
+  '6ZWY3Bau5zw1j7vMQQ1czSw4rjBJrExHQ8Renor2vLpy',
+];
+
+const BLACKLISTED_MINTS = new Set<string>(DEFAULT_BLACKLIST);
 
 /** Add mints to the blacklist (call at startup with old mints) */
 export function blacklistMints(mints: string[]): void {

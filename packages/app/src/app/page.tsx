@@ -3,10 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, getComms, getDexPool, getDexVaults, isPyreMint, PROGRAM_ID } from 'pyre-world-kit'
-
-// Only show factions created after this timestamp (filters out old devnet factions)
-const FACTION_EPOCH = 1741459200 // 2026-03-09T00:00:00Z
+import { getFactions, getComms, getDexPool, getDexVaults, isPyreMint, isBlacklistedMint, PROGRAM_ID } from 'pyre-world-kit'
 import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { StageEntry } from '@/components/StageEntry'
@@ -47,7 +44,7 @@ export default function StagePage() {
     if (showLoading) setLoading(true)
     try {
       const result = await getFactions(connection, { limit: 50, sort: 'newest' })
-      const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && t.created_at >= FACTION_EPOCH)
+      const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && !isBlacklistedMint(t.mint))
 
       const entries: ActionEntry[] = []
 

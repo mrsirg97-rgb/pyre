@@ -3,10 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, getMembers, getDexVaults, isPyreMint } from 'pyre-world-kit'
-
-// Only show factions created after this timestamp (filters out old devnet factions)
-const FACTION_EPOCH = 1741459200 // 2026-03-09T00:00:00Z
+import { getFactions, getMembers, getDexVaults, isPyreMint, isBlacklistedMint } from 'pyre-world-kit'
 import type { FactionSummary, Member } from 'pyre-world-kit'
 import Link from 'next/link'
 import { Header } from '@/components/Header'
@@ -32,7 +29,7 @@ export default function FactionsPage() {
     setLoading(true)
     try {
       const result = await getFactions(connection, { limit: 100, sort: 'marketcap' })
-      const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && t.created_at >= FACTION_EPOCH)
+      const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && !isBlacklistedMint(t.mint))
       pyreFactions.sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
       setFactions(pyreFactions)
       setTotal(pyreFactions.length)
