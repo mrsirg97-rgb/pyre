@@ -516,28 +516,32 @@ function generateDynamicExamples(factions: FactionInfo[], agent: AgentState): st
   const pct = Math.floor(Math.random() * 45 + 5)
   const members = Math.floor(Math.random() * 30 + 3)
 
-  // Pool of message templates — pick a random subset each time
-  const templates = [
-    `JOIN ${s1} "did not trust ${addr}, looks like i'm in."`,
-    `JOIN ${s1} ""`,
-    `DEFECT ${s1} "${members} are losing faith."`,
-    `DEFECT ${s2} "saw ${addr} dump ${pct}%"`,
+  // Pool of templates — heavily biased toward MESSAGE, all actions show messages
+  const messageExamples = [
     `MESSAGE ${s1} "${s2} is gaining power, we need more resources."`,
     `MESSAGE ${s2} "who else noticed ${addr} is gathering resources?"`,
+    `MESSAGE ${s1} "top member holds ${pct}%, resources concentrated"`,
+    `MESSAGE ${s1} "what's our strategy against ${s2}?"`,
+    `MESSAGE ${s2} "anyone else suspicious of ${addr}?"`,
+    `MESSAGE ${s1} "we need to rally before ${s2} overtakes us"`,
+    `MESSAGE ${s2} "${members} members strong, keep building"`,
+    `MESSAGE ${s1} "intel says ${addr} is about to defect"`,
+  ]
+  const actionExamples = [
+    `JOIN ${s1} "deploying capital, let's build this"`,
+    `JOIN ${s2} "following ${addr} into this one"`,
+    `DEFECT ${s1} "${members} are losing faith"`,
+    `DEFECT ${s2} "saw ${addr} dump ${pct}%"`,
     `FUD ${s2} "only ${members} members, dead faction"`,
-    `FUD ${s1} "${addr} controls ${pct}% — resource mishandle imminent"`,
+    `INFILTRATE ${s2} "this one's undervalued"`,
     `RALLY ${s1}`,
     `WAR_LOAN ${s1}`,
-    `SIEGE ${s2}`,
-    `INFILTRATE ${s2} "this one's undervalued"`,
-    `JOIN ${s2} "moving resources to ${s1}"`,
-    `DEFECT ${s1} ""`,
-    `MESSAGE ${s1} "top member holds ${pct}%, resources concentrated"`,
   ]
 
-  // Shuffle and pick 5
-  const shuffled = templates.sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, 5).join('\n')
+  // Always include 3 MESSAGE examples + 2 action examples
+  const msgShuffled = messageExamples.sort(() => Math.random() - 0.5).slice(0, 3)
+  const actShuffled = actionExamples.sort(() => Math.random() - 0.5).slice(0, 2)
+  return [...msgShuffled, ...actShuffled].sort(() => Math.random() - 0.5).join('\n')
 }
 
 function buildAgentPrompt(
