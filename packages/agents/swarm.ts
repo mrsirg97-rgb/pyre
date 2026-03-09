@@ -939,7 +939,24 @@ async function ensureStronghold(connection: Connection, agent: AgentState): Prom
     const existing = await getStronghold(connection, agent.publicKey)
     if (existing) {
       agent.hasStronghold = true
-      log(short, `[${agent.personality}] stronghold already exists`)
+      // Top up vault if low
+      if (existing.sol_balance < 5 * LAMPORTS_PER_SOL) {
+        try {
+          const walletBal = await connection.getBalance(new PublicKey(agent.publicKey))
+          const reserve = 5 * LAMPORTS_PER_SOL // keep 5 SOL in wallet for fees
+          const available = walletBal - reserve
+          if (available > 1 * LAMPORTS_PER_SOL) {
+            const fundAmt = Math.floor(available)
+            const fundResult = await fundStronghold(connection, {
+              depositor: agent.publicKey,
+              stronghold_creator: agent.publicKey,
+              amount_sol: fundAmt,
+            })
+            await sendAndConfirm(connection, agent.keypair, fundResult)
+            log(short, `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(1)} SOL`)
+          }
+        } catch { /* top-up failed, continue anyway */ }
+      }
       return
     }
   } catch { /* not found, create one */ }
