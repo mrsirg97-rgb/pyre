@@ -981,8 +981,8 @@ async function swarm() {
     const balance = await connection.getBalance(kp.publicKey)
     const sol = balance / LAMPORTS_PER_SOL
 
-    if (sol < MIN_FUNDED_SOL) {
-      logGlobal(`  Skipping ${pubkey.slice(0, 8)}... (${sol.toFixed(4)} SOL — need ${MIN_FUNDED_SOL})`)
+    if (sol < 0.001) {
+      logGlobal(`  Skipping ${pubkey.slice(0, 8)}... (${sol.toFixed(4)} SOL — no gas)`)
       continue
     }
 
