@@ -91,6 +91,32 @@ export const fetchFactionIntel = async (
   }
 }
 
+/**
+ * Generate an image prompt for a faction via LLM (or fallback).
+ * Returns a short descriptive prompt suitable for Pollinations.ai.
+ */
+export const generateImagePrompt = async (
+  name: string,
+  personality: Personality,
+  llmAvailable: boolean,
+): Promise<string> => {
+  const prompt = `Generate a short image description (1 sentence, under 20 words) for a faction emblem/logo.
+
+Faction name: "${name}"
+Style: dark fantasy, militant, iconic symbol, no text, simple background
+
+Your response (one sentence only):`
+
+  const raw = await ollamaGenerate(prompt, llmAvailable)
+  if (raw) {
+    const line = raw.split('\n').find(l => l.trim().length > 10)
+    if (line) return line.trim().replace(/^["']|["']$/g, '')
+  }
+
+  // Fallback: deterministic prompt from name
+  return `dark fantasy faction emblem for ${name}, iconic militant symbol, simple background, no text`
+}
+
 export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentState): string => {
   const syms = factions.map(f => f.symbol)
   const s1 = syms.length > 0 ? pick(syms) : 'IRON'

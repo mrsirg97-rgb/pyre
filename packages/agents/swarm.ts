@@ -65,12 +65,13 @@ import * as path from 'path'
 import { AgentState, FactionInfo, LLMDecision } from './src/types'
 import { chooseAction, sentimentBuySize } from './src/action'
 import { log, logGlobal, pick, randRange, sleep } from './src/util'
-import { AGENT_COUNT, KEYS_FILE, LLM_ENABLED, MAX_INTERVAL, MIN_FUNDED_SOL, MIN_INTERVAL, OLLAMA_MODEL, OLLAMA_URL, RPC_URL, NETWORK, CONCURRENT_AGENTS, STRONGHOLD_FUND_SOL, FUND_TARGET_SOL } from './src/config'
+import { AGENT_COUNT, KEYS_FILE, LLM_ENABLED, MAX_INTERVAL, MIN_FUNDED_SOL, MIN_INTERVAL, OLLAMA_MODEL, OLLAMA_URL, RPC_URL, NETWORK, CONCURRENT_AGENTS, STRONGHOLD_FUND_SOL, FUND_TARGET_SOL, MAX_SWARM_FACTIONS } from './src/config'
 import { llmDecide } from './src/agent'
 import { assignPersonality, PERSONALITY_SOL } from './src/identity'
 import { ensureStronghold } from './src/stronghold'
 import { sendAndConfirm } from './src/tx'
-import { FALLBACK_FACTION_NAMES, FALLBACK_FACTION_SYMBOLS, generateFactionIdentity } from './src/faction'
+import { FALLBACK_FACTION_NAMES, FALLBACK_FACTION_SYMBOLS, generateFactionIdentity, generateImagePrompt } from './src/faction'
+import { uploadFactionAssets } from './src/irys'
 import { parseCustomError } from './src/error'
 import { generateKeys, loadKeys, saveKeys } from './src/keys'
 import { loadState, saveState } from './src/state'
@@ -358,6 +359,9 @@ async function agentTick(
 
       case 'launch': {
         if (agent.founded.length >= 2) return
+        // Global faction cap (mainnet: 3)
+        const totalFounded = agents.reduce((n, a) => n + a.founded.length, 0)
+        if (totalFounded >= MAX_SWARM_FACTIONS) return
 
         // Generate faction name + symbol via LLM, fall back to static list
         let name: string | null = null
@@ -380,11 +384,22 @@ async function agentTick(
         }
         if (!name || !symbol) return // all names used
 
+        let metadataUri: string
+        if (NETWORK === 'mainnet') {
+          // Generate image + upload to Arweave
+          const imagePrompt = await generateImagePrompt(name, agent.personality, llmAvailable)
+          log(short, `[${agent.personality}] generating faction art: "${imagePrompt}"`)
+          metadataUri = await uploadFactionAssets(agent.keypair, name, symbol, imagePrompt)
+          log(short, `[${agent.personality}] uploaded to Arweave: ${metadataUri}`)
+        } else {
+          metadataUri = `https://pyre.gg/factions/${symbol.toLowerCase()}.json`
+        }
+
         const result = await launchFaction(connection, {
           founder: agent.publicKey,
           name,
           symbol,
-          metadata_uri: `https://pyre.gg/factions/${symbol.toLowerCase()}.json`,
+          metadata_uri: metadataUri,
           community_faction: true,
         })
         await sendAndConfirm(connection, agent.keypair, result)
