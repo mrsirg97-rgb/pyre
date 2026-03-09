@@ -320,7 +320,11 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   if (action === 'repay_loan' && (!faction || !agent.activeLoans.has(faction.mint))) return null
   if ((action === 'siege' || action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return null
   if (action === 'infiltrate' && !faction) return null
-  if (action === 'fud' && (!faction || !agent.holdings.has(faction.mint))) return null // need tokens to sell
+  if (action === 'fud' && faction && !agent.holdings.has(faction.mint)) {
+    // No holdings to sell — downgrade to MESSAGE (micro buy + same message)
+    return { action: 'message', faction: faction.symbol, message, reasoning: line }
+  }
+  if (action === 'fud' && !faction) return null
 
   const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
   const sol = randRange(minSol, maxSol)
