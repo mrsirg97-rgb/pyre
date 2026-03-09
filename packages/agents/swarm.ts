@@ -161,11 +161,11 @@ const PERSONALITY_WEIGHTS: Record<Personality, number[]> = {
 }
 
 const PERSONALITY_SOL: Record<Personality, [number, number]> = {
-  loyalist:     [0.1, 0.5],
-  mercenary:    [0.05, 0.4],
-  provocateur:  [0.03, 0.25],
-  scout:        [0.02, 0.15],
-  whale:        [0.5, 2.0],
+  loyalist:     [0.02, 0.1],
+  mercenary:    [0.01, 0.08],
+  provocateur:  [0.005, 0.05],
+  scout:        [0.005, 0.03],
+  whale:        [0.1, 0.5],
 }
 
 
@@ -652,6 +652,12 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'SEND': 'MESSAGE', 'SAY': 'MESSAGE', 'CHAT': 'MESSAGE', 'MSG': 'MESSAGE', 'MESSAGING': 'MESSAGE',
       'CREATE': 'LAUNCH', 'FOUND': 'LAUNCH', 'HARVEST': 'TITHE',
       'MIGRATE': 'ASCEND', 'RECLAIM': 'RAZE', 'SPY': 'INFILTRATE',
+      'INVESTIGATION': 'INFILTRATE', 'INVESTIGATE': 'INFILTRATE', 'SCOUT': 'INFILTRATE', 'RECON': 'INFILTRATE',
+      'PLEDGE': 'JOIN', 'ALLY': 'JOIN', 'BACK': 'JOIN', 'FUND': 'JOIN',
+      'WITHDRAW': 'DEFECT', 'RETREAT': 'DEFECT', 'ABANDON': 'DEFECT', 'BAIL': 'DEFECT',
+      'ANNOUNCE': 'MESSAGE', 'BROADCAST': 'MESSAGE', 'COMM': 'MESSAGE', 'COMMS': 'MESSAGE', 'REPORT': 'MESSAGE',
+      'SMEAR': 'FUD', 'SLANDER': 'FUD', 'DISCREDIT': 'FUD', 'SABOTAGE': 'FUD', 'UNDERMINE': 'FUD',
+      'ENDORSE': 'RALLY', 'PROMOTE': 'RALLY', 'BOOST': 'RALLY',
       // Common misspellings
       'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT',
       'JION': 'JOIN', 'JOING': 'JOIN', 'JOIIN': 'JOIN',
