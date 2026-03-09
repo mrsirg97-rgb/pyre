@@ -6,7 +6,9 @@ export const NETWORK = (process.env.TORCH_NETWORK ?? 'devnet') as 'devnet' | 'ma
 const isMainnet = NETWORK === 'mainnet'
 
 export const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? (isMainnet ? '15' : '150'))
-export const RPC_URL = process.env.RPC_URL ?? 'https://torch-market-rpc.mrsirg97.workers.dev'
+export const RPC_URL = process.env.RPC_URL ?? (isMainnet
+  ? 'https://torch-market-rpc.mrsirg97.workers.dev'
+  : 'https://torch-market-rpc.mrsirg97.workers.dev/devnet')
 export const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? (isMainnet ? '5000' : '1000'))
 export const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? (isMainnet ? '10000' : '2500'))
 export const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
@@ -19,7 +21,7 @@ export const CONCURRENT_AGENTS = isMainnet ? 2 : 3
 export const STRONGHOLD_FUND_SOL = isMainnet ? 0.225 : 35
 export const STRONGHOLD_TOPUP_THRESHOLD_SOL = isMainnet ? 0.02 : 5
 export const STRONGHOLD_TOPUP_RESERVE_SOL = isMainnet ? 0.05 : 5
-export const FUND_TARGET_SOL = isMainnet ? 0.27 : 40
+export const FUND_TARGET_SOL = isMainnet ? 0.27 : 0.5
 export const MAX_SWARM_FACTIONS = isMainnet ? 3 : Infinity
 
 // File paths — separate per network to avoid cross-contamination

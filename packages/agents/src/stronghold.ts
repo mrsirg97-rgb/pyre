@@ -28,7 +28,7 @@ export const ensureStronghold = async (connection: Connection, agent: AgentState
           log(short, `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
         }
       }
-    } catch { /* top-up check failed, continue */ }
+    } catch (err: any) { log(short, `[${agent.personality}] vault topup check failed: ${err.message?.slice(0, 80) ?? err}`) }
     return
   }
 
