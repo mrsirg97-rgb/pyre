@@ -15,6 +15,7 @@ export const PROGRAM_ERRORS: Record<number, string> = {
   6012: 'AmountTooSmall',
   6013: 'ProtocolPaused',
   6014: 'ZeroAmount',
+  6022: 'VoteRequired',
   6030: 'NotMigrated',
   6044: 'LendingNotEnabled',
   6045: 'LendingRequiresMigration',
