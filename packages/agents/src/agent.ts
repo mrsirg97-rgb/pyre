@@ -275,7 +275,6 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     }
   }
 
-  log(agent.publicKey.slice(0, 8), `LLM parse fail: "${raw.slice(0, 80)}"`)
   return null
 }
 
@@ -413,7 +412,14 @@ export async function llmDecide(
 
   const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet, recentMessages)
   const raw = await ollamaGenerate(prompt, llmAvailable)
-  if (!raw) return null
+  if (!raw) {
+    log(agent.publicKey.slice(0, 8), `LLM returned null`)
+    return null
+  }
 
-  return parseLLMDecision(raw, factions, agent)
+  const result = parseLLMDecision(raw, factions, agent)
+  if (!result) {
+    log(agent.publicKey.slice(0, 8), `LLM parse fail: "${raw.slice(0, 100)}"`)
+  }
+  return result
 }
