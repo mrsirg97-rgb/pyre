@@ -25,5 +25,5 @@ export const FUND_TARGET_SOL = isMainnet ? 3 : 40
 
 // File paths — separate per network to avoid cross-contamination
 const suffix = isMainnet ? '-mainnet' : ''
-export const KEYS_FILE = path.join(__dirname, `.swarm-keys${suffix}.json`)
-export const STATE_FILE = path.join(__dirname, `.swarm-state${suffix}.json`)
+export const KEYS_FILE = path.join(__dirname, '..', `.swarm-keys${suffix}.json`)
+export const STATE_FILE = path.join(__dirname, '..', `.swarm-state${suffix}.json`)
