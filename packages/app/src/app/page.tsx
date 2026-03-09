@@ -107,10 +107,11 @@ export default function StagePage() {
                 }
               }
 
-              // Detect action from the signer's token balance change
+              // Detect action from token balance changes
               const pre = tx.meta.preTokenBalances || []
               const post = tx.meta.postTokenBalances || []
 
+              // 1. Check signer's token delta (direct trades)
               let traderTokenDelta = 0
               for (const postBal of post) {
                 if (postBal.mint !== faction.mint) continue
@@ -122,6 +123,24 @@ export default function StagePage() {
                 break
               }
 
+              // 2. Vault-routed: signer delta is 0, check the vault's token account
+              // Find any non-signer, non-BC account with a token delta for this mint
+              let vaultTokenDelta = 0
+              if (traderTokenDelta === 0) {
+                for (const postBal of post) {
+                  if (postBal.mint !== faction.mint) continue
+                  if (postBal.owner === trader || postBal.owner === bcAddress) continue
+                  const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
+                  const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                  const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                  const delta = postAmt - preAmt
+                  if (delta !== 0) {
+                    vaultTokenDelta = delta
+                    break
+                  }
+                }
+              }
+
               let action: ActionEntry['action']
               const isCreateTx = i === txs.length - 1
               const postBalance = tx.meta.postBalances[bcIndex]
@@ -131,16 +150,12 @@ export default function StagePage() {
                 action = 'launched'
               } else if (isMigrationTx) {
                 action = 'ascended'
-              } else if (traderTokenDelta > 0) {
+              } else if (traderTokenDelta > 0 || vaultTokenDelta > 0) {
                 action = 'joined'
-              } else if (traderTokenDelta < 0) {
+              } else if (traderTokenDelta < 0 || vaultTokenDelta < 0) {
                 action = 'defected'
-              } else if (solChange > 0) {
-                // Vault-routed buy: signer has no token delta, but SOL flows into bonding curve
-                action = 'joined'
-              } else if (solChange < 0) {
-                // Vault-routed sell: SOL flows out of bonding curve
-                action = 'defected'
+              } else if (solChange !== 0) {
+                action = solChange > 0 ? 'joined' : 'defected'
               } else {
                 action = 'rallied'
               }
@@ -219,6 +234,7 @@ export default function StagePage() {
               const pre = tx.meta.preTokenBalances || []
               const post = tx.meta.postTokenBalances || []
 
+              // Check signer's token delta (direct trades)
               let traderTokenDelta = 0
               for (const postBal of post) {
                 if (postBal.mint !== faction.mint) continue
@@ -230,24 +246,35 @@ export default function StagePage() {
                 break
               }
 
-              // SOL amount + direction from pool's SOL vault
+              // Vault-routed: check vault's token account (non-signer, non-pool)
+              let vaultTokenDelta = 0
+              if (traderTokenDelta === 0) {
+                for (const postBal of post) {
+                  if (postBal.mint !== faction.mint) continue
+                  if (postBal.owner === trader) continue
+                  const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
+                  const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                  const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                  const delta = postAmt - preAmt
+                  if (delta !== 0) {
+                    vaultTokenDelta = delta
+                    break
+                  }
+                }
+              }
+
+              // SOL amount from pool's SOL vault
               let absSol = 0
-              let solVaultDelta = 0
               const { solVault } = getDexVaults(faction.mint)
               const solVaultIndex = tx.transaction.message.accountKeys.findIndex(
                 k => k.pubkey.toString() === solVault
               )
               if (solVaultIndex !== -1) {
-                solVaultDelta = tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]
-                absSol = Math.abs(solVaultDelta) / 1_000_000_000
+                absSol = Math.abs(tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]) / 1_000_000_000
               }
 
-              // Signer token delta for direct trades, SOL vault direction for vault-routed
-              // SOL into pool = buy (joined), SOL out of pool = sell (defected)
-              const action: ActionEntry['action'] = traderTokenDelta > 0 ? 'joined'
-                : traderTokenDelta < 0 ? 'defected'
-                : solVaultDelta > 0 ? 'joined'
-                : solVaultDelta < 0 ? 'defected'
+              const action: ActionEntry['action'] = traderTokenDelta > 0 || vaultTokenDelta > 0 ? 'joined'
+                : traderTokenDelta < 0 || vaultTokenDelta < 0 ? 'defected'
                 : 'joined'
 
               entries.push({
@@ -317,11 +344,12 @@ export default function StagePage() {
       // Reclassify micro-trades with memos:
       // - buys with memo + no meaningful SOL → "said in" (messaged)
       // - sells with memo + no meaningful SOL → "argued in" (argued)
+      // - rallied with memo → vault-routed message/fud that couldn't be classified
       for (const e of merged) {
         if (e.memo && e.amount_sol === null) {
           if (e.action === 'defected') {
             e.action = 'argued'
-          } else if (e.action === 'joined' || e.action === 'reinforced') {
+          } else if (e.action === 'joined' || e.action === 'reinforced' || e.action === 'rallied') {
             e.action = 'messaged'
           }
         }
