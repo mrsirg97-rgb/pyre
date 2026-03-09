@@ -7,12 +7,13 @@ import { NETWORK } from './config'
 // Devnet: full action set
 // Mainnet: mostly message + fud, with rare join/defect/launch
 // [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
+// [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
 export const PERSONALITY_WEIGHTS: Record<Personality, number[]> = NETWORK === 'mainnet' ? {
-  loyalist:     [0.04, 0.02, 0, 0.01, 0.68, 0, 0, 0, 0, 0, 0, 0, 0, 0.25],
-  mercenary:    [0.03, 0.04, 0, 0.01, 0.50, 0, 0, 0, 0, 0, 0, 0, 0, 0.42],
-  provocateur:  [0.02, 0.03, 0, 0.01, 0.42, 0, 0, 0, 0, 0, 0, 0, 0, 0.52],
-  scout:        [0.03, 0.02, 0, 0.01, 0.74, 0, 0, 0, 0, 0, 0, 0, 0, 0.20],
-  whale:        [0.05, 0.03, 0, 0.01, 0.54, 0, 0, 0, 0, 0, 0, 0, 0, 0.37],
+  loyalist:     [0.02, 0.01, 0, 0.005, 0.78, 0, 0, 0, 0, 0, 0, 0, 0, 0.185],
+  mercenary:    [0.02, 0.02, 0, 0.005, 0.65, 0, 0, 0, 0, 0, 0, 0, 0, 0.305],
+  provocateur:  [0.01, 0.01, 0, 0.005, 0.55, 0, 0, 0, 0, 0, 0, 0, 0, 0.425],
+  scout:        [0.02, 0.01, 0, 0.005, 0.82, 0, 0, 0, 0, 0, 0, 0, 0, 0.145],
+  whale:        [0.03, 0.02, 0, 0.005, 0.70, 0, 0, 0, 0, 0, 0, 0, 0, 0.245],
 } : {
   loyalist:     [0.28, 0.06, 0.14, 0.02, 0.12, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.10, 0.02, 0.03],
   mercenary:    [0.16, 0.18, 0.04, 0.02, 0.08, 0.04, 0.08, 0.04, 0.06, 0.03, 0.04, 0.03, 0.12, 0.08],
