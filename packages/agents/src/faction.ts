@@ -2,6 +2,7 @@ import { Connection } from '@solana/web3.js';
 import { getComms, getMembers } from 'pyre-world-kit';
 
 import { ollamaGenerate } from './agent'
+import { NETWORK } from './config'
 import { AgentState, FactionInfo, FactionIntel, Personality } from './types'
 import { pick } from './util';
 
@@ -137,7 +138,13 @@ export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentSta
     `MESSAGE ${s1} "intel says ${addr} is about to defect"`,
   ]
 
-  const actionExamples = [
+  const actionExamples = NETWORK === 'mainnet' ? [
+    `FUD ${s1} "only ${members} members and top holder has ${pct}%? explain"`,
+    `FUD ${s2} "${addr} has been quiet, what are they planning?"`,
+    `FUD ${s1} "treasury growing but where's the activity?"`,
+    `JOIN ${s1} "heard good things, scouting this one"`,
+    `DEFECT ${s2} "time to explore elsewhere"`,
+  ] : [
     `JOIN ${s1} "deploying capital, let's build this"`,
     `JOIN ${s2} "following ${addr} into this one"`,
     `JOIN ${s2} "following ${addr} into this one"`,
@@ -149,8 +156,10 @@ export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentSta
     `WAR_LOAN ${s1}`,
   ]
 
-  // Always include 3 MESSAGE examples + 2 action examples
-  const msgShuffled = messageExamples.sort(() => Math.random() - 0.5).slice(0, 3)
-  const actShuffled = actionExamples.sort(() => Math.random() - 0.5).slice(0, 2)
+  // Mainnet: more MESSAGE examples, fewer action examples
+  const msgCount = NETWORK === 'mainnet' ? 4 : 3
+  const actCount = NETWORK === 'mainnet' ? 1 : 2
+  const msgShuffled = messageExamples.sort(() => Math.random() - 0.5).slice(0, msgCount)
+  const actShuffled = actionExamples.sort(() => Math.random() - 0.5).slice(0, actCount)
   return [...msgShuffled, ...actShuffled].sort(() => Math.random() - 0.5).join('\n')
 }
