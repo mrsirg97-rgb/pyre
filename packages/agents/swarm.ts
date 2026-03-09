@@ -415,7 +415,7 @@ async function agentTick(
         const message = decision.message
         if (!message) return // no message to send without LLM
 
-        if (!agent.hasStronghold) await ensureStronghold(connection, agent)
+        await ensureStronghold(connection, agent)
         if (!agent.hasStronghold) return
 
         const result = await messageFaction(connection, {
@@ -701,7 +701,7 @@ async function agentTick(
         if (!message) return // FUD requires a message
         if (!agent.holdings.has(faction.mint)) return // need tokens to sell
 
-        if (!agent.hasStronghold) await ensureStronghold(connection, agent)
+        await ensureStronghold(connection, agent)
         if (!agent.hasStronghold) return
 
         const result = await fudFaction(connection, {
