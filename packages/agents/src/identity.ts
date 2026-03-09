@@ -23,11 +23,11 @@ export const PERSONALITY_WEIGHTS: Record<Personality, number[]> = NETWORK === 'm
 
 // SOL spend ranges per personality — scaled down on mainnet
 export const PERSONALITY_SOL: Record<Personality, [number, number]> = NETWORK === 'mainnet' ? {
-  loyalist:     [0.005, 0.025],
-  mercenary:    [0.003, 0.02],
-  provocateur:  [0.002, 0.012],
-  scout:        [0.002, 0.008],
-  whale:        [0.02, 0.1],
+  loyalist:     [0.001, 0.005],
+  mercenary:    [0.001, 0.004],
+  provocateur:  [0.001, 0.003],
+  scout:        [0.001, 0.002],
+  whale:        [0.002, 0.01],
 } : {
   loyalist:     [0.02, 0.1],
   mercenary:    [0.01, 0.08],
