@@ -21,7 +21,7 @@ export const ensureStronghold = async (connection: Connection, agent: AgentState
           const walletBal = await connection.getBalance(new PublicKey(agent.publicKey))
           const reserve = STRONGHOLD_TOPUP_RESERVE_SOL * LAMPORTS_PER_SOL
           const available = walletBal - reserve
-          if (available > 1 * LAMPORTS_PER_SOL) {
+          if (available > 0.01 * LAMPORTS_PER_SOL) {
             const fundAmt = Math.floor(available)
             const fundResult = await fundStronghold(connection, {
               depositor: agent.publicKey,
