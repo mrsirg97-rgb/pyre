@@ -218,13 +218,10 @@ async function agentTick(
         const sol = decision.sol ?? sentimentBuySize(agent, faction.mint)
         const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
 
-        if (faction.status === 'ascended') {
-          // Post-migration: trade via stronghold on DEX
-          if (!agent.hasStronghold) {
-            await ensureStronghold(connection, agent)
-          }
-          if (!agent.hasStronghold) return // failed to create
+        await ensureStronghold(connection, agent)
+        if (!agent.hasStronghold) return
 
+        if (faction.status === 'ascended') {
           const result = await tradeOnDex(connection, {
             mint: faction.mint,
             signer: agent.publicKey,
@@ -236,11 +233,6 @@ async function agentTick(
           })
           await sendAndConfirm(connection, agent.keypair, result)
         } else {
-          // All buys go through vault (stronghold)
-          if (!agent.hasStronghold) {
-            await ensureStronghold(connection, agent)
-          }
-          if (!agent.hasStronghold) return
 
           const alreadyVoted = agent.voted.has(faction.mint)
           const params: any = {
