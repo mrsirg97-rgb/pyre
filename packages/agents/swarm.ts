@@ -639,8 +639,8 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
 
   for (const candidate of lines) {
     const line = candidate.trim()
-    // Strip leading punctuation/bullets and literal "ACTION" prefix models sometimes add
-    const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '').replace(/^ACTION\s+/i, '')
+    // Strip leading punctuation/bullets, LLM preamble tags, and literal "ACTION" prefix models sometimes add
+    const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
 
     // All valid actions + aliases mapped to real actions
     const ACTION_MAP: Record<string, string> = {
