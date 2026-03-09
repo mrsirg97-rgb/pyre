@@ -107,17 +107,14 @@ export default function StagePage() {
                 }
               }
 
-              // Detect action from the TRADER's token balance change
-              // Trader = signer = accountKeys[0]
-              // Their token balance increased = bought (joined), decreased = sold (defected)
-              let traderTokenDelta = 0
+              // Detect action from the signer's token balance change
               const pre = tx.meta.preTokenBalances || []
               const post = tx.meta.postTokenBalances || []
+
+              let traderTokenDelta = 0
               for (const postBal of post) {
                 if (postBal.mint !== faction.mint) continue
-                // Match by owner (trader's pubkey) — works for both direct and vault-routed
-                const owner = postBal.owner
-                if (owner !== trader) continue
+                if (postBal.owner !== trader) continue
                 const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
                 const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
                 const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
@@ -134,16 +131,18 @@ export default function StagePage() {
                 action = 'launched'
               } else if (isMigrationTx) {
                 action = 'ascended'
-              } else if (traderTokenDelta === 0 && solChange === 0) {
-                action = 'rallied'
               } else if (traderTokenDelta > 0) {
                 action = 'joined'
               } else if (traderTokenDelta < 0) {
                 action = 'defected'
               } else if (solChange > 0) {
+                // Vault-routed buy: signer has no token delta, but SOL flows into bonding curve
                 action = 'joined'
-              } else {
+              } else if (solChange < 0) {
+                // Vault-routed sell: SOL flows out of bonding curve
                 action = 'defected'
+              } else {
+                action = 'rallied'
               }
 
               entries.push({
@@ -216,10 +215,11 @@ export default function StagePage() {
                 }
               }
 
-              // Detect buy vs sell from the trader's token balance change
-              let traderTokenDelta = 0
+              // Detect buy vs sell from token balance changes
               const pre = tx.meta.preTokenBalances || []
               const post = tx.meta.postTokenBalances || []
+
+              let traderTokenDelta = 0
               for (const postBal of post) {
                 if (postBal.mint !== faction.mint) continue
                 if (postBal.owner !== trader) continue
@@ -230,17 +230,25 @@ export default function StagePage() {
                 break
               }
 
-              // SOL amount from pool's SOL vault
+              // SOL amount + direction from pool's SOL vault
               let absSol = 0
+              let solVaultDelta = 0
               const { solVault } = getDexVaults(faction.mint)
               const solVaultIndex = tx.transaction.message.accountKeys.findIndex(
                 k => k.pubkey.toString() === solVault
               )
               if (solVaultIndex !== -1) {
-                absSol = Math.abs(tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]) / 1_000_000_000
+                solVaultDelta = tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]
+                absSol = Math.abs(solVaultDelta) / 1_000_000_000
               }
 
-              const action: ActionEntry['action'] = traderTokenDelta >= 0 ? 'joined' : 'defected'
+              // Signer token delta for direct trades, SOL vault direction for vault-routed
+              // SOL into pool = buy (joined), SOL out of pool = sell (defected)
+              const action: ActionEntry['action'] = traderTokenDelta > 0 ? 'joined'
+                : traderTokenDelta < 0 ? 'defected'
+                : solVaultDelta > 0 ? 'joined'
+                : solVaultDelta < 0 ? 'defected'
+                : 'joined'
 
               entries.push({
                 agent: trader,

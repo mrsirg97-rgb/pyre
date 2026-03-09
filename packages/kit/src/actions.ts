@@ -499,7 +499,7 @@ export async function messageFaction(
   connection: Connection,
   params: MessageFactionParams,
 ): Promise<TransactionResult> {
-  const MICRO_BUY_LAMPORTS = 1_000; // 0.001 SOL
+  const MICRO_BUY_LAMPORTS = 1_000_000; // 0.001 SOL
   if (params.ascended) {
     return buildVaultSwapTransaction(connection, {
       mint: params.mint,
