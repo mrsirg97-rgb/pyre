@@ -37,6 +37,7 @@ import {
   isPyreMint,
   // Stronghold
   createStronghold,
+  getStronghold,
   fundStronghold,
   // DEX trading (post-migration)
   tradeOnDex,
@@ -920,6 +921,17 @@ async function sendAndConfirm(connection: Connection, keypair: Keypair, result: 
 async function ensureStronghold(connection: Connection, agent: AgentState): Promise<void> {
   if (agent.hasStronghold) return
   const short = agent.publicKey.slice(0, 8)
+
+  // Check if stronghold already exists on-chain (from a previous run)
+  try {
+    const existing = await getStronghold(connection, agent.publicKey)
+    if (existing) {
+      agent.hasStronghold = true
+      log(short, `[${agent.personality}] stronghold already exists`)
+      return
+    }
+  } catch { /* not found, create one */ }
+
   try {
     const result = await createStronghold(connection, { creator: agent.publicKey })
     await sendAndConfirm(connection, agent.keypair, result)
