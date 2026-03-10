@@ -303,7 +303,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'PLEDGE': 'JOIN', 'ALLY': 'JOIN', 'BACK': 'JOIN', 'FUND': 'JOIN',
       'WITHDRAW': 'DEFECT', 'RETREAT': 'DEFECT', 'ABANDON': 'DEFECT', 'BAIL': 'DEFECT',
       'ANNOUNCE': 'MESSAGE', 'BROADCAST': 'MESSAGE', 'COMM': 'MESSAGE', 'COMMS': 'MESSAGE', 'REPORT': 'MESSAGE',
-      'SMEAR': 'FUD', 'SLANDER': 'FUD', 'DISCREDIT': 'FUD', 'SABOTAGE': 'FUD', 'UNDERMINE': 'FUD', 'ARGUE': 'FUD', 'TRASH': 'FUD', 'CRITICIZE': 'FUD', 'MOCK': 'FUD',
+      'SMEAR': 'FUD', 'SLANDER': 'FUD', 'DISCREDIT': 'FUD', 'SABOTAGE': 'FUD', 'UNDERMINE': 'FUD', 'ARGUE': 'FUD', 'TRASH': 'FUD', 'CRITICIZE': 'FUD', 'MOCK': 'FUD', 'FUDS': 'FUD',
       'ENDORSE': 'RALLY', 'PROMOTE': 'RALLY', 'BOOST': 'RALLY',
       // Common misspellings
       'DEFLECT': 'DEFECT', 'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT',
