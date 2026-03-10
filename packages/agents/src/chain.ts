@@ -113,9 +113,15 @@ function parseTransaction(
     logs.some(l => l.includes(TORCH_PROGRAM_ID))
   if (!isTorchTx) return null
 
-  const action = categorizeFromLogs(logs)
+  let action = categorizeFromLogs(logs)
   const mint = accountKeys.find(k => knownMints.has(k))
   const memo = extractMemo(tx)
+
+  // A buy with a memo = message, a sell with a memo = fud
+  if (memo?.trim()) {
+    if (action === 'join' || action === 'dex_buy') action = 'message'
+    else if (action === 'defect' || action === 'dex_sell') action = 'fud'
+  }
 
   return { signature, timestamp, action, mint, memo }
 }

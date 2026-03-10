@@ -114,13 +114,19 @@ function parseTransaction(
   if (!isTorchTx) return null
 
   // Determine action type from logs
-  const action = categorizeFromLogs(logs)
+  let action = categorizeFromLogs(logs)
 
   // Find faction mint from account keys
   const mint = findMintInAccounts(accountKeys, knownMints)
 
   // Extract memo
   const memo = extractMemo(tx)
+
+  // Buy + memo = message (micro buy with text), sell + memo = fud (micro sell with text)
+  if (memo?.trim()) {
+    if (action === 'join' || action === 'dex_buy') action = 'message'
+    else if (action === 'defect' || action === 'dex_sell') action = 'fud'
+  }
 
   // Find other agents (signers that aren't this agent)
   const otherAgents = tx.transaction.message.accountKeys
