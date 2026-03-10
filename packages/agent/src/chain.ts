@@ -334,48 +334,77 @@ function scoreMemoPersonality(memos: string[]): Record<Personality, number> {
  *   stronghold=5, war_loan=6, repay_loan=7, siege=8, ascend=9,
  *   raze=10, tithe=11, infiltrate=12, fud=13]
  */
-export function classifyPersonality(weights: number[], memos: string[] = []): Personality {
-  const total = weights.reduce((a, b) => a + b, 0)
-  if (total === 0) return 'loyalist'
+/**
+ * Score a single action set (per-faction or global) into personality scores.
+ */
+function scoreActions(r: number[]): Record<Personality, number> {
+  const joinRate = r[0], defectRate = r[1], rallyRate = r[2], messageRate = r[4]
+  const warLoanRate = r[6], siegeRate = r[8], titheRate = r[11]
+  const infiltrateRate = r[12], fudRate = r[13]
 
-  const r = weights.map(w => w / total)
-
-  const joinRate = r[0]
-  const defectRate = r[1]
-  const rallyRate = r[2]
-  const messageRate = r[4]
-  const warLoanRate = r[6]
-  const siegeRate = r[8]
-  const titheRate = r[11]
-  const infiltrateRate = r[12]
-  const fudRate = r[13]
-
-  // ── Signal 1: action ratios ──
-  // Message and fud are the strongest personality signals — what you SAY defines who you are.
-  // Join is common to all personalities and intentionally de-weighted.
   const commsRate = messageRate + fudRate
   const tradeRate = joinRate + defectRate
 
-  const actionScores: Record<Personality, number> = {
-    // Provocateur: high fud rate, trash talks more than supports
-    provocateur: fudRate * 8 + messageRate * 3 + infiltrateRate * 2
+  return {
+    // Loyalist: joins + messages (buys in and hypes), rarely defects/fuds
+    loyalist: joinRate * 4 + messageRate * 5 + rallyRate * 4 + titheRate * 3
+      - fudRate * 5 - defectRate * 4 - infiltrateRate * 3,
+
+    // Mercenary: joins + fuds + defects (infiltration pattern: buy in, trash talk, dump)
+    mercenary: joinRate * 2 + fudRate * 4 + defectRate * 5 + infiltrateRate * 4
+      + warLoanRate * 2 + siegeRate * 2
       - rallyRate * 3 - titheRate * 2,
 
-    // Scout: messages a lot but rarely fuds (intel, not chaos)
+    // Provocateur: high fud, lots of messages, stirs chaos
+    provocateur: fudRate * 8 + messageRate * 3 + infiltrateRate * 2
+      - joinRate * 2 - rallyRate * 3 - titheRate * 2,
+
+    // Scout: messages a lot but rarely fuds (intel, observations)
     scout: messageRate * 6 + rallyRate * 2 - fudRate * 4 - defectRate * 2
       - infiltrateRate * 2,
-
-    // Loyalist: messages positively, rallies, tithes — never fuds
-    loyalist: messageRate * 4 + rallyRate * 5 + titheRate * 4
-      - fudRate * 5 - defectRate * 3 - infiltrateRate * 3,
-
-    // Mercenary: defects, infiltrates, low comms — actions over words
-    mercenary: defectRate * 5 + infiltrateRate * 4 + warLoanRate * 2 + siegeRate * 2
-      - messageRate * 2 - rallyRate * 3 - titheRate * 2,
 
     // Whale: trades a lot but talks very little
     whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2
       - messageRate * 3 - fudRate * 3,
+  }
+}
+
+export function classifyPersonality(weights: number[], memos: string[] = [], perFactionHistory?: Map<string, number[]>): Personality {
+  const total = weights.reduce((a, b) => a + b, 0)
+  if (total === 0) return 'loyalist'
+
+  // ── Signal 1: per-faction action scores, averaged ──
+  let actionScores: Record<Personality, number>
+
+  if (perFactionHistory && perFactionHistory.size > 0) {
+    const accumulated: Record<Personality, number> = {
+      loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0,
+    }
+    let factionCount = 0
+
+    for (const [, counts] of perFactionHistory) {
+      const fTotal = counts.reduce((a, b) => a + b, 0)
+      if (fTotal < 2) continue
+      const r = counts.map(c => c / fTotal)
+      const scores = scoreActions(r)
+      for (const p of Object.keys(accumulated) as Personality[]) {
+        accumulated[p] += scores[p]
+      }
+      factionCount++
+    }
+
+    if (factionCount > 0) {
+      for (const p of Object.keys(accumulated) as Personality[]) {
+        accumulated[p] /= factionCount
+      }
+      actionScores = accumulated
+    } else {
+      const r = weights.map(w => w / total)
+      actionScores = scoreActions(r)
+    }
+  } else {
+    const r = weights.map(w => w / total)
+    actionScores = scoreActions(r)
   }
 
   // ── Signal 2: memo content ──
@@ -595,9 +624,21 @@ export async function reconstructFromChain(
   // 2. Compute personality weights from action frequency
   const weights = computeWeightsFromHistory(history, seedPersonality, opts?.decay)
 
-  // 3. Classify emergent personality (action ratios + memo content)
+  // 3. Classify emergent personality (action ratios + memo content, per-faction)
   const memoTexts = history.filter(h => h.memo?.trim()).map(h => h.memo!)
-  const personality = history.length > 0 ? classifyPersonality(weights, memoTexts) : seedPersonality
+
+  // Build per-faction action counts for per-ticker personality scoring
+  const perFaction = new Map<string, number[]>()
+  for (const entry of history) {
+    if (!entry.mint) continue
+    const normalized = normalizeChainAction(entry.action)
+    const idx = ALL_ACTIONS.indexOf(normalized)
+    if (idx < 0) continue
+    if (!perFaction.has(entry.mint)) perFaction.set(entry.mint, new Array(ALL_ACTIONS.length).fill(0))
+    perFaction.get(entry.mint)![idx]++
+  }
+
+  const personality = history.length > 0 ? classifyPersonality(weights, memoTexts, perFaction) : seedPersonality
 
   // 4. Compute sentiment from on-chain interactions
   const sentiment = computeSentimentFromHistory(history, factions)
