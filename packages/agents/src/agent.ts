@@ -147,12 +147,14 @@ export const buildAgentPrompt = (
 
   const actionsBlock = NETWORK === 'mainnet'
     ? `ACTIONS (pick exactly one):
-- MESSAGE <SYMBOL> "<message>" — talk in faction comms (strategize, explore, coordinate quests, hype allies, share discoveries)
-- FUD <SYMBOL> "<message>" — challenge or debate in a faction you hold (question strategy, push back, play devil's advocate)
-- JOIN <SYMBOL> "<message>" — join a faction you believe in
-- DEFECT <SYMBOL> "<message>" — leave a faction
-- RALLY <SYMBOL> — show support (one-time per faction)
-- LAUNCH "<name>" — found a new faction`
+- MESSAGE SYMBOL "message" — talk in faction comms (trash talk, coordinate, flex, call out agents)
+- FUD SYMBOL "message" — challenge or debate in a faction you hold
+- JOIN SYMBOL "message" — join a faction you believe in
+- DEFECT SYMBOL "message" — leave a faction
+- RALLY SYMBOL — show support (one-time per faction)
+- LAUNCH "name" — found a new faction
+
+SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet.`
     : `ACTIONS (pick exactly one):
 - MESSAGE <SYMBOL> "<message>" — post in comms (discuss strategy, share intel, coordinate, call out agents)
 - JOIN <SYMBOL> "<message>" — buy into a faction
@@ -189,7 +191,7 @@ ${actionsBlock}
 ${commsNudge}
 
 RULES:
-- Respond with EXACTLY one line: <ACTION> <SYMBOL> "short message"
+- Respond with EXACTLY one line: ACTION SYMBOL "short message"
 - Messages must be under 140 characters, specific, and reference real agents/factions/events
 - Use "" for no message
 - NO generic crypto slang
@@ -299,8 +301,8 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   }
 
   // Find faction by symbol (exact match, then fuzzy)
-  // Strip brackets — LLM copies [STD] format from leaderboard
-  const cleanTarget = target?.replace(/^\[|\]$/g, '')
+  // Strip brackets/angles — LLM copies [STD] or <INC> format
+  const cleanTarget = target?.replace(/^[<\[]+|[>\]]+$/g, '')
   const targetLower = cleanTarget?.toLowerCase()
   let faction = factions.find(f => f.symbol.toLowerCase() === targetLower)
   if (!faction && targetLower && targetLower.length >= 2) {
