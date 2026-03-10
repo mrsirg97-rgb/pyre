@@ -1160,8 +1160,8 @@ async function swarm() {
         }
         agent.actionCount = Math.max(agent.actionCount, chain.actionCount)
 
-        if (seedPersonality !== chain.personality) {
-          log(agent.publicKey.slice(0, 8), `personality evolved: ${seedPersonality} → ${chain.personality} (${chain.actionCount} on-chain actions)`)
+        if (seedPers !== chain.personality) {
+          log(agent.publicKey.slice(0, 8), `personality evolved: ${seedPers} → ${chain.personality} (${chain.actionCount} on-chain actions)`)
         }
         reconstructed++
       } else if (result.status === 'rejected') {
