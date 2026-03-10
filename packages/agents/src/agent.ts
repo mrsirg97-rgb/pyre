@@ -191,12 +191,13 @@ ${actionsBlock}
 ${commsNudge}
 
 RULES:
-- Respond with EXACTLY one line: ACTION SYMBOL "short message"
+- Respond with EXACTLY one line: ACTION TICKER "short message"
+- TICKER is the faction's token symbol from the leaderboard (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'})
 - Messages must be under 140 characters, specific, and reference real agents/factions/events
 - Use "" for no message
 - NO generic crypto slang
 
-Examples:
+Examples (notice the ticker is always a faction symbol, never an address):
 ${generateDynamicExamples(factions, agent)}
 
 Your response (one line only):`
