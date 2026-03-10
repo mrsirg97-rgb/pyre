@@ -39,16 +39,16 @@ import idl from 'torchsdk/dist/torch_market.json'
 const getGlobalConfigPda = (): [PublicKey, number] =>
   PublicKey.findProgramAddressSync([Buffer.from(GLOBAL_CONFIG_SEED)], PROGRAM_ID)
 
-const getBondingCurvePda = (mint: PublicKey): [PublicKey, number] =>
+export const getBondingCurvePda = (mint: PublicKey): [PublicKey, number] =>
   PublicKey.findProgramAddressSync([Buffer.from(BONDING_CURVE_SEED), mint.toBuffer()], PROGRAM_ID)
 
-const getTokenTreasuryPda = (mint: PublicKey): [PublicKey, number] =>
+export const getTokenTreasuryPda = (mint: PublicKey): [PublicKey, number] =>
   PublicKey.findProgramAddressSync([Buffer.from(TREASURY_SEED), mint.toBuffer()], PROGRAM_ID)
 
 const getTreasuryTokenAccount = (mint: PublicKey, treasury: PublicKey): PublicKey =>
   getAssociatedTokenAddressSync(mint, treasury, true, TOKEN_2022_PROGRAM_ID)
 
-const getTreasuryLockPda = (mint: PublicKey): [PublicKey, number] =>
+export const getTreasuryLockPda = (mint: PublicKey): [PublicKey, number] =>
   PublicKey.findProgramAddressSync([Buffer.from(TREASURY_LOCK_SEED), mint.toBuffer()], PROGRAM_ID)
 
 const getTreasuryLockTokenAccount = (mint: PublicKey, treasuryLock: PublicKey): PublicKey =>

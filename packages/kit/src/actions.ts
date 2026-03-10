@@ -106,7 +106,7 @@ import {
   mapTokenStatusFilter,
 } from './mappers';
 
-import { buildCreateFactionTransaction, isPyreMint } from './vanity';
+import { buildCreateFactionTransaction, isPyreMint, getBondingCurvePda, getTokenTreasuryPda, getTreasuryLockPda } from './vanity';
 
 // ─── Blacklist ──────────────────────────────────────────────────────
 // Mints from previous swarm runs. Agents should skip these and only
@@ -181,13 +181,26 @@ export async function getFaction(
   return mapTokenDetailToFaction(detail);
 }
 
-/** Get faction members (top holders) */
+/** Get faction members (top holders, excluding program-owned accounts) */
 export async function getMembers(
   connection: Connection,
   mint: string,
   limit?: number,
 ): Promise<MembersResult> {
-  const result = await getHolders(connection, mint, limit);
+  const mintPk = new PublicKey(mint);
+  const [bondingCurve] = getBondingCurvePda(mintPk);
+  const [treasury] = getTokenTreasuryPda(mintPk);
+  const [treasuryLock] = getTreasuryLockPda(mintPk);
+  const excluded = new Set([
+    bondingCurve.toString(),
+    treasury.toString(),
+    treasuryLock.toString(),
+  ]);
+
+  // Fetch extra to compensate for filtered-out program accounts
+  const result = await getHolders(connection, mint, (limit ?? 10) + 5);
+  result.holders = result.holders.filter(h => !excluded.has(h.address));
+  if (limit) result.holders = result.holders.slice(0, limit);
   return mapHoldersResult(result);
 }
 
