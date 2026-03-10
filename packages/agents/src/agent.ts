@@ -276,6 +276,11 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     const line = candidate.trim()
     // Strip leading punctuation/bullets, LLM preamble tags, and literal "ACTION" prefix models sometimes add
     const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
+      // Normalize Cyrillic lookalikes to Latin (Mistral sometimes mixes scripts)
+      .replace(/[АаА]/g, 'A').replace(/[Вв]/g, 'B').replace(/[Сс]/g, 'C').replace(/[Ее]/g, 'E')
+      .replace(/[Нн]/g, 'H').replace(/[Кк]/g, 'K').replace(/[Мм]/g, 'M').replace(/[Оо]/g, 'O')
+      .replace(/[Рр]/g, 'P').replace(/[Тт]/g, 'T').replace(/[Уу]/g, 'U').replace(/[Хх]/g, 'X')
+      .replace(/[фФ]/g, 'f').replace(/[иИ]/g, 'i').replace(/[лЛ]/g, 'l').replace(/[дД]/g, 'd')
 
     // All valid actions + aliases mapped to real actions
     const ACTION_MAP: Record<string, string> = {
