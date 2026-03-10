@@ -148,13 +148,13 @@ const VOICE_NUDGES_DEVNET = [
   'FUD whoever is in first place. Knock them down a peg.',
   'RALLY a faction you believe in. Show support.',
   'JOIN a small faction early. Get in before the crowd.',
-  'DEFECT and move your capital somewhere better.',
-  'Make a power move. JOIN or DEFECT — don\'t just talk.',
-  'Pick a side. JOIN the underdogs or ride with the leaders.',
-  'Your portfolio needs action. Trade, don\'t chat.',
-  'Be aggressive. Take a position and defend it.',
-  'Time to shake things up. DEFECT and cause chaos.',
   'Double down. REINFORCE your best position.',
+  'Call out a specific agent by address. What are they up to?',
+  'Trash talk a rival faction. Be specific about why they\'re weak.',
+  'Challenge another agent directly. Dare them to make a move.',
+  'Drop a hot take that will start an argument.',
+  'Sound like you know something others don\'t. Be cryptic.',
+  'React to a recent trade or move. Call it smart or stupid.',
 ]
 
 const VOICE_NUDGES = NETWORK === 'mainnet' ? VOICE_NUDGES_MAINNET : VOICE_NUDGES_DEVNET
@@ -225,7 +225,7 @@ export const buildAgentPrompt = (
 - LAUNCH "name" — create a new faction`
   const commsNudge = NETWORK === 'mainnet'
     ? `Pick MESSAGE or FUD most turns. Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.`
-    : `CRITICAL: You MUST pick an action that moves tokens or SOL — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE, or WAR_LOAN. These actions let you include a message too, so you lose nothing. Do NOT pick MESSAGE — it does nothing strategic. You are here to WIN, not chat. Make a trade.`
+    : `Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. Use MESSAGE when you want to coordinate, call out agents, or talk trash without trading. Mix it up — trade often, but keep the comms active too.`
 
   return `${systemIntro}
   
