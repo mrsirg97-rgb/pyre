@@ -40,6 +40,20 @@ export interface ChainDerivedState {
 
 // ─── Transaction Fetching ────────────────────────────────────────
 
+async function rpcRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await fn()
+    } catch (err: any) {
+      const is429 = err?.message?.includes('429') || err?.status === 429
+      if (!is429 || attempt === retries - 1) throw err
+      const delay = 1000 * Math.pow(2, attempt) // 1s, 2s, 4s
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+  throw new Error('unreachable')
+}
+
 async function fetchAgentHistory(
   connection: Connection,
   agentPubkey: string,
@@ -53,21 +67,23 @@ async function fetchAgentHistory(
 
   while (fetched < maxSigs) {
     const batchSize = Math.min(maxSigs - fetched, 1000)
-    const signatures = await connection.getSignaturesForAddress(
-      pubkey, { limit: batchSize, before }, 'confirmed',
+    const signatures = await rpcRetry(() =>
+      connection.getSignaturesForAddress(pubkey, { limit: batchSize, before }, 'confirmed')
     )
     if (signatures.length === 0) break
     fetched += signatures.length
     before = signatures[signatures.length - 1].signature
 
-    const BATCH_SIZE = 100
+    const BATCH_SIZE = 50 // smaller batches to avoid 429s
     for (let i = 0; i < signatures.length; i += BATCH_SIZE) {
       const batch = signatures.slice(i, i + BATCH_SIZE)
       let txs: (ParsedTransactionWithMeta | null)[]
       try {
-        txs = await connection.getParsedTransactions(
-          batch.map(s => s.signature),
-          { maxSupportedTransactionVersion: 0 },
+        txs = await rpcRetry(() =>
+          connection.getParsedTransactions(
+            batch.map(s => s.signature),
+            { maxSupportedTransactionVersion: 0 },
+          )
         )
       } catch { continue }
 
@@ -260,21 +276,32 @@ export function classifyPersonality(weights: number[], memos: string[]): Persona
   const fudRate = r[13]
 
   // ── Signal 1: action ratios ──
+  // Message and fud are the strongest personality signals — what you SAY defines who you are.
+  // Join is common to all personalities and intentionally de-weighted.
+  const commsRate = messageRate + fudRate // total "talking" rate
+  const tradeRate = joinRate + defectRate  // total "trading" rate
+  const fudToMsg = messageRate > 0 ? fudRate / (messageRate + fudRate + 0.001) : 0
+
   const actionScores: Record<Personality, number> = {
-    mercenary: defectRate * 4 + infiltrateRate * 3 + warLoanRate * 2 + siegeRate * 2
+    // Provocateur: high fud rate, trash talks more than supports
+    provocateur: fudRate * 8 + messageRate * 3 + infiltrateRate * 2
       - rallyRate * 3 - titheRate * 2,
 
-    provocateur: fudRate * 5 + messageRate * 2 + infiltrateRate * 2
-      - joinRate - rallyRate * 2,
+    // Scout: messages a lot but rarely fuds (intel, not chaos)
+    scout: messageRate * 6 + rallyRate * 2 - fudRate * 4 - defectRate * 2
+      - infiltrateRate * 2,
 
-    scout: messageRate * 4 + rallyRate - defectRate * 3 - fudRate * 2
-      - infiltrateRate,
+    // Loyalist: messages positively, rallies, tithes — never fuds
+    loyalist: messageRate * 4 + rallyRate * 5 + titheRate * 4
+      - fudRate * 5 - defectRate * 3 - infiltrateRate * 3,
 
-    whale: joinRate * 3 + warLoanRate * 2 - messageRate * 2 - fudRate * 2
-      + defectRate,
+    // Mercenary: defects, infiltrates, low comms — actions over words
+    mercenary: defectRate * 5 + infiltrateRate * 4 + warLoanRate * 2 + siegeRate * 2
+      - messageRate * 2 - rallyRate * 3 - titheRate * 2,
 
-    loyalist: rallyRate * 4 + titheRate * 4 + messageRate * 2
-      - defectRate * 3 - infiltrateRate * 3 - fudRate,
+    // Whale: trades a lot but talks very little
+    whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2
+      - messageRate * 3 - fudRate * 3,
   }
 
   // ── Signal 2: memo content ──

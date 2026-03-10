@@ -1123,7 +1123,7 @@ async function swarm() {
     agentSeedPersonality.set(agent.publicKey, agent.personality)
   }
   let reconstructed = 0
-  const CHAIN_BATCH = 5 // reconstruct N agents at a time to avoid RPC hammering
+  const CHAIN_BATCH = 2 // reconstruct N agents at a time to avoid 429s
   for (let i = 0; i < agents.length; i += CHAIN_BATCH) {
     const batch = agents.slice(i, i + CHAIN_BATCH)
     const PER_AGENT_TIMEOUT = 15_000 // 15s per agent max
@@ -1171,7 +1171,7 @@ async function swarm() {
         }
       }
     }
-    if (i + CHAIN_BATCH < agents.length) await sleep(500)
+    if (i + CHAIN_BATCH < agents.length) await sleep(2000)
   }
   logGlobal(`${reconstructed}/${agents.length} agents reconstructed from on-chain history`)
 
