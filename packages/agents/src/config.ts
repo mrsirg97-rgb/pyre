@@ -9,8 +9,8 @@ export const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? (isMainnet ? '15'
 export const RPC_URL = process.env.RPC_URL ?? (isMainnet
   ? 'https://torch-market-rpc.mrsirg97.workers.dev'
   : 'https://torch-market-rpc.mrsirg97.workers.dev/devnet')
-export const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? (isMainnet ? '30000' : '10000'))
-export const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? (isMainnet ? '60000' : '20000'))
+export const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? (isMainnet ? '10000' : '5000'))
+export const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? (isMainnet ? '20000' : '10000'))
 export const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'mistral'
 export const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
