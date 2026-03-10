@@ -52,6 +52,13 @@ export const chooseAction = (
   if (agent.infiltrated.size > 0) {
     weights[1] += 0.10
   }
+  // Bearish sentiment on held factions → boost defect (sell what you don't believe in)
+  if (hasHoldings) {
+    const bearishHeld = heldMints.filter(m => (agent.sentiment.get(m) ?? 0) < -2)
+    if (bearishHeld.length > 0) {
+      weights[1] += 0.05 * bearishHeld.length // more bearish holdings = more likely to sell
+    }
+  }
   // Boost war loans and sieges when ascended factions exist
   if (ascendedFactions.length > 0) {
     if (holdsAscended) {

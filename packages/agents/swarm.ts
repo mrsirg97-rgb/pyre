@@ -759,6 +759,10 @@ async function agentTick(
         })
         await sendAndConfirm(connection, agent.keypair, result)
 
+        // Fudding tanks your own sentiment — you're talking trash, you're going bearish
+        const fudSentiment = agent.sentiment.get(faction.mint) ?? 0
+        agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
+
         agent.lastAction = `fud ${faction.symbol}`
         const desc = `argued in ${faction.symbol}: "${message}"`
         agent.recentHistory.push(desc)
@@ -777,6 +781,12 @@ async function agentTick(
 
     // Track action for live personality evolution
     recordAgentAction(agent.publicKey, action, decision?.message)
+
+    // Sentiment decay — agents get restless, don't stay loyal forever
+    for (const [mint, score] of agent.sentiment) {
+      if (score > 0) agent.sentiment.set(mint, Math.max(0, score - 0.1))
+      else if (score < 0) agent.sentiment.set(mint, Math.min(0, score + 0.05)) // bearish decays slower
+    }
 
     agent.actionCount++
   } catch (err: any) {

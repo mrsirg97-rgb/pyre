@@ -355,6 +355,9 @@ const handlers: Record<Action, ActionHandler> = {
       stronghold: ctx.agent.publicKey, ascended: faction.status === 'ascended',
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+    // Fudding tanks your own sentiment — you're going bearish
+    const fudSentiment = ctx.agent.sentiment.get(faction.mint) ?? 0
+    ctx.agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
     ctx.agent.lastAction = `fud ${faction.symbol}`
     return `argued in ${faction.symbol}: "${ctx.decision.message}"`
   },

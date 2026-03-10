@@ -44,6 +44,13 @@ export const chooseAction = (
   if (!hasHoldings) { weights[0] += weights[13]; weights[13] = 0 }
 
   if (agent.infiltrated.size > 0) { weights[1] += 0.10 }
+  // Bearish sentiment on held factions → boost defect
+  if (hasHoldings) {
+    const bearishHeld = heldMints.filter(m => (agent.sentiment.get(m) ?? 0) < -2)
+    if (bearishHeld.length > 0) {
+      weights[1] += 0.05 * bearishHeld.length
+    }
+  }
 
   if (ascendedFactions.length > 0) {
     if (holdsAscended) { weights[6] += 0.15 }
