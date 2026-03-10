@@ -347,8 +347,8 @@ function scoreActions(r: number[]): Record<Personality, number> {
 
   return {
     // Loyalist: joins + messages (buys in and hypes), rarely defects/fuds
-    loyalist: joinRate * 4 + messageRate * 5 + rallyRate * 4 + titheRate * 3
-      - fudRate * 5 - defectRate * 4 - infiltrateRate * 3,
+    loyalist: joinRate * 3 + messageRate * 4 + rallyRate * 3 + titheRate * 2
+      - fudRate * 4 - defectRate * 3 - infiltrateRate * 2,
 
     // Mercenary: the infiltration cycle — join + fud + defect in the same faction
     // Key signal: defect AND fud both present (provocateurs fud but stay, mercenaries dump)
