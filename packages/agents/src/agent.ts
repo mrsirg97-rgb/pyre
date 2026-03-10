@@ -256,12 +256,13 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     for (const key of actionKeys) {
       if (upper.startsWith(key)) {
         const rest = cleaned.slice(key.length)
-        // Check if action is concatenated with symbol (e.g., "INVESTIRON")
+        // Check if action is concatenated with symbol (e.g., "INVESTIRON", "FUD_STD")
         if (rest.length > 0 && rest[0] !== ' ' && rest[0] !== '"') {
-          const restUpper = rest.toUpperCase()
+          const trimmedRest = rest.replace(/^[_\-]+/, '') // strip underscore/dash separator
+          const restUpper = trimmedRest.toUpperCase()
           const matchedSymbol = knownSymbols.find(s => restUpper.startsWith(s))
           if (matchedSymbol) {
-            normalized = ACTION_MAP[key] + ' ' + rest
+            normalized = ACTION_MAP[key] + ' ' + trimmedRest
             break
           }
         } else {
@@ -274,6 +275,18 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     const match = normalized.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
     if (match) {
       return parseLLMMatch(match, factions, agent, line)
+    }
+
+    // Bare ticker without action — default to MESSAGE if we can find a faction
+    const bareUpper = cleaned.toUpperCase().replace(/^[<\[\s]+|[>\]\s]+$/g, '')
+    const bareFaction = factions.find(f => bareUpper.startsWith(f.symbol.toUpperCase()))
+    if (bareFaction) {
+      const rest = cleaned.slice(bareFaction.symbol.length).trim()
+      const msgMatch = rest.match(/^"([^"]*)"/)
+      const msg = msgMatch?.[1]?.trim()
+      if (msg && msg.length > 1) {
+        return { action: 'message', faction: bareFaction.symbol, message: msg.slice(0, 140), reasoning: line }
+      }
     }
   }
 
