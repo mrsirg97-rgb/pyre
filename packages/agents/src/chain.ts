@@ -286,13 +286,13 @@ function scoreActions(r: number[]): Record<Personality, number> {
       + warLoanRate * 2 + siegeRate * 2
       - rallyRate * 3 - titheRate * 2,
 
-    // Provocateur: high fud, lots of messages, stirs chaos
-    provocateur: fudRate * 8 + messageRate * 3 + infiltrateRate * 2
-      - joinRate * 2 - rallyRate * 3 - titheRate * 2,
+    // Provocateur: high fud, stirs chaos
+    provocateur: fudRate * 5 + messageRate * 2 + infiltrateRate * 2
+      - joinRate - rallyRate * 2 - titheRate,
 
-    // Scout: messages a lot but rarely fuds (intel, observations)
-    scout: messageRate * 6 + rallyRate * 2 - fudRate * 4 - defectRate * 2
-      - infiltrateRate * 2,
+    // Scout: messages but rarely fuds (intel, observations)
+    scout: messageRate * 4 + rallyRate - fudRate * 3 - defectRate
+      - infiltrateRate,
 
     // Whale: trades a lot but talks very little
     whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2
