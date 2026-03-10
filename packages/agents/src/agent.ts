@@ -281,6 +281,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       .replace(/[Нн]/g, 'H').replace(/[Кк]/g, 'K').replace(/[Мм]/g, 'M').replace(/[Оо]/g, 'O')
       .replace(/[Рр]/g, 'P').replace(/[Тт]/g, 'T').replace(/[Уу]/g, 'U').replace(/[Хх]/g, 'X')
       .replace(/[фФ]/g, 'f').replace(/[иИ]/g, 'i').replace(/[лЛ]/g, 'l').replace(/[дД]/g, 'd')
+      .replace(/\\/g, '') // strip backslash escapes (Mistral escapes underscores as markdown)
 
     // All valid actions + aliases mapped to real actions
     const ACTION_MAP: Record<string, string> = {
