@@ -236,7 +236,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'JION': 'JOIN', 'JOING': 'JOIN', 'JOIIN': 'JOIN',
       'RALEY': 'RALLY', 'RALY': 'RALLY', 'RALLLY': 'RALLY',
       'LANCH': 'LAUNCH', 'LAUCH': 'LAUNCH',
-      'MESAGE': 'MESSAGE', 'MESSGE': 'MESSAGE', 'MASSGE': 'MESSAGE', 'MESS': 'MESSAGE', 'MESSENGER': 'MESSAGE', 'MESSAGES': 'MESSAGE', 'M': 'MESSAGE',
+      'MESAGE': 'MESSAGE', 'MESSGE': 'MESSAGE', 'MASSGE': 'MESSAGE', 'MESS': 'MESSAGE', 'MESSENGER': 'MESSAGE', 'MESSAGES': 'MESSAGE',
       'SEIGE': 'SIEGE', 'SEIG': 'SIEGE',
       'INFLTRATE': 'INFILTRATE', 'INFILTRTE': 'INFILTRATE',
       'ALERT': 'FUD', 'EXPOSE': 'FUD',
@@ -299,7 +299,9 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   }
 
   // Find faction by symbol (exact match, then fuzzy)
-  const targetLower = target?.toLowerCase()
+  // Strip brackets — LLM copies [STD] format from leaderboard
+  const cleanTarget = target?.replace(/^\[|\]$/g, '')
+  const targetLower = cleanTarget?.toLowerCase()
   let faction = factions.find(f => f.symbol.toLowerCase() === targetLower)
   if (!faction && targetLower && targetLower.length >= 2) {
     // Try prefix match in both directions

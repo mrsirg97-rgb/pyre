@@ -998,7 +998,7 @@ async function swarm() {
       holdings: new Map(Object.entries(prior?.holdings ?? {})),
       founded: prior?.founded ?? [],
       rallied: new Set(prior?.rallied ?? []),
-      voted: new Set(prior?.voted ?? []),
+      voted: new Set([...(prior?.voted ?? []), ...Object.keys(prior?.holdings ?? {})]),
       hasStronghold: prior?.hasStronghold ?? false,
       activeLoans: new Set(prior?.activeLoans ?? []),
       infiltrated: new Set(prior?.infiltrated ?? []),
