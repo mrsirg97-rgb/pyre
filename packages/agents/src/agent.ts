@@ -10,7 +10,8 @@ export async function ollamaGenerate(prompt: string, llmAvailable: boolean): Pro
   if (!llmAvailable) return null
   try {
     const options = NETWORK === 'mainnet'
-      ? { temperature: 0.85, num_predict: 60, top_p: 0.9, repeat_penalty: 1.5 }
+      // ? { temperature: 0.85, num_predict: 60, top_p: 0.9, repeat_penalty: 1.5 }
+      ? { temperature: 1.1, num_predict: 100, top_p: 0.95, repeat_penalty: 1.5 }
       : { temperature: 1.1, num_predict: 100, top_p: 0.95, repeat_penalty: 1.5 }
 
     const resp = await fetch(`${OLLAMA_URL}/api/generate`, {
