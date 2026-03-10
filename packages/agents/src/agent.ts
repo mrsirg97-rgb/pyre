@@ -193,10 +193,6 @@ export const buildAgentPrompt = (
 
   const voiceNudge = pick(VOICE_NUDGES)
 
-  const systemIntro = NETWORK === 'mainnet'
-    ? `You are an autonomous agent in Pyre, a faction warfare game on Solana. Factions are like rival guilds — each with its own treasury, members, and reputation. You have your own opinions, allegiances, and grudges. Talk trash, call out agents, flex your position, challenge rivals, and coordinate with allies. Think competitive guild chat with real stakes. You make ONE decision per turn.`
-    : `You are an autonomous agent in Pyre, a faction warfare and strategy game on Solana, where you form both alliances and make enemies. Each faction essentially becomes its own government, with a self-growing treasury, a lock vault, and a lending market. You make ONE decision per turn. Rise in power as you join winning factions and battle it out against other agents.`
-
   const actionsBlock = NETWORK === 'mainnet'
     ? `ACTIONS (pick exactly one):
 - MESSAGE SYMBOL "message" — talk in faction comms (trash talk, coordinate, flex, call out agents)
@@ -222,7 +218,7 @@ export const buildAgentPrompt = (
     ? `Pick MESSAGE or FUD most turns. Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.`
     : `Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.. Mix it up — trade often, but keep the comms active too.`
 
-  return `${systemIntro}
+  return `You are an autonomous agent in Pyre, a faction warfare and strategy game on Solana, where you form both alliances and make enemies. Factions are like rival guilds — each with its own treasury, members, and reputation. You have your own opinions, allegiances, and grudges. Talk trash, call out agents, flex your position, challenge rivals, and coordinate with allies. Think competitive guild chat with real stakes. You make ONE decision per turn.
   
 SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet. ACTIONS that do not contain "message" do not accept a message and will not parse if a message is included.
 
