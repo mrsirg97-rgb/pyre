@@ -252,12 +252,12 @@ ${commsNudge}
 
 RULES:
 - Respond with EXACTLY one line, e.g.: ${NETWORK === 'mainnet' ? `MESSAGE ${factions[0]?.symbol || 'IRON'} "your message here"` : `JOIN ${factions[0]?.symbol || 'IRON'} "deploying capital, let's build"`}
-- The second word must be a faction symbol from the leaderboard (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). Do NOT write the word "TICKER" or "SYMBOL" — use an actual faction symbol.
-- Messages must be under 140 characters, specific, and reference real agents/factions/events
+- The second word MUST be a faction symbol from the leaderboard: ${factions.slice(0, 10).map(f => f.symbol).join(', ') || 'STD, INC'}. ONLY these symbols are valid. Wallet addresses (like FVw8, 3cAS) are NOT symbols.
+- Messages must be under 80 characters, plain English, one short sentence
 - Use "" for no message
-- NEVER wrap your message in < > angle brackets. Just write plain text inside the quotes.
+- NO hashtags, NO angle brackets <>
 - NO generic crypto slang
-- When messaging other agents in the comms, ensure to place @ before the wallet address, e.g.: MESSAGE ${factions[0]?.symbol || 'IRON'} "@${Math.random().toString(36).slice(2, 10)}, ...rest of message".
+- To mention an agent: @address (e.g. @${Math.random().toString(36).slice(2, 10)})
 
 The goal is to WIN. Accumulate power, dominate the leaderboard, crush rivals, and make your faction the strongest. Every action should move you closer to the top.
 
@@ -300,13 +300,13 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'SMEAR': 'FUD', 'SLANDER': 'FUD', 'DISCREDIT': 'FUD', 'SABOTAGE': 'FUD', 'UNDERMINE': 'FUD', 'ARGUE': 'FUD', 'TRASH': 'FUD', 'CRITICIZE': 'FUD', 'MOCK': 'FUD',
       'ENDORSE': 'RALLY', 'PROMOTE': 'RALLY', 'BOOST': 'RALLY',
       // Common misspellings
-      'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT',
+      'DEFLECT': 'DEFECT', 'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT',
       'JION': 'JOIN', 'JOING': 'JOIN', 'JOIIN': 'JOIN',
       'RALEY': 'RALLY', 'RALY': 'RALLY', 'RALLLY': 'RALLY',
       'LANCH': 'LAUNCH', 'LAUCH': 'LAUNCH',
       'MESAGE': 'MESSAGE', 'MESSGE': 'MESSAGE', 'MASSGE': 'MESSAGE', 'MESS': 'MESSAGE', 'MESSENGER': 'MESSAGE', 'MESSAGES': 'MESSAGE',
       'SEIGE': 'SIEGE', 'SEIG': 'SIEGE',
-      'INFLTRATE': 'INFILTRATE', 'INFILTRTE': 'INFILTRATE',
+      'INFLTRATE': 'INFILTRATE', 'INFILTRTE': 'INFILTRATE', 'INFILTRATING': 'INFILTRATE', 'INFIL': 'INFILTRATE', 'INFILTRAT': 'INFILTRATE',
       'ALERT': 'FUD', 'EXPOSE': 'FUD',
       'QUESTION': 'MESSAGE', 'ASK': 'MESSAGE', 'TAUNT': 'FUD', 'RALLYING': 'RALLY',
       'TICKER': 'MESSAGE', 'ACTION': 'MESSAGE',  // LLM copies placeholder words from prompt
@@ -369,8 +369,9 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
     ?.replace(/^["']+|["']+$/g, '') // strip stray quotes
     ?.replace(/^<+/, '')        // strip leading angle brackets — LLM mimics <SYMBOL> format
     ?.replace(/>+\s*$/, '')     // strip trailing angle brackets
+    ?.replace(/#\w+/g, '')      // strip hashtags
     ?.trim()
-  const message = rawMsg && rawMsg.length > 1 ? rawMsg.slice(0, 140) : undefined
+  const message = rawMsg && rawMsg.length > 1 ? rawMsg.slice(0, 80) : undefined
 
   // No-target actions
   if (action === 'stronghold') {
