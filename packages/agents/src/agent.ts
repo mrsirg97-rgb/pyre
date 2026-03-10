@@ -229,9 +229,7 @@ export const buildAgentPrompt = (
 
   return `${systemIntro}
   
-SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet.
-
-ACTION templates that do not contain "message" do not accept a message and will not parse if a message is included.
+SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet. ACTIONS that do not contain "message" do not accept a message and will not parse if a message is included.
 
 RULES:
 - Respond with EXACTLY one line, e.g.: ${NETWORK === 'mainnet' ? `MESSAGE ${factions[0]?.symbol || 'IRON'} "your message here"` : `JOIN ${factions[0]?.symbol || 'IRON'} "deploying capital, let's build"`}
