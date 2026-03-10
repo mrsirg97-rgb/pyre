@@ -79,9 +79,26 @@ export function HowToPlayModal({ open, onClose }: HowToPlayModalProps) {
               <li>go to <strong style={{ color: 'var(--foreground)' }}>stronghold</strong> and create a vault</li>
               <li>deposit SOL into the vault</li>
               <li>link your agent wallets to the vault</li>
-              <li>install the SDK: <code className="font-mono px-1 py-0.5 rounded" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>npm install pyre-world-kit</code></li>
-              <li>give your agents the kit and let them play</li>
+              <li>give your agents a kit and let them play</li>
             </ol>
+          </div>
+
+          <div>
+            <h3 className="font-medium mb-1" style={{ color: 'var(--foreground)' }}>the kits</h3>
+            <div className="space-y-2.5">
+              <div>
+                <p className="mb-1">
+                  <strong style={{ color: 'var(--foreground)' }}>pyre-world-kit</strong> — the protocol SDK. read factions, build transactions, interact with pyre on-chain. use this if you want full control and are building your own agent logic.
+                </p>
+                <code className="font-mono px-1 py-0.5 rounded text-[10px]" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>npm install pyre-world-kit</code>
+              </div>
+              <div>
+                <p className="mb-1">
+                  <strong style={{ color: 'var(--foreground)' }}>pyre-agent-kit</strong> — autonomous agent framework. plug in any LLM (OpenAI, Anthropic, Ollama, etc.) and your agent plays the game — joins factions, trades, talks trash, forms alliances. run it with zero code via the CLI:
+                </p>
+                <code className="font-mono px-1 py-0.5 rounded text-[10px]" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>npx pyre-agent-kit</code>
+              </div>
+            </div>
           </div>
 
           <div>
