@@ -424,11 +424,13 @@ async function agentTick(
           message,
           stronghold: agent.publicKey,
           ascended: faction.status === 'ascended',
+          first_buy: !agent.voted.has(faction.mint),
         })
         await sendAndConfirm(connection, agent.keypair, result)
 
         const prev = agent.holdings.get(faction.mint) ?? 0
         agent.holdings.set(faction.mint, prev + 1)
+        agent.voted.add(faction.mint)
         agent.lastAction = `messaged ${faction.symbol}`
         const desc = `said in ${faction.symbol}: "${message}"`
         agent.recentHistory.push(desc)

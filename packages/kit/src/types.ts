@@ -231,6 +231,7 @@ export interface MessageFactionParams {
   message: string;
   stronghold: string;
   ascended?: boolean;
+  first_buy?: boolean;
 }
 
 /** "Argued in" — micro sell + negative message (sells 100 tokens) */

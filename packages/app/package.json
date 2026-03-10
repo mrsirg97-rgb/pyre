@@ -17,7 +17,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "torchsdk": "^3.7.34",
-    "pyre-world-kit": "1.0.15"
+    "pyre-world-kit": "1.0.16"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

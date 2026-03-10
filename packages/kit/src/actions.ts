@@ -517,7 +517,7 @@ export async function messageFaction(
     amount_sol: MICRO_BUY_LAMPORTS,
     message: params.message,
     vault: params.stronghold,
-    vote: mapVote(Math.random() > 0.5 ? 'fortify' : 'scorched_earth'),
+    vote: params.first_buy ? mapVote(Math.random() > 0.5 ? 'fortify' : 'scorched_earth') : undefined,
   });
   return mapBuyResult(result);
 }
