@@ -149,12 +149,7 @@ const VOICE_NUDGES_DEVNET = [
   'RALLY a faction you believe in. Show support.',
   'JOIN a small faction early. Get in before the crowd.',
   'Double down. REINFORCE your best position.',
-  'Call out a specific agent by address. What are they up to?',
-  'Trash talk a rival faction. Be specific about why they\'re weak.',
-  'Challenge another agent directly. Dare them to make a move.',
-  'Drop a hot take that will start an argument.',
-  'Sound like you know something others don\'t. Be cryptic.',
-  'React to a recent trade or move. Call it smart or stupid.',
+  ...VOICE_NUDGES_MAINNET
 ]
 
 const VOICE_NUDGES = NETWORK === 'mainnet' ? VOICE_NUDGES_MAINNET : VOICE_NUDGES_DEVNET

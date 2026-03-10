@@ -134,6 +134,7 @@ export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentSta
     `MESSAGE ${s1} "what's our strategy against ${s2}?"`,
     `FUD ${s2} "only ${members} members, dead faction"`,
     `FUD ${s1} "treasury growing but where's the activity?"`,
+    `FUD ${s1} "@${addr} you better watch your back"`,
   ]
 
   // Pool of action+message examples (the LLM should prefer these)
