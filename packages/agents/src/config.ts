@@ -12,7 +12,7 @@ export const RPC_URL = process.env.RPC_URL ?? (isMainnet
 export const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? (isMainnet ? '30000' : '10000'))
 export const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? (isMainnet ? '60000' : '20000'))
 export const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
-export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'mistral'
+export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3.5:9b'
 export const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
 export const MIN_FUNDED_SOL = isMainnet ? 0.05 : 0.05
 export const CONCURRENT_AGENTS = isMainnet ? 2 : 3
