@@ -1,7 +1,7 @@
 import { Connection, Keypair } from '@solana/web3.js'
 
 /** Poll-based transaction confirmation (avoids WebSocket signatureSubscribe flooding) */
-async function pollConfirmation(connection: Connection, sig: string, timeout = 30000): Promise<void> {
+async function pollConfirmation(connection: Connection, sig: string, timeout = 60000): Promise<void> {
   const start = Date.now()
   while (Date.now() - start < timeout) {
     const status = await connection.getSignatureStatus(sig)
