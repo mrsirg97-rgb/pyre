@@ -252,12 +252,12 @@ ${commsNudge}
 
 RULES:
 - Respond with EXACTLY one line, e.g.: ${NETWORK === 'mainnet' ? `MESSAGE ${factions[0]?.symbol || 'IRON'} "your message here"` : `JOIN ${factions[0]?.symbol || 'IRON'} "deploying capital, let's build"`}
-- The second word MUST be one of these faction symbols: ${factions.slice(0, 10).map(f => f.symbol).join(', ') || 'STD, INC'}. NOTHING ELSE is valid. Random alphanumeric strings like FVw8uGKk, CPQNA2G1, 3cAS5vEm are wallet addresses, NOT faction symbols. Never use them as the second word.
+- To mention an agent: @address (e.g. @${Math.random().toString(36).slice(2, 10)})
+- The second word MUST be one of these faction symbols: ${factions.slice(0, 10).map(f => f.symbol).join(', ') || 'STD, INC'}. NOTHING ELSE is valid. Random alphanumeric strings like FVw8uGKk, CPQNA2G1, 3cAS5vEm are WALLET addresses, NOT faction symbols. Never use them as the second word.
 - Messages must be under 80 characters, plain English, one short sentence
 - Use "" for no message
 - NO hashtags, NO angle brackets <>
 - NO generic crypto slang
-- To mention an agent: @address (e.g. @${Math.random().toString(36).slice(2, 10)})
 
 The goal is to WIN. Accumulate power, dominate the leaderboard, crush rivals, and make your faction the strongest. Every action should move you closer to the top.
 
