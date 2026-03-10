@@ -220,7 +220,7 @@ export const buildAgentPrompt = (
 - LAUNCH "name" — create a new faction`
   const commsNudge = NETWORK === 'mainnet'
     ? `Pick MESSAGE or FUD most turns. Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.`
-    : `Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. Use MESSAGE when you want to coordinate, call out agents, or talk trash without trading. Mix it up — trade often, but keep the comms active too.`
+    : `Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.. Mix it up — trade often, but keep the comms active too.`
 
   return `${systemIntro}
   
