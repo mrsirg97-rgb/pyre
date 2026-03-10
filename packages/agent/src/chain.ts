@@ -267,41 +267,126 @@ function normalizeChainAction(action: OnChainAction['action']): Action {
   }
 }
 
+/**
+ * Recompute weights from raw action counts (no history parsing needed).
+ * Used for live personality evolution during runtime.
+ */
+export function weightsFromCounts(
+  counts: number[],
+  seedPersonality: Personality,
+  decay = 0.85,
+): number[] {
+  const seed = [...PERSONALITY_WEIGHTS[seedPersonality]]
+  const total = counts.reduce((a, b) => a + b, 0)
+  if (total === 0) return seed
+
+  const observed = counts.map(c => c / total)
+  const seedFactor = Math.pow(decay, total)
+  return seed.map((s, i) => s * seedFactor + observed[i] * (1 - seedFactor))
+}
+
+/** Action type to index in the ALL_ACTIONS array */
+export function actionIndex(action: Action): number {
+  return ALL_ACTIONS.indexOf(action)
+}
+
+// ─── Memo Content Personality Signals ─────────────────────────────
+
+const PROVOCATEUR_VOICE = /trash|beef|fight|chaos|war|destroy|crush|pathetic|laughable|weak|dead|fake|scam|clown|joke|fool|coward|expose|call.?out|dare|challenge|predict|bold|hot.?take/
+const SCOUT_VOICE = /intel|data|notice|observ|suspicious|watch|track|report|warn|alert|question|why did|who.?s|pattern|trend|%|percent|member|holder|accumul/
+const LOYALIST_VOICE = /ride.?or.?die|loyal|hold|believe|strong|build|together|ally|alliance|trust|support|back|hype|power|conviction|never.?sell|diamond/
+const MERCENARY_VOICE = /profit|alpha|flip|exit|dump|cash|roi|returns|opportunity|play|angle|trade|stack|bag|gain|solo|lone.?wolf/
+const WHALE_VOICE = /flex|position|size|deploy|capital|market|move|massive|big|dominate|everyone.?watch|listen|whale|stack|load/
+
+function scoreMemoPersonality(memos: string[]): Record<Personality, number> {
+  const scores: Record<Personality, number> = {
+    loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0,
+  }
+
+  for (const memo of memos) {
+    const text = memo.toLowerCase()
+    if (PROVOCATEUR_VOICE.test(text)) scores.provocateur++
+    if (SCOUT_VOICE.test(text)) scores.scout++
+    if (LOYALIST_VOICE.test(text)) scores.loyalist++
+    if (MERCENARY_VOICE.test(text)) scores.mercenary++
+    if (WHALE_VOICE.test(text)) scores.whale++
+  }
+
+  return scores
+}
+
 // ─── Personality Classification ──────────────────────────────────
 
 /**
- * Classify personality from weight distribution using cosine similarity
- * against the seed personality profiles.
+ * Classify personality from observed action distribution + memo content.
  *
- * The personality label becomes DESCRIPTIVE of behavior, not prescriptive.
- * An agent that defects a lot BECOMES a mercenary.
+ * Two signal sources, blended:
+ *   1. Action ratios — what the agent DOES
+ *   2. Memo keywords — what the agent SAYS
+ *
+ * Action indices: [join=0, defect=1, rally=2, launch=3, message=4,
+ *   stronghold=5, war_loan=6, repay_loan=7, siege=8, ascend=9,
+ *   raze=10, tithe=11, infiltrate=12, fud=13]
  */
-export function classifyPersonality(weights: number[]): Personality {
-  const personalities: Personality[] = ['loyalist', 'mercenary', 'provocateur', 'scout', 'whale']
-  let bestMatch: Personality = 'loyalist'
-  let bestSimilarity = -1
+export function classifyPersonality(weights: number[], memos: string[] = []): Personality {
+  const total = weights.reduce((a, b) => a + b, 0)
+  if (total === 0) return 'loyalist'
 
-  for (const p of personalities) {
-    const profile = PERSONALITY_WEIGHTS[p]
-    const similarity = cosineSimilarity(weights, profile)
-    if (similarity > bestSimilarity) {
-      bestSimilarity = similarity
-      bestMatch = p
+  const r = weights.map(w => w / total)
+
+  const joinRate = r[0]
+  const defectRate = r[1]
+  const rallyRate = r[2]
+  const messageRate = r[4]
+  const warLoanRate = r[6]
+  const siegeRate = r[8]
+  const titheRate = r[11]
+  const infiltrateRate = r[12]
+  const fudRate = r[13]
+
+  // ── Signal 1: action ratios ──
+  const actionScores: Record<Personality, number> = {
+    mercenary: defectRate * 4 + infiltrateRate * 3 + warLoanRate * 2 + siegeRate * 2
+      - rallyRate * 3 - titheRate * 2,
+
+    provocateur: fudRate * 5 + messageRate * 2 + infiltrateRate * 2
+      - joinRate - rallyRate * 2,
+
+    scout: messageRate * 4 + rallyRate - defectRate * 3 - fudRate * 2
+      - infiltrateRate,
+
+    whale: joinRate * 3 + warLoanRate * 2 - messageRate * 2 - fudRate * 2
+      + defectRate,
+
+    loyalist: rallyRate * 4 + titheRate * 4 + messageRate * 2
+      - defectRate * 3 - infiltrateRate * 3 - fudRate,
+  }
+
+  // ── Signal 2: memo content ──
+  const memoScores = scoreMemoPersonality(memos)
+  const memoTotal = Object.values(memoScores).reduce((a, b) => a + b, 0)
+  const memoWeight = 0.4
+
+  // ── Blend ──
+  const finalScores: Record<Personality, number> = {
+    loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0,
+  }
+
+  for (const p of Object.keys(finalScores) as Personality[]) {
+    const actionSignal = actionScores[p]
+    const memoSignal = memoTotal > 0 ? (memoScores[p] / memoTotal) : 0
+    finalScores[p] = actionSignal * (1 - memoWeight) + memoSignal * memoWeight
+  }
+
+  let best: Personality = 'loyalist'
+  let bestScore = -Infinity
+  for (const [p, score] of Object.entries(finalScores)) {
+    if (score > bestScore) {
+      bestScore = score
+      best = p as Personality
     }
   }
-
-  return bestMatch
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0, magA = 0, magB = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    magA += a[i] * a[i]
-    magB += b[i] * b[i]
-  }
-  const denom = Math.sqrt(magA) * Math.sqrt(magB)
-  return denom > 0 ? dot / denom : 0
+  return best
 }
 
 // ─── Sentiment from On-Chain Data ────────────────────────────────
@@ -494,8 +579,9 @@ export async function reconstructFromChain(
   // 2. Compute personality weights from action frequency
   const weights = computeWeightsFromHistory(history, seedPersonality, opts?.decay)
 
-  // 3. Classify emergent personality
-  const personality = history.length > 0 ? classifyPersonality(weights) : seedPersonality
+  // 3. Classify emergent personality (action ratios + memo content)
+  const memoTexts = history.filter(h => h.memo?.trim()).map(h => h.memo!)
+  const personality = history.length > 0 ? classifyPersonality(weights, memoTexts) : seedPersonality
 
   // 4. Compute sentiment from on-chain interactions
   const sentiment = computeSentimentFromHistory(history, factions)

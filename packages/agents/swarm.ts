@@ -62,7 +62,7 @@ import {
 import type { WarLoan } from 'pyre-world-kit'
 import * as fs from 'fs'
 import * as path from 'path'
-import { AgentState, FactionInfo, LLMDecision } from './src/types'
+import { Action, AgentState, FactionInfo, LLMDecision, Personality } from './src/types'
 import { chooseAction, sentimentBuySize } from './src/action'
 import { log, logGlobal, pick, randRange, sleep } from './src/util'
 import { AGENT_COUNT, KEYS_FILE, LLM_ENABLED, MAX_INTERVAL, MIN_FUNDED_SOL, MIN_INTERVAL, OLLAMA_MODEL, OLLAMA_URL, RPC_URL, NETWORK, CONCURRENT_AGENTS, STRONGHOLD_FUND_SOL, FUND_TARGET_SOL, MAX_SWARM_FACTIONS } from './src/config'
@@ -75,11 +75,30 @@ import { uploadFactionAssets } from './src/irys'
 import { parseCustomError } from './src/error'
 import { generateKeys, loadKeys, saveKeys } from './src/keys'
 import { loadState, saveState } from './src/state'
-import { reconstructFromChain, ChainDerivedState } from './src/chain'
+import { reconstructFromChain, ChainDerivedState, weightsFromCounts, classifyPersonality, actionIndex } from './src/chain'
 
 // Per-agent dynamic weights derived from on-chain history
 const agentDynamicWeights = new Map<string, number[]>()
 const agentMemories = new Map<string, string[]>()
+
+// Per-agent runtime action tracking for live personality evolution
+const agentActionCounts = new Map<string, number[]>()  // pubkey -> counts per action type (14 elements)
+const agentMemoBuffer = new Map<string, string[]>()     // pubkey -> memos generated during runtime
+const agentSeedPersonality = new Map<string, Personality>() // original seed personality for weight blending
+
+/** Record a successful action for live personality evolution */
+function recordAgentAction(pubkey: string, action: Action, memo?: string) {
+  const idx = actionIndex(action)
+  if (idx < 0) return
+  if (!agentActionCounts.has(pubkey)) {
+    agentActionCounts.set(pubkey, new Array(14).fill(0))
+  }
+  agentActionCounts.get(pubkey)![idx]++
+  if (memo?.trim()) {
+    if (!agentMemoBuffer.has(pubkey)) agentMemoBuffer.set(pubkey, [])
+    agentMemoBuffer.get(pubkey)!.push(memo)
+  }
+}
 
 // Global ring buffer of recent messages across all agents — prevents repetition
 const RECENT_GLOBAL_MESSAGES: string[] = []
@@ -756,6 +775,9 @@ async function agentTick(
     // Record message globally to prevent cross-agent repetition
     if (decision?.message) recordGlobalMessage(decision.message)
 
+    // Track action for live personality evolution
+    recordAgentAction(agent.publicKey, action, decision?.message)
+
     agent.actionCount++
   } catch (err: any) {
     const parsed = parseCustomError(err)
@@ -1096,13 +1118,21 @@ async function swarm() {
   // Derive dynamic personality weights from each agent's tx history.
   // Agents become defined by their on-chain behavior over time.
   logGlobal('Reconstructing agent state from on-chain history...')
+  // Store seed personalities for all agents (used by live evolution)
+  for (const agent of agents) {
+    agentSeedPersonality.set(agent.publicKey, agent.personality)
+  }
   let reconstructed = 0
   const CHAIN_BATCH = 5 // reconstruct N agents at a time to avoid RPC hammering
   for (let i = 0; i < agents.length; i += CHAIN_BATCH) {
     const batch = agents.slice(i, i + CHAIN_BATCH)
+    const PER_AGENT_TIMEOUT = 15_000 // 15s per agent max
     const results = await Promise.allSettled(
       batch.map(agent =>
-        reconstructFromChain(connection, agent.publicKey, knownFactions, agent.personality)
+        Promise.race([
+          reconstructFromChain(connection, agent.publicKey, knownFactions, agent.personality),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), PER_AGENT_TIMEOUT)),
+        ])
       )
     )
     for (let j = 0; j < results.length; j++) {
@@ -1110,7 +1140,8 @@ async function swarm() {
       const agent = batch[j]
       if (result.status === 'fulfilled' && result.value.actionCount > 0) {
         const chain = result.value
-        const seedPersonality = agent.personality
+        const seedPers = agent.personality
+        agentSeedPersonality.set(agent.publicKey, seedPers) // preserve for live evolution
         agent.personality = chain.personality
         agentDynamicWeights.set(agent.publicKey, chain.weights)
         agentMemories.set(agent.publicKey, chain.memories)
@@ -1133,6 +1164,11 @@ async function swarm() {
           log(agent.publicKey.slice(0, 8), `personality evolved: ${seedPersonality} → ${chain.personality} (${chain.actionCount} on-chain actions)`)
         }
         reconstructed++
+      } else if (result.status === 'rejected') {
+        const reason = result.reason?.message ?? String(result.reason)
+        if (reason === 'timeout') {
+          log(agent.publicKey.slice(0, 8), `chain reconstruction timed out (>${PER_AGENT_TIMEOUT / 1000}s), using seed personality`)
+        }
       }
     }
     if (i + CHAIN_BATCH < agents.length) await sleep(500)
@@ -1193,6 +1229,7 @@ async function swarm() {
   const REPORT_EVERY = 50 // report every N ticks
   const SAVE_EVERY = 20   // save state every N ticks
   const DISCOVERY_EVERY = 100 // re-scan factions every N ticks
+  const EVOLVE_EVERY = 500  // recompute personality from runtime actions every N ticks
 
   // Graceful shutdown
   let stopping = false
@@ -1254,6 +1291,31 @@ async function swarm() {
       } catch {
         // ignore discovery errors
       }
+    }
+
+    // Periodic personality evolution from runtime actions
+    if (tick % EVOLVE_EVERY === 0 && tick > 0) {
+      let evolved = 0
+      for (const agent of agents) {
+        const counts = agentActionCounts.get(agent.publicKey)
+        if (!counts) continue
+        const total = counts.reduce((a, b) => a + b, 0)
+        if (total < 5) continue // not enough data to evolve yet
+
+        const seed = agentSeedPersonality.get(agent.publicKey) ?? agent.personality
+        const weights = weightsFromCounts(counts, seed)
+        const memos = agentMemoBuffer.get(agent.publicKey) ?? []
+        const newPersonality = classifyPersonality(weights, memos)
+
+        agentDynamicWeights.set(agent.publicKey, weights)
+
+        if (newPersonality !== agent.personality) {
+          log(agent.publicKey.slice(0, 8), `personality evolved: ${agent.personality} → ${newPersonality} (${total} runtime actions)`)
+          agent.personality = newPersonality
+          evolved++
+        }
+      }
+      if (evolved > 0) logGlobal(`Personality evolution: ${evolved} agents evolved at tick ${tick}`)
     }
 
     // Retry LLM if it was down

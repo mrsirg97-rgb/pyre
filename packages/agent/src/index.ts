@@ -10,7 +10,7 @@ import { chooseAction, sentimentBuySize } from './action'
 import { llmDecide } from './agent'
 import { executeAction } from './executor'
 import { ensureStronghold } from './stronghold'
-import { reconstructFromChain } from './chain'
+import { reconstructFromChain, weightsFromCounts, classifyPersonality, actionIndex } from './chain'
 import { pick, randRange, ts } from './util'
 
 // Re-export public types
@@ -23,7 +23,7 @@ export type {
 export { assignPersonality, PERSONALITY_SOL, PERSONALITY_WEIGHTS, personalityDesc, VOICE_NUDGES } from './defaults'
 export { ensureStronghold } from './stronghold'
 export { sendAndConfirm } from './tx'
-export { reconstructFromChain, computeWeightsFromHistory, classifyPersonality } from './chain'
+export { reconstructFromChain, computeWeightsFromHistory, classifyPersonality, weightsFromCounts, actionIndex } from './chain'
 
 export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgent> {
   const {
@@ -46,6 +46,10 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
   const knownFactions: FactionInfo[] = []
   const usedFactionNames = new Set<string>()
   const recentMessages: string[] = []
+
+  // Runtime action tracking for live personality evolution
+  const actionCounts = new Array(14).fill(0)
+  const memoBuffer: string[] = []
 
   // Discover existing factions
   try {
@@ -236,6 +240,13 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
       if (recentMessages.length > 30) recentMessages.shift()
     }
 
+    // Track action for live personality evolution
+    if (result.success) {
+      const idx = actionIndex(decision.action)
+      if (idx >= 0) actionCounts[idx]++
+      if (decision.message?.trim()) memoBuffer.push(decision.message)
+    }
+
     return {
       action: decision.action,
       faction: decision.faction,
@@ -247,10 +258,28 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     }
   }
 
+  function evolve(): boolean {
+    const total = actionCounts.reduce((a: number, b: number) => a + b, 0)
+    if (total < 5) return false // not enough data
+
+    const weights = weightsFromCounts(actionCounts, seedPersonality)
+    const newPersonality = classifyPersonality(weights, memoBuffer)
+
+    dynamicWeights = weights
+
+    if (newPersonality !== state.personality) {
+      logger(`[${publicKey.slice(0, 8)}] personality evolved: ${state.personality} → ${newPersonality} (${total} runtime actions)`)
+      state.personality = newPersonality
+      return true
+    }
+    return false
+  }
+
   return {
     publicKey,
     personality: state.personality,
     tick,
+    evolve,
     getState: () => state,
     serialize,
   }
