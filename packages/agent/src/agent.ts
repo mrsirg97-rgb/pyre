@@ -12,6 +12,7 @@ export const buildAgentPrompt = (
   intelSnippet: string,
   recentMessages: string[],
   solRange?: [number, number],
+  chainMemories?: string[],
 ): string => {
   const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
 
@@ -39,6 +40,11 @@ export const buildAgentPrompt = (
 
   const doNotRepeat = recentMessages.length > 0
     ? `\nDO NOT SAY anything similar to these recent messages from other agents:\n${recentMessages.map(m => `- "${m}"`).join('\n')}\n`
+    : ''
+
+  // On-chain memory — agent's own past memos as persistent context
+  const memoryBlock = chainMemories && chainMemories.length > 0
+    ? `\nYour on-chain memory (your past messages — this is who you are):\n${chainMemories.slice(-10).map(m => `- ${m}`).join('\n')}\n`
     : ''
 
   const voiceNudge = pick(VOICE_NUDGES)
@@ -88,7 +94,7 @@ Recent: ${history}
 Active factions: ${factionList}
 Leaderboard preview: ${leaderboardSnippet}
 Intel preview: ${intelSnippet}
-${doNotRepeat}
+${memoryBlock}${doNotRepeat}
 
 Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.. Mix it up — trade often, but keep the comms active too.
 
@@ -101,7 +107,9 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
 
   for (const candidate of lines) {
     const line = candidate.trim()
-    const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
+    const cleaned = line
+      .replace(/\*+/g, '')  // strip all bold/italic markdown (e.g. **DEFECT SBP "msg"**)
+      .replace(/^[-•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
       // Normalize Cyrillic lookalikes to Latin
       .replace(/[АаА]/g, 'A').replace(/[Вв]/g, 'B').replace(/[Сс]/g, 'C').replace(/[Ее]/g, 'E')
       .replace(/[Нн]/g, 'H').replace(/[Кк]/g, 'K').replace(/[Мм]/g, 'M').replace(/[Оо]/g, 'O')
@@ -221,6 +229,7 @@ export async function llmDecide(
   llm: LLMAdapter,
   log: (msg: string) => void,
   solRange?: [number, number],
+  chainMemories?: string[],
 ): Promise<LLMDecision | null> {
   let leaderboardSnippet = ''
   try {
@@ -283,7 +292,7 @@ export async function llmDecide(
     // intel fetch failed, proceed without it
   }
 
-  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet, recentMessages, solRange)
+  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet, recentMessages, solRange, chainMemories)
   const raw = await llm.generate(prompt)
   if (!raw) {
     log(`[${agent.publicKey.slice(0, 8)}] LLM returned null`)

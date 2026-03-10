@@ -12,8 +12,9 @@ export const chooseAction = (
   agent: AgentState,
   canRally: boolean,
   knownFactions: FactionInfo[],
+  dynamicWeights?: number[],
 ): Action => {
-  const weights = [...PERSONALITY_WEIGHTS[personality]]
+  const weights = dynamicWeights ? [...dynamicWeights] : [...PERSONALITY_WEIGHTS[personality]]
   const hasHoldings = agent.holdings.size > 0
   const heldMints = [...agent.holdings.keys()]
   // Factions we don't hold (targets for infiltrate/fud)

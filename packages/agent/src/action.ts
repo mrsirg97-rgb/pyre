@@ -7,13 +7,20 @@ const ALL_ACTIONS: Action[] = [
   'infiltrate', 'fud',
 ]
 
+/**
+ * Choose an action using weighted random selection.
+ *
+ * Accepts optional dynamic weights (from on-chain history).
+ * Falls back to static personality weights if not provided.
+ */
 export const chooseAction = (
   personality: Personality,
   agent: AgentState,
   canRally: boolean,
   knownFactions: FactionInfo[],
+  dynamicWeights?: number[],
 ): Action => {
-  const weights = [...PERSONALITY_WEIGHTS[personality]]
+  const weights = dynamicWeights ? [...dynamicWeights] : [...PERSONALITY_WEIGHTS[personality]]
   const hasHoldings = agent.holdings.size > 0
   const heldMints = [...agent.holdings.keys()]
   const rivalFactions = knownFactions.filter(f => !heldMints.includes(f.mint))

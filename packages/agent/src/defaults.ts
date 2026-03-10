@@ -83,7 +83,7 @@ export const ACTION_MAP: Record<string, string> = {
   'SMEAR': 'FUD', 'SLANDER': 'FUD', 'DISCREDIT': 'FUD', 'SABOTAGE': 'FUD', 'UNDERMINE': 'FUD', 'ARGUE': 'FUD', 'TRASH': 'FUD', 'CRITICIZE': 'FUD', 'MOCK': 'FUD', 'FUDS': 'FUD',
   'ENDORSE': 'RALLY', 'PROMOTE': 'RALLY', 'BOOST': 'RALLY',
   // Common misspellings
-  'DEFLECT': 'DEFECT', 'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT',
+  'DEFLECT': 'DEFECT', 'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT', 'DERECT': 'DEFECT',
   'JION': 'JOIN', 'JOING': 'JOIN', 'JOIIN': 'JOIN',
   'RALEY': 'RALLY', 'RALY': 'RALLY', 'RALLLY': 'RALLY',
   'LANCH': 'LAUNCH', 'LAUCH': 'LAUNCH',

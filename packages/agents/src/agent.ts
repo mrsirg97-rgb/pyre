@@ -265,8 +265,10 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
 
   for (const candidate of lines) {
     const line = candidate.trim()
-    // Strip leading punctuation/bullets, LLM preamble tags, and literal "ACTION" prefix models sometimes add
-    const cleaned = line.replace(/^[-*•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
+    // Strip markdown bold/italic wrapping, leading punctuation/bullets, LLM preamble tags
+    const cleaned = line
+      .replace(/\*+/g, '')  // strip all bold/italic markdown (e.g. **DEFECT SBP "msg"**)
+      .replace(/^[-•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
       // Normalize Cyrillic lookalikes to Latin (Mistral sometimes mixes scripts)
       .replace(/[АаА]/g, 'A').replace(/[Вв]/g, 'B').replace(/[Сс]/g, 'C').replace(/[Ее]/g, 'E')
       .replace(/[Нн]/g, 'H').replace(/[Кк]/g, 'K').replace(/[Мм]/g, 'M').replace(/[Оо]/g, 'O')
@@ -297,7 +299,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'SMEAR': 'FUD', 'SLANDER': 'FUD', 'DISCREDIT': 'FUD', 'SABOTAGE': 'FUD', 'UNDERMINE': 'FUD', 'ARGUE': 'FUD', 'TRASH': 'FUD', 'CRITICIZE': 'FUD', 'MOCK': 'FUD', 'FUDS': 'FUD',
       'ENDORSE': 'RALLY', 'PROMOTE': 'RALLY', 'BOOST': 'RALLY',
       // Common misspellings
-      'DEFLECT': 'DEFECT', 'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT',
+      'DEFLECT': 'DEFECT', 'DEFEKT': 'DEFECT', 'DEFCT': 'DEFECT', 'DEFFECT': 'DEFECT', 'DERECT': 'DEFECT',
       'JION': 'JOIN', 'JOING': 'JOIN', 'JOIIN': 'JOIN',
       'RALEY': 'RALLY', 'RALY': 'RALLY', 'RALLLY': 'RALLY',
       'LANCH': 'LAUNCH', 'LAUCH': 'LAUNCH',

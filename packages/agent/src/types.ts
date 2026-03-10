@@ -120,7 +120,7 @@ export interface SerializedAgentState {
 export interface PyreAgent {
   /** Agent's public key */
   readonly publicKey: string
-  /** Agent's personality */
+  /** Agent's personality (emergent from on-chain history) */
   readonly personality: Personality
   /** Run one decision+action cycle */
   tick(factions?: FactionInfo[]): Promise<AgentTickResult>
@@ -128,4 +128,42 @@ export interface PyreAgent {
   getState(): AgentState
   /** Serialize state for persistence */
   serialize(): SerializedAgentState
+}
+
+// ─── On-Chain History Types ──────────────────────────────────────
+
+/** A single on-chain action parsed from transaction history */
+export interface OnChainAction {
+  signature: string
+  timestamp: number
+  action: Action | 'fund' | 'dex_buy' | 'dex_sell' | 'unknown'
+  mint?: string          // faction mint involved
+  memo?: string          // SPL memo if present
+  otherAgents?: string[] // other signers/participants
+}
+
+/** State derived entirely from on-chain data */
+export interface ChainDerivedState {
+  /** Personality weights computed from action frequency */
+  weights: number[]
+  /** Classified personality from weight distribution */
+  personality: Personality
+  /** Sentiment from on-chain interactions (buys/sells/memos per faction) */
+  sentiment: Map<string, number>
+  /** Allies derived from shared factions + positive memos */
+  allies: Set<string>
+  /** Rivals derived from defections + negative memos */
+  rivals: Set<string>
+  /** SOL spending range derived from actual tx amounts */
+  solRange: [number, number]
+  /** Total on-chain actions */
+  actionCount: number
+  /** Recent action descriptions for LLM context */
+  recentHistory: string[]
+  /** Founded faction mints (agent was signer on CreateToken) */
+  founded: string[]
+  /** Agent's own memos as persistent memory */
+  memories: string[]
+  /** Raw parsed history */
+  history: OnChainAction[]
 }

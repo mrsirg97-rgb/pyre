@@ -3,24 +3,27 @@ import { getFactions, isPyreMint } from 'pyre-world-kit'
 
 import {
   PyreAgentConfig, PyreAgent, AgentState, AgentTickResult,
-  FactionInfo, LLMDecision, SerializedAgentState,
+  FactionInfo, LLMDecision, SerializedAgentState, ChainDerivedState,
 } from './types'
 import { PERSONALITY_SOL, assignPersonality } from './defaults'
 import { chooseAction, sentimentBuySize } from './action'
 import { llmDecide } from './agent'
 import { executeAction } from './executor'
 import { ensureStronghold } from './stronghold'
+import { reconstructFromChain } from './chain'
 import { pick, randRange, ts } from './util'
 
 // Re-export public types
 export type {
   PyreAgentConfig, PyreAgent, AgentTickResult, SerializedAgentState,
   LLMAdapter, LLMDecision, FactionInfo, Personality, Action, AgentState,
+  OnChainAction, ChainDerivedState,
 } from './types'
 
 export { assignPersonality, PERSONALITY_SOL, PERSONALITY_WEIGHTS, personalityDesc, VOICE_NUDGES } from './defaults'
 export { ensureStronghold } from './stronghold'
 export { sendAndConfirm } from './tx'
+export { reconstructFromChain, computeWeightsFromHistory, classifyPersonality } from './chain'
 
 export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgent> {
   const {
@@ -30,35 +33,13 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
   } = config
 
   const publicKey = keypair.publicKey.toBase58()
-  const personality = config.personality ?? config.state?.personality ?? assignPersonality()
-  const solRange = config.solRange ?? PERSONALITY_SOL[personality]
+  const seedPersonality = config.personality ?? config.state?.personality ?? assignPersonality()
   const logger = config.logger ?? ((msg: string) => console.log(`[${ts()}] ${msg}`))
 
   const strongholdOpts = {
     fundSol: strongholdFundSol,
     topupThresholdSol: strongholdTopupThresholdSol,
     topupReserveSol: strongholdTopupReserveSol,
-  }
-
-  // Build agent state from serialized or fresh
-  const prior = config.state
-  const state: AgentState = {
-    keypair,
-    publicKey,
-    personality,
-    holdings: new Map(Object.entries(prior?.holdings ?? {})),
-    founded: prior?.founded ?? [],
-    rallied: new Set(prior?.rallied ?? []),
-    voted: new Set([...(prior?.voted ?? []), ...Object.keys(prior?.holdings ?? {})]),
-    hasStronghold: prior?.hasStronghold ?? false,
-    activeLoans: new Set(prior?.activeLoans ?? []),
-    infiltrated: new Set(prior?.infiltrated ?? []),
-    sentiment: new Map(Object.entries(prior?.sentiment ?? {})),
-    allies: new Set(prior?.allies ?? []),
-    rivals: new Set(prior?.rivals ?? []),
-    actionCount: prior?.actionCount ?? 0,
-    lastAction: prior?.lastAction ?? 'none',
-    recentHistory: prior?.recentHistory ?? [],
   }
 
   // Track known factions and used names
@@ -77,6 +58,66 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     logger(`[${publicKey.slice(0, 8)}] discovered ${knownFactions.length} factions`)
   } catch {
     logger(`[${publicKey.slice(0, 8)}] faction discovery failed`)
+  }
+
+  // ─── On-Chain State Reconstruction ───────────────────────────────
+  // Derive personality, weights, sentiment, allies/rivals from chain history.
+  // Falls back to seed personality + serialized state if chain fetch fails.
+
+  let chainState: ChainDerivedState | null = null
+  let personality = seedPersonality
+  let dynamicWeights: number[] | undefined
+  let solRange = config.solRange ?? PERSONALITY_SOL[seedPersonality]
+
+  try {
+    chainState = await reconstructFromChain(
+      connection, publicKey, knownFactions, seedPersonality,
+      { maxSignatures: 500 },
+    )
+
+    if (chainState.actionCount > 0) {
+      personality = chainState.personality
+      dynamicWeights = chainState.weights
+      solRange = chainState.solRange
+
+      logger(`[${publicKey.slice(0, 8)}] on-chain reconstruction: ${chainState.actionCount} actions, personality: ${seedPersonality} → ${personality}, memories: ${chainState.memories.length}`)
+    } else {
+      logger(`[${publicKey.slice(0, 8)}] no on-chain history, using seed personality: ${seedPersonality}`)
+    }
+  } catch (err: any) {
+    logger(`[${publicKey.slice(0, 8)}] chain reconstruction failed (${err.message?.slice(0, 60)}), using fallback state`)
+  }
+
+  // Build agent state — chain-derived where available, serialized fallback, fresh default
+  const prior = config.state
+  const state: AgentState = {
+    keypair,
+    publicKey,
+    personality,
+    holdings: new Map(Object.entries(prior?.holdings ?? {})),
+    founded: chainState?.founded ?? prior?.founded ?? [],
+    rallied: new Set(prior?.rallied ?? []),
+    voted: new Set([...(prior?.voted ?? []), ...Object.keys(prior?.holdings ?? {})]),
+    hasStronghold: prior?.hasStronghold ?? false,
+    activeLoans: new Set(prior?.activeLoans ?? []),
+    infiltrated: new Set(prior?.infiltrated ?? []),
+    // Chain-derived sentiment as baseline, overwritten by serialized if available
+    sentiment: chainState && chainState.actionCount > 0
+      ? chainState.sentiment
+      : new Map(Object.entries(prior?.sentiment ?? {})),
+    // Chain-derived allies/rivals as baseline
+    allies: chainState && chainState.actionCount > 0
+      ? chainState.allies
+      : new Set(prior?.allies ?? []),
+    rivals: chainState && chainState.actionCount > 0
+      ? chainState.rivals
+      : new Set(prior?.rivals ?? []),
+    actionCount: chainState?.actionCount ?? prior?.actionCount ?? 0,
+    lastAction: prior?.lastAction ?? 'none',
+    // Chain memories + recent history for LLM context
+    recentHistory: chainState && chainState.actionCount > 0
+      ? chainState.recentHistory
+      : prior?.recentHistory ?? [],
   }
 
   // Ensure stronghold exists
@@ -110,14 +151,14 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     let usedLLM = false
 
     if (llm && activeFactions.length > 0) {
-      decision = await llmDecide(state, activeFactions, connection, recentMessages, llm, logger, solRange)
+      decision = await llmDecide(state, activeFactions, connection, recentMessages, llm, logger, solRange, chainState?.memories)
       if (decision) usedLLM = true
     }
 
-    // Fallback: weighted random
+    // Fallback: weighted random (using dynamic weights from chain history)
     if (!decision) {
       const canRally = activeFactions.some(f => !state.rallied.has(f.mint))
-      const action = chooseAction(state.personality, state, canRally, activeFactions)
+      const action = chooseAction(state.personality, state, canRally, activeFactions, dynamicWeights)
       const [minSol, maxSol] = solRange
       decision = { action, sol: randRange(minSol, maxSol) }
 
@@ -208,7 +249,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
 
   return {
     publicKey,
-    personality,
+    personality: state.personality,
     tick,
     getState: () => state,
     serialize,

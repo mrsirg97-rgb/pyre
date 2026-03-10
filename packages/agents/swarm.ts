@@ -75,6 +75,11 @@ import { uploadFactionAssets } from './src/irys'
 import { parseCustomError } from './src/error'
 import { generateKeys, loadKeys, saveKeys } from './src/keys'
 import { loadState, saveState } from './src/state'
+import { reconstructFromChain, ChainDerivedState } from './src/chain'
+
+// Per-agent dynamic weights derived from on-chain history
+const agentDynamicWeights = new Map<string, number[]>()
+const agentMemories = new Map<string, string[]>()
 
 // Global ring buffer of recent messages across all agents — prevents repetition
 const RECENT_GLOBAL_MESSAGES: string[] = []
@@ -130,7 +135,8 @@ async function agentTick(
   // Fallback: weighted random, no canned messages (LLM generates all messages)
   if (!decision) {
     const canRally = knownFactions.some(f => !agent.rallied.has(f.mint))
-    const action = chooseAction(agent.personality, agent, canRally, knownFactions)
+    const dynWeights = agentDynamicWeights.get(agent.publicKey)
+    const action = chooseAction(agent.personality, agent, canRally, knownFactions, dynWeights)
     const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
 
     decision = { action, sol: randRange(minSol, maxSol) }
@@ -1085,6 +1091,53 @@ async function swarm() {
   } catch (err: any) {
     logGlobal(`Could not discover factions: ${err.message?.slice(0, 80)}`)
   }
+
+  // ─── On-Chain State Reconstruction ──────────────────────────────
+  // Derive dynamic personality weights from each agent's tx history.
+  // Agents become defined by their on-chain behavior over time.
+  logGlobal('Reconstructing agent state from on-chain history...')
+  let reconstructed = 0
+  const CHAIN_BATCH = 5 // reconstruct N agents at a time to avoid RPC hammering
+  for (let i = 0; i < agents.length; i += CHAIN_BATCH) {
+    const batch = agents.slice(i, i + CHAIN_BATCH)
+    const results = await Promise.allSettled(
+      batch.map(agent =>
+        reconstructFromChain(connection, agent.publicKey, knownFactions, agent.personality)
+      )
+    )
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j]
+      const agent = batch[j]
+      if (result.status === 'fulfilled' && result.value.actionCount > 0) {
+        const chain = result.value
+        const seedPersonality = agent.personality
+        agent.personality = chain.personality
+        agentDynamicWeights.set(agent.publicKey, chain.weights)
+        agentMemories.set(agent.publicKey, chain.memories)
+
+        // Merge chain-derived sentiment as baseline
+        for (const [mint, score] of chain.sentiment) {
+          if (!agent.sentiment.has(mint)) agent.sentiment.set(mint, score)
+        }
+        // Merge chain-derived founded factions
+        for (const mint of chain.founded) {
+          if (!agent.founded.includes(mint)) agent.founded.push(mint)
+        }
+        // Use chain history if local history is empty
+        if (agent.recentHistory.length === 0) {
+          agent.recentHistory = chain.recentHistory
+        }
+        agent.actionCount = Math.max(agent.actionCount, chain.actionCount)
+
+        if (seedPersonality !== chain.personality) {
+          log(agent.publicKey.slice(0, 8), `personality evolved: ${seedPersonality} → ${chain.personality} (${chain.actionCount} on-chain actions)`)
+        }
+        reconstructed++
+      }
+    }
+    if (i + CHAIN_BATCH < agents.length) await sleep(500)
+  }
+  logGlobal(`${reconstructed}/${agents.length} agents reconstructed from on-chain history`)
 
   // If no factions exist, have a few agents launch some
   if (knownFactions.length === 0) {
