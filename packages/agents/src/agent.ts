@@ -463,7 +463,7 @@ export async function llmDecide(
           ? `${intel.totalMembers} members, top holder: ${intel.members[0]?.percentage.toFixed(1)}%`
           : 'no members'
         const commsInfo = intel.recentComms.length > 0
-          ? intel.recentComms.slice(0, 3).map(c => `${c.sender.slice(0, 8)}: "${c.memo.replace(/^<+/, '').replace(/>+\s*$/, '')}"`).join(', ')
+          ? intel.recentComms.slice(0, 3).map(c => `@${c.sender.slice(0, 8)} said: "${c.memo.replace(/^<+/, '').replace(/>+\s*$/, '')}"`).join(', ')
           : 'no recent comms'
         return `  [${intel.symbol}] ${memberInfo} | recent comms: ${commsInfo}`
       })
