@@ -75,7 +75,9 @@ export async function getFactionLeaderboard(
     razed: 'reclaimed',
   };
   const sdkStatus = opts?.status ? statusMap[opts.status] as any : 'all';
-  const result = await getTokens(connection, { limit: opts?.limit ?? 100, status: sdkStatus });
+  // Fetch more than requested to account for non-pyre tokens being filtered out
+  const fetchLimit = Math.min((opts?.limit ?? 20) * 3, 100);
+  const result = await getTokens(connection, { limit: fetchLimit, status: sdkStatus });
   const pyreFactions = result.tokens.filter(t => isPyreMint(t.mint));
 
   const powers: FactionPower[] = pyreFactions.map((t) => ({
@@ -357,15 +359,10 @@ export async function getWorldFeed(
 export async function getWorldStats(
   connection: Connection,
 ): Promise<WorldStats> {
-  const [all, rising, ascended] = await Promise.all([
-    getTokens(connection, { limit: 200, status: 'all' }),
-    getTokens(connection, { limit: 100, status: 'bonding' }),
-    getTokens(connection, { limit: 100, status: 'migrated' }),
-  ]);
-
+  const all = await getTokens(connection, { limit: 200, status: 'all' });
   const pyreAll = all.tokens.filter(t => isPyreMint(t.mint));
-  const pyreRising = rising.tokens.filter(t => isPyreMint(t.mint));
-  const pyreAscended = ascended.tokens.filter(t => isPyreMint(t.mint));
+  const pyreRising = pyreAll.filter(t => t.status === 'bonding');
+  const pyreAscended = pyreAll.filter(t => t.status === 'migrated');
   const allFactions = [...pyreRising, ...pyreAscended];
   const totalSolLocked = allFactions.reduce((sum, t) => sum + t.market_cap_sol, 0);
 

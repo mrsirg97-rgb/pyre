@@ -3,13 +3,41 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, getComms, getDexPool, getDexVaults, isPyreMint, isBlacklistedMint, PROGRAM_ID } from 'pyre-world-kit'
+import { getFactions, getDexPool, getDexVaults, isPyreMint, isBlacklistedMint, PROGRAM_ID } from 'pyre-world-kit'
 import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { StageEntry } from '@/components/StageEntry'
 import { HowToPlayModal } from '@/components/HowToPlayModal'
 
 const BONDING_CURVE_SEED = 'bonding_curve'
+const MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'
+
+/** Extract memo from a parsed transaction (top-level + inner instructions) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractMemo(tx: any): string | null {
+  const allIxs = [
+    ...tx.transaction.message.instructions,
+    ...(tx.meta?.innerInstructions || []).flatMap((inner: any) => inner.instructions),
+  ]
+  for (const ix of allIxs) {
+    const pid = 'programId' in ix ? (ix.programId as PublicKey).toString() : ''
+    const pname = 'program' in ix ? (ix as { program: string }).program : ''
+    if (pid === MEMO_PROGRAM || pname === 'spl-memo') {
+      if ('parsed' in ix) {
+        return typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed)
+      } else if ('data' in ix && typeof (ix as { data?: string }).data === 'string') {
+        const raw = (ix as { data: string }).data
+        try {
+          const bytes = Buffer.from(raw, 'base64')
+          return new TextDecoder().decode(bytes)
+        } catch {
+          return raw
+        }
+      }
+    }
+  }
+  return null
+}
 
 function getBondingCurvePda(mint: PublicKey): PublicKey {
   const [pda] = PublicKey.findProgramAddressSync(
@@ -81,6 +109,8 @@ export default function StagePage() {
               const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
               const absSol = Math.abs(solChange) / 1_000_000_000
 
+              const memo = extractMemo(tx)
+
               // Detect action from token balance changes
               const pre = tx.meta.preTokenBalances || []
               const post = tx.meta.postTokenBalances || []
@@ -140,7 +170,7 @@ export default function StagePage() {
                 faction_name: faction.name,
                 action,
                 amount_sol: absSol > 0.001 ? absSol : null,
-                memo: null,
+                memo,
                 timestamp: sig.blockTime || 0,
                 signature: sig.signature,
               })
@@ -178,6 +208,7 @@ export default function StagePage() {
               if (!tx?.meta || tx.meta.err) continue
 
               const trader = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || ''
+              const memo = extractMemo(tx)
 
               // Detect buy vs sell from token balance changes
               const pre = tx.meta.preTokenBalances || []
@@ -232,7 +263,7 @@ export default function StagePage() {
                 faction_name: faction.name,
                 action,
                 amount_sol: absSol > 0.001 ? absSol : null,
-                memo: null,
+                memo,
                 timestamp: sig.blockTime || 0,
                 signature: sig.signature,
               })
@@ -243,43 +274,12 @@ export default function StagePage() {
         }),
       )
 
-      // Fetch messages (comms) from top factions
-      await Promise.all(
-        pyreFactions.slice(0, 20).map(async (faction) => {
-          try {
-            const msgs = await getComms(connection, faction.mint, 30)
-
-            for (const msg of msgs.comms) {
-              entries.push({
-                agent: msg.sender,
-                faction_mint: faction.mint,
-                faction_name: faction.name,
-                action: 'messaged',
-                amount_sol: null,
-                memo: msg.memo,
-                timestamp: msg.timestamp,
-                signature: msg.signature,
-              })
-            }
-          } catch {
-            // skip
-          }
-        }),
-      )
-
-      // Merge duplicates: same signature can appear from BC scan + pool scan + comms.
+      // Merge duplicates: same signature can appear from BC scan + pool scan.
       // Prefer pool scan (more accurate for vault swaps) and preserve memos.
       const bySignature = new Map<string, ActionEntry>()
       for (const e of entries) {
         const existing = bySignature.get(e.signature)
         if (!existing) {
-          bySignature.set(e.signature, e)
-        } else if (e.action === 'messaged' && e.memo) {
-          // Comms entry — just attach memo to the existing action
-          existing.memo = e.memo
-        } else if (existing.action === 'messaged') {
-          // Existing was comms-only, replace with real action but keep memo
-          e.memo = e.memo || existing.memo
           bySignature.set(e.signature, e)
         } else if (existing.action === 'rallied' && e.action !== 'rallied') {
           // BC scan classified vault swap as "rallied" (zero SOL change on BC),
