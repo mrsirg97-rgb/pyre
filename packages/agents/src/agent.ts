@@ -286,7 +286,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       // Aliases
       'BUY': 'JOIN', 'INVEST': 'JOIN', 'ENTER': 'JOIN', 'JOINING': 'JOIN', 'BUYING': 'JOIN', 'INVESTING': 'JOIN',
       'REINFORCE': 'JOIN', 'INCREASE': 'JOIN', 'GATHER': 'JOIN',
-      'SELL': 'DEFECT', 'DUMP': 'DEFECT', 'EXIT': 'DEFECT', 'LEAVE': 'DEFECT', 'DEFECTING': 'DEFECT', 'SELLING': 'DEFECT', 'DUMPING': 'DEFECT',
+      'SELL': 'DEFECT', 'DUMP': 'DEFECT', 'EXIT': 'DEFECT', 'LEAVE': 'DEFECT', 'DEFECTING': 'DEFECT', 'DEFECTION': 'DEFECT', 'SELLING': 'DEFECT', 'DUMPING': 'DEFECT',
       'WARN': 'FUD', 'ATTACK': 'SIEGE', 'LIQUIDATE': 'SIEGE',
       'BORROW': 'WAR_LOAN', 'LOAN': 'WAR_LOAN',
       'REPAY': 'REPAY_LOAN', 'STAR': 'RALLY', 'VOTE': 'RALLY', 'SUPPORT': 'RALLY',
@@ -403,9 +403,10 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   if (action === 'defect' && (!faction || !agent.holdings.has(faction.mint))) return null
   if (action === 'rally' && (!faction || agent.rallied.has(faction.mint))) return null
   if ((action === 'join' || action === 'message') && !faction) return null
-  if (action === 'war_loan' && (!faction || !agent.holdings.has(faction.mint))) return null
+  if (action === 'war_loan' && (!faction || !agent.holdings.has(faction.mint) || faction.status !== 'ascended')) return null
   if (action === 'repay_loan' && (!faction || !agent.activeLoans.has(faction.mint))) return null
-  if ((action === 'siege' || action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return null
+  if (action === 'siege' && (!faction || faction.status !== 'ascended')) return null
+  if ((action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return null
   if (action === 'infiltrate' && !faction) return null
   if (action === 'fud' && faction && !agent.holdings.has(faction.mint)) {
     // No holdings to sell — downgrade to MESSAGE (micro buy + same message)
