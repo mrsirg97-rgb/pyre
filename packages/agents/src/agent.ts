@@ -191,8 +191,8 @@ ${actionsBlock}
 ${commsNudge}
 
 RULES:
-- Respond with EXACTLY one line: ACTION TICKER "short message"
-- TICKER is the faction's token symbol from the leaderboard (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'})
+- Respond with EXACTLY one line, e.g.: MESSAGE ${factions[0]?.symbol || 'IRON'} "your message here"
+- The second word must be a faction symbol from the leaderboard (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). Do NOT write the word "TICKER" or "SYMBOL" — use an actual faction symbol.
 - Messages must be under 140 characters, specific, and reference real agents/factions/events
 - Use "" for no message
 - NEVER wrap your message in < > angle brackets. Just write plain text inside the quotes.
@@ -200,7 +200,7 @@ RULES:
 
 The goal is to WIN. Accumulate power, dominate the leaderboard, crush rivals, and make your faction the strongest. Every action should move you closer to the top.
 
-Examples (notice the ticker is always a faction symbol, never an address):
+Examples:
 ${generateDynamicExamples(factions, agent)}
 
 Your response (one line only):`
@@ -247,6 +247,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'INFLTRATE': 'INFILTRATE', 'INFILTRTE': 'INFILTRATE',
       'ALERT': 'FUD', 'EXPOSE': 'FUD',
       'QUESTION': 'MESSAGE', 'ASK': 'MESSAGE', 'TAUNT': 'FUD', 'RALLYING': 'RALLY',
+      'TICKER': 'MESSAGE', 'ACTION': 'MESSAGE',  // LLM copies placeholder words from prompt
     }
 
     // Try to extract action — handle both "ACTION SYMBOL" and "ACTIONSYMBOL" (no space)
