@@ -418,7 +418,7 @@ async function agentTick(
         await ensureStronghold(connection, agent)
         if (!agent.hasStronghold) return
 
-        const result = await messageFaction(connection, {
+        let result = await messageFaction(connection, {
           mint: faction.mint,
           agent: agent.publicKey,
           message,
@@ -426,7 +426,26 @@ async function agentTick(
           ascended: faction.status === 'ascended',
           first_buy: !agent.voted.has(faction.mint),
         })
-        await sendAndConfirm(connection, agent.keypair, result)
+        try {
+          await sendAndConfirm(connection, agent.keypair, result)
+        } catch (retryErr: any) {
+          const p = parseCustomError(retryErr)
+          if (p && p.code === 6008) {
+            // AlreadyVoted — retry without vote
+            agent.voted.add(faction.mint)
+            result = await messageFaction(connection, {
+              mint: faction.mint,
+              agent: agent.publicKey,
+              message,
+              stronghold: agent.publicKey,
+              ascended: faction.status === 'ascended',
+              first_buy: false,
+            })
+            await sendAndConfirm(connection, agent.keypair, result)
+          } else {
+            throw retryErr
+          }
+        }
 
         const prev = agent.holdings.get(faction.mint) ?? 0
         agent.holdings.set(faction.mint, prev + 1)
