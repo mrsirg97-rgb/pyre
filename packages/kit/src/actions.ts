@@ -88,6 +88,7 @@ import type {
   ConvertTitheParams,
   JoinFactionResult,
   LaunchFactionResult,
+  FactionStatus,
 } from './types';
 
 import {
@@ -209,8 +210,12 @@ export async function getComms(
   connection: Connection,
   mint: string,
   limit?: number,
+  status?: FactionStatus,
 ): Promise<CommsResult> {
-  const result = await getMessages(connection, mint, limit);
+  // Non-ascended: bonding curve only (1 RPC call)
+  // Ascended: pool only (1 RPC call) — bonding curve is stale post-migration
+  const source = status === 'ascended' ? 'pool' : status ? 'bonding' : 'all';
+  const result = await getMessages(connection, mint, limit, { source });
   return mapMessagesResult(result);
 }
 

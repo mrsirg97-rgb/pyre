@@ -82,7 +82,7 @@ export const fetchFactionIntel = async (
 ): Promise<FactionIntel> => {
   const [membersResult, commsResult] = await Promise.all([
     getMembers(connection, faction.mint, 10).catch(() => ({ members: [], total_members: 0 })),
-    getComms(connection, faction.mint, 5).catch(() => ({ comms: [], total: 0 })),
+    getComms(connection, faction.mint, 5, faction.status).catch(() => ({ comms: [], total: 0 })),
   ])
   return {
     symbol: faction.symbol,
