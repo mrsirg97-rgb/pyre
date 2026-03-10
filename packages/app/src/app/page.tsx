@@ -81,32 +81,6 @@ export default function StagePage() {
               const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
               const absSol = Math.abs(solChange) / 1_000_000_000
 
-              // Parse memo from all instructions (top-level + inner)
-              const MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'
-              let memo: string | null = null
-              const allIxs = [
-                ...tx.transaction.message.instructions,
-                ...(tx.meta.innerInstructions || []).flatMap(inner => inner.instructions),
-              ]
-              for (const ix of allIxs) {
-                const pid = 'programId' in ix ? (ix.programId as PublicKey).toString() : ''
-                const pname = 'program' in ix ? (ix as { program: string }).program : ''
-                if (pid === MEMO_PROGRAM || pname === 'spl-memo') {
-                  if ('parsed' in ix) {
-                    memo = typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed)
-                  } else if ('data' in ix && typeof (ix as { data?: string }).data === 'string') {
-                    // Raw memo instruction — data is base58 or utf8
-                    const raw = (ix as { data: string }).data
-                    try {
-                      const bytes = Buffer.from(raw, 'base64')
-                      memo = new TextDecoder().decode(bytes)
-                    } catch {
-                      memo = raw
-                    }
-                  }
-                }
-              }
-
               // Detect action from token balance changes
               const pre = tx.meta.preTokenBalances || []
               const post = tx.meta.postTokenBalances || []
@@ -166,7 +140,7 @@ export default function StagePage() {
                 faction_name: faction.name,
                 action,
                 amount_sol: absSol > 0.001 ? absSol : null,
-                memo,
+                memo: null,
                 timestamp: sig.blockTime || 0,
                 signature: sig.signature,
               })
@@ -204,31 +178,6 @@ export default function StagePage() {
               if (!tx?.meta || tx.meta.err) continue
 
               const trader = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || ''
-
-              // Parse memo from all instructions (top-level + inner)
-              const MEMO_PROGRAM_DEX = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'
-              let memo: string | null = null
-              const allDexIxs = [
-                ...tx.transaction.message.instructions,
-                ...(tx.meta.innerInstructions || []).flatMap(inner => inner.instructions),
-              ]
-              for (const ix of allDexIxs) {
-                const pid = 'programId' in ix ? (ix.programId as PublicKey).toString() : ''
-                const pname = 'program' in ix ? (ix as { program: string }).program : ''
-                if (pid === MEMO_PROGRAM_DEX || pname === 'spl-memo') {
-                  if ('parsed' in ix) {
-                    memo = typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed)
-                  } else if ('data' in ix && typeof (ix as { data?: string }).data === 'string') {
-                    const raw = (ix as { data: string }).data
-                    try {
-                      const bytes = Buffer.from(raw, 'base64')
-                      memo = new TextDecoder().decode(bytes)
-                    } catch {
-                      memo = raw
-                    }
-                  }
-                }
-              }
 
               // Detect buy vs sell from token balance changes
               const pre = tx.meta.preTokenBalances || []
@@ -283,7 +232,7 @@ export default function StagePage() {
                 faction_name: faction.name,
                 action,
                 amount_sol: absSol > 0.001 ? absSol : null,
-                memo,
+                memo: null,
                 timestamp: sig.blockTime || 0,
                 signature: sig.signature,
               })

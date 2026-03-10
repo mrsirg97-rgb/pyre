@@ -115,7 +115,7 @@ const VOICE_NUDGES_MAINNET = [
 const VOICE_NUDGES = NETWORK === 'mainnet' ? VOICE_NUDGES_MAINNET : VOICE_NUDGES_DEVNET
 */
 
-const VOICE_NUDGES = [
+const VOICE_NUDGES_MAINNET = [
   'Call out a specific agent by address. What are they up to?',
   'Trash talk a rival faction. Be specific about why they\'re weak.',
   'Flex on your position. You\'re winning and everyone should know.',
@@ -135,6 +135,29 @@ const VOICE_NUDGES = [
   'Write a one-liner. Punchy. Sarcastic. No explanation needed.',
   'Sound like you\'re warning an ally about something you saw.',
 ]
+
+const VOICE_NUDGES_DEVNET = [
+  'JOIN a faction you\'ve been eyeing. Put your money where your mouth is.',
+  'DEFECT from a faction that\'s underperforming. Cut your losses.',
+  'INFILTRATE a rival faction. Sneak in before they notice.',
+  'FUD a faction you hold — spread doubt and buy the dip later.',
+  'Take a WAR_LOAN against your strongest position. Leverage up.',
+  'JOIN the top faction on the leaderboard. Ride the momentum.',
+  'DEFECT dramatically. Trash talk on the way out.',
+  'INFILTRATE the weakest faction. Easy target.',
+  'FUD whoever is in first place. Knock them down a peg.',
+  'RALLY a faction you believe in. Show support.',
+  'JOIN a small faction early. Get in before the crowd.',
+  'DEFECT and move your capital somewhere better.',
+  'Make a power move. JOIN or DEFECT — don\'t just talk.',
+  'Pick a side. JOIN the underdogs or ride with the leaders.',
+  'Your portfolio needs action. Trade, don\'t chat.',
+  'Be aggressive. Take a position and defend it.',
+  'Time to shake things up. DEFECT and cause chaos.',
+  'Double down. REINFORCE your best position.',
+]
+
+const VOICE_NUDGES = NETWORK === 'mainnet' ? VOICE_NUDGES_MAINNET : VOICE_NUDGES_DEVNET
 
 export const buildAgentPrompt = (
   agent: AgentState,
@@ -183,17 +206,17 @@ export const buildAgentPrompt = (
     ? `ACTIONS (pick exactly one):
 - MESSAGE SYMBOL "message" — talk in faction comms (trash talk, coordinate, flex, call out agents)
 - FUD SYMBOL "message" — challenge or debate in a faction you hold
-- JOIN SYMBOL "message" — join a faction you believe in
+- JOIN SYMBOL "message" — join a faction you believe in AND OPTIONALLY post a message (grow your position)
+- REINFORCE SYMBOL "message" — increase your position in a faction AND OPTIONALLY post a message (grow your position)
 - DEFECT SYMBOL "message" — leave a faction
 - RALLY SYMBOL — show support (one-time per faction)
-- LAUNCH "name" — found a new faction
-
-SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet.`
+- LAUNCH "name" — found a new faction`
     : `ACTIONS (pick exactly one — every action with "message" lets you talk in comms at the same time):
-- JOIN SYMBOL "message" — buy into a faction AND post a message (grow your position)
-- DEFECT SYMBOL "message" — sell tokens AND post a message (take profits or cut losses)
+- JOIN SYMBOL "message" — buy into a faction AND OPTIONALLY post a message (grow your position)
+- DEFECT SYMBOL "message" — sell tokens AND OPTIONALLY post a message (take profits or cut losses)
+- REINFORCE SYMBOL "message" — increase your position in a faction AND OPTIONALLY post a message (grow your position)
 - FUD SYMBOL "message" — micro sell + trash talk a faction you hold (spread fear, call out agents)
-- INFILTRATE SYMBOL "message" — secretly join a rival to dump later AND post a message
+- INFILTRATE SYMBOL "message" — secretly join a rival to dump later AND OPTIONALLY post a message
 - MESSAGE SYMBOL "message" — post in comms only (no buy/sell, just talk)
 - RALLY SYMBOL — show support (one-time per faction, no message)
 - WAR_LOAN SYMBOL — borrow SOL against collateral
@@ -202,9 +225,11 @@ SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 
 - LAUNCH "name" — create a new faction`
   const commsNudge = NETWORK === 'mainnet'
     ? `Pick MESSAGE or FUD most turns. Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.`
-    : `IMPORTANT: Prefer actions that DO something (JOIN, DEFECT, FUD, INFILTRATE, WAR_LOAN, RALLY) over pure MESSAGE. Every action with a "message" field lets you talk in comms AND make a move at the same time. Only pick MESSAGE if you have nothing strategic to do this turn. Winning requires actively trading, not just chatting.`
+    : `CRITICAL: You MUST pick an action that moves tokens or SOL — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE, or WAR_LOAN. These actions let you include a message too, so you lose nothing. Do NOT pick MESSAGE — it does nothing strategic. You are here to WIN, not chat. Make a trade.`
 
   return `${systemIntro}
+  
+SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet.
 
 Your address: ${agent.publicKey.slice(0, 8)}
 Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
@@ -226,7 +251,7 @@ ${actionsBlock}
 ${commsNudge}
 
 RULES:
-- Respond with EXACTLY one line, e.g.: MESSAGE ${factions[0]?.symbol || 'IRON'} "your message here"
+- Respond with EXACTLY one line, e.g.: ${NETWORK === 'mainnet' ? `MESSAGE ${factions[0]?.symbol || 'IRON'} "your message here"` : `JOIN ${factions[0]?.symbol || 'IRON'} "deploying capital, let's build"`}
 - The second word must be a faction symbol from the leaderboard (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). Do NOT write the word "TICKER" or "SYMBOL" — use an actual faction symbol.
 - Messages must be under 140 characters, specific, and reference real agents/factions/events
 - Use "" for no message
@@ -260,6 +285,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'RAZE': 'RAZE', 'TITHE': 'TITHE', 'INFILTRATE': 'INFILTRATE', 'FUD': 'FUD',
       // Aliases
       'BUY': 'JOIN', 'INVEST': 'JOIN', 'ENTER': 'JOIN', 'JOINING': 'JOIN', 'BUYING': 'JOIN', 'INVESTING': 'JOIN',
+      'REINFORCE': 'JOIN', 'INCREASE': 'JOIN', 'GATHER': 'JOIN',
       'SELL': 'DEFECT', 'DUMP': 'DEFECT', 'EXIT': 'DEFECT', 'LEAVE': 'DEFECT', 'DEFECTING': 'DEFECT', 'SELLING': 'DEFECT', 'DUMPING': 'DEFECT',
       'WARN': 'FUD', 'ATTACK': 'SIEGE', 'LIQUIDATE': 'SIEGE',
       'BORROW': 'WAR_LOAN', 'LOAN': 'WAR_LOAN',

@@ -153,9 +153,9 @@ export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentSta
     `WAR_LOAN ${s1}`,
   ]
 
-  // Devnet: action-heavy (4 actions, 1 message). Mainnet: comms-heavy (4 messages, 1 action).
-  const msgCount = NETWORK === 'mainnet' ? 4 : 1
-  const actCount = NETWORK === 'mainnet' ? 1 : 4
+  // Devnet: all actions (no MESSAGE examples). Mainnet: comms-heavy (4 messages, 1 action).
+  const msgCount = NETWORK === 'mainnet' ? 4 : 0
+  const actCount = NETWORK === 'mainnet' ? 1 : 5
   const msgShuffled = messageExamples.sort(() => Math.random() - 0.5).slice(0, msgCount)
   const actShuffled = actionExamples.sort(() => Math.random() - 0.5).slice(0, actCount)
   return [...actShuffled, ...msgShuffled].sort(() => Math.random() - 0.5).join('\n')
