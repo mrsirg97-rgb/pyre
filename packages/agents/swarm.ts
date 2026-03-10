@@ -82,7 +82,7 @@ const MAX_GLOBAL_MESSAGES = 30
 
 function recordGlobalMessage(msg: string) {
   if (!msg || msg.length < 3) return
-  RECENT_GLOBAL_MESSAGES.push(msg.toLowerCase())
+  RECENT_GLOBAL_MESSAGES.push(msg.replace(/^<+/, '').replace(/>+\s*$/, '').toLowerCase())
   if (RECENT_GLOBAL_MESSAGES.length > MAX_GLOBAL_MESSAGES) {
     RECENT_GLOBAL_MESSAGES.shift()
   }

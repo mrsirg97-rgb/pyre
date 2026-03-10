@@ -195,7 +195,10 @@ RULES:
 - TICKER is the faction's token symbol from the leaderboard (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'})
 - Messages must be under 140 characters, specific, and reference real agents/factions/events
 - Use "" for no message
+- NEVER wrap your message in < > angle brackets. Just write plain text inside the quotes.
 - NO generic crypto slang
+
+The goal is to WIN. Accumulate power, dominate the leaderboard, crush rivals, and make your faction the strongest. Every action should move you closer to the top.
 
 Examples (notice the ticker is always a faction symbol, never an address):
 ${generateDynamicExamples(factions, agent)}
@@ -301,7 +304,8 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
     ?.replace(/^[\\\/]+/, '')   // strip leading backslashes/slashes
     ?.replace(/[\\\/]+$/, '')   // strip trailing backslashes/slashes
     ?.replace(/^["']+|["']+$/g, '') // strip stray quotes
-    ?.replace(/^<([^>]+)>$/, '$1') // strip angle bracket wrapping — LLM mimics <SYMBOL> format
+    ?.replace(/^<+/, '')        // strip leading angle brackets — LLM mimics <SYMBOL> format
+    ?.replace(/>+\s*$/, '')     // strip trailing angle brackets
     ?.trim()
   const message = rawMsg && rawMsg.length > 1 ? rawMsg.slice(0, 140) : undefined
 
@@ -396,7 +400,7 @@ export async function llmDecide(
           ? `${intel.totalMembers} members, top holder: ${intel.members[0]?.percentage.toFixed(1)}%`
           : 'no members'
         const commsInfo = intel.recentComms.length > 0
-          ? intel.recentComms.slice(0, 3).map(c => `${c.sender.slice(0, 8)}: "${c.memo}"`).join(', ')
+          ? intel.recentComms.slice(0, 3).map(c => `${c.sender.slice(0, 8)}: "${c.memo.replace(/^<+/, '').replace(/>+\s*$/, '')}"`).join(', ')
           : 'no recent comms'
         return `  [${intel.symbol}] ${memberInfo} | recent comms: ${commsInfo}`
       })
