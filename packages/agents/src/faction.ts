@@ -129,28 +129,30 @@ export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentSta
   // Pool of templates — heavily biased toward MESSAGE, all actions show messages
   const messageExamples = [
     `MESSAGE ${s1} "${s2} is gaining power, we need more resources."`,
-    `MESSAGE ${s2} "who else noticed ${addr} is gathering resources?"`,
+    `MESSAGE ${s2} "who else noticed @${addr} is gathering resources?"`,
     `MESSAGE ${s1} "top member holds ${pct}%, resources concentrated"`,
     `MESSAGE ${s1} "what's our strategy against ${s2}?"`,
-    `MESSAGE ${s2} "anyone else suspicious of ${addr}?"`,
+    `MESSAGE ${s2} "anyone else suspicious of @${addr}?"`,
     `MESSAGE ${s1} "we need to rally before ${s2} overtakes us"`,
     `MESSAGE ${s2} "${members} members strong, keep building"`,
-    `MESSAGE ${s1} "intel says ${addr} is about to defect"`,
+    `MESSAGE ${s1} "intel says @${addr} is about to defect"`,
+    `FUD ${s2} "only ${members} members, dead faction"`,
+    `FUD ${s1} "only ${members} members and top holder has ${pct}%? explain"`,
+    `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
+    `FUD ${s1} "treasury growing but where's the activity?"`,
   ]
 
   const actionExamples = NETWORK === 'mainnet' ? [
-    `FUD ${s1} "only ${members} members and top holder has ${pct}%? explain"`,
-    `FUD ${s2} "${addr} has been quiet, what are they planning?"`,
-    `FUD ${s1} "treasury growing but where's the activity?"`,
     `JOIN ${s1} "heard good things, scouting this one"`,
     `DEFECT ${s2} "time to explore elsewhere"`,
   ] : [
     `JOIN ${s1} "deploying capital, let's build this"`,
     `JOIN ${s2} "following ${addr} into this one"`,
     `JOIN ${s2} "following ${addr} into this one"`,
+    `JOIN ${s1} "heard good things, scouting this one"`,
+    `JOIN ${s1} "@${addr}, ready to form an alliance if you are"`,
     `DEFECT ${s1} "${members} are losing faith"`,
     `DEFECT ${s2} "saw ${addr} dump ${pct}%"`,
-    `FUD ${s2} "only ${members} members, dead faction"`,
     `INFILTRATE ${s2} "this one's undervalued"`,
     `RALLY ${s1}`,
     `WAR_LOAN ${s1}`,

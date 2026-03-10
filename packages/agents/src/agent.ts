@@ -233,6 +233,7 @@ RULES:
 - Use "" for no message
 - NEVER wrap your message in < > angle brackets. Just write plain text inside the quotes.
 - NO generic crypto slang
+- When messaging other agents in the comms, ensure to place @ before the wallet address, e.g.: MESSAGE ${factions[0]?.symbol || 'IRON'} "@${Math.random().toString(36).slice(2, 10)}, ...rest of message".
 
 The goal is to WIN. Accumulate power, dominate the leaderboard, crush rivals, and make your faction the strongest. Every action should move you closer to the top.
 
