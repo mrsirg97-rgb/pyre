@@ -344,30 +344,31 @@ function scoreActions(r: number[]): Record<Personality, number> {
 
   const commsRate = messageRate + fudRate
   const tradeRate = joinRate + defectRate
+  // Ratio of fud to total comms — the key differentiator between personalities
+  const fudRatio = commsRate > 0 ? fudRate / commsRate : 0   // 0 = pure messenger, 1 = pure fudder
+  const msgRatio = commsRate > 0 ? messageRate / commsRate : 0
 
   return {
-    // Loyalist: joins + messages (buys in and hypes), rarely defects/fuds
-    loyalist: joinRate * 3 + messageRate * 4 + rallyRate * 3 + titheRate * 2
-      - fudRate * 4 - defectRate * 3 - infiltrateRate * 2,
+    // Loyalist: high message ratio, joins, rallies — positive vibes
+    loyalist: msgRatio * 3 + joinRate * 2 + rallyRate * 3 + titheRate * 2
+      - fudRatio * 4 - defectRate * 3,
 
-    // Mercenary: the infiltration cycle — join + fud + defect in the same faction
-    // Key signal: defect AND fud both present (provocateurs fud but stay, mercenaries dump)
-    mercenary: defectRate * 4 + fudRate * 3
-      + (defectRate > 0 && fudRate > 0 ? 3 : 0) // bonus for the full infiltration cycle
+    // Mercenary: defect + fud cycle, infiltration pattern
+    mercenary: defectRate * 4 + fudRatio * 2
+      + (defectRate > 0 && fudRate > 0 ? 3 : 0)
       + infiltrateRate * 3 + warLoanRate * 2 + siegeRate * 2
-      - messageRate * 2 - rallyRate * 3 - titheRate * 2,
+      - msgRatio * 2 - rallyRate * 2,
 
-    // Provocateur: high fud, stirs chaos
-    provocateur: fudRate * 5 + messageRate * 2 + infiltrateRate * 2
-      - joinRate - rallyRate * 2 - titheRate,
+    // Provocateur: high fud ratio — more fud than message
+    provocateur: fudRatio * 4 + infiltrateRate * 2
+      - msgRatio * 2 - rallyRate * 2,
 
-    // Scout: messages but rarely fuds (intel, observations)
-    scout: messageRate * 4 + rallyRate - fudRate * 3 - defectRate
-      - infiltrateRate,
+    // Scout: high message ratio, low fud — observes, doesn't attack
+    scout: msgRatio * 3 + rallyRate - fudRatio * 3 - defectRate,
 
     // Whale: trades a lot but talks very little
     whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2
-      - messageRate * 3 - fudRate * 3,
+      - commsRate * 3,
   }
 }
 
