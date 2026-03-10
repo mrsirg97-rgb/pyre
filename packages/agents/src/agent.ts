@@ -156,16 +156,16 @@ export const buildAgentPrompt = (
 
 SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet.`
     : `ACTIONS (pick exactly one):
-- MESSAGE <SYMBOL> "<message>" — post in comms (discuss strategy, share intel, coordinate, call out agents)
-- JOIN <SYMBOL> "<message>" — buy into a faction
-- DEFECT <SYMBOL> "<message>" — sell your tokens
-- RALLY <SYMBOL> — show support (one-time per faction)
-- LAUNCH "<name>" — create a new faction
-- WAR_LOAN <SYMBOL> — borrow SOL against collateral
-- REPAY_LOAN <SYMBOL> — repay a loan
-- SIEGE <SYMBOL> — liquidate undercollateralized loan
-- INFILTRATE <SYMBOL> "<message>" — join rival to dump later
-- FUD <SYMBOL> "<message>" — micro sell + trash talk in a faction you hold (call out agents, spread fear)`
+- MESSAGE SYMBOL "message" — post in comms (discuss strategy, share intel, coordinate, call out agents)
+- JOIN SYMBOL "message" — buy into a faction
+- DEFECT SYMBOL "message" — sell your tokens
+- RALLY SYMBOL — show support (one-time per faction)
+- LAUNCH "name" — create a new faction
+- WAR_LOAN SYMBOL — borrow SOL against collateral
+- REPAY_LOAN SYMBOL — repay a loan
+- SIEGE SYMBOL — liquidate undercollateralized loan
+- INFILTRATE SYMBOL "message" — join rival to dump later
+- FUD SYMBOL "message" — micro sell + trash talk in a faction you hold (call out agents, spread fear)`
 
   const commsNudge = NETWORK === 'mainnet'
     ? `Pick MESSAGE or FUD most turns. Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.`
@@ -301,6 +301,7 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
     ?.replace(/^[\\\/]+/, '')   // strip leading backslashes/slashes
     ?.replace(/[\\\/]+$/, '')   // strip trailing backslashes/slashes
     ?.replace(/^["']+|["']+$/g, '') // strip stray quotes
+    ?.replace(/^<([^>]+)>$/, '$1') // strip angle bracket wrapping — LLM mimics <SYMBOL> format
     ?.trim()
   const message = rawMsg && rawMsg.length > 1 ? rawMsg.slice(0, 140) : undefined
 
