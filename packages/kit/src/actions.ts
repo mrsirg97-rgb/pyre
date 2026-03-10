@@ -6,7 +6,6 @@
  */
 
 import { Connection, PublicKey } from '@solana/web3.js';
-import bs58 from 'bs58';
 import {
   // Read operations
   getTokens,
@@ -15,6 +14,7 @@ import {
   getMessages,
   getBuyQuote,
   getSellQuote,
+  getBorrowQuote,
   getVault,
   getVaultForWallet,
   getVaultWalletLink,
@@ -197,102 +197,8 @@ export async function getComms(
   mint: string,
   limit?: number,
 ): Promise<CommsResult> {
-  const safeLimit = Math.min(limit || 50, 100);
-  const MEMO_PROGRAM = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
-
-  // Fetch bonding curve messages AND pool state messages in parallel
-  const bondingCommsPromise = getMessages(connection, mint, safeLimit)
-    .then(r => mapMessagesResult(r))
-    .catch(() => ({ comms: [], total: 0 } as CommsResult));
-
-  const poolCommsPromise = (async (): Promise<CommsResult> => {
-    try {
-      const mintPubkey = new PublicKey(mint);
-      const { poolState } = getRaydiumMigrationAccounts(mintPubkey);
-
-      const signatures = await connection.getSignaturesForAddress(
-        poolState,
-        { limit: Math.min(safeLimit, 50) },
-        'confirmed',
-      );
-
-      if (signatures.length === 0) return { comms: [], total: 0 };
-
-      const txs = await connection.getParsedTransactions(
-        signatures.map(s => s.signature),
-        { maxSupportedTransactionVersion: 0 },
-      );
-
-      const comms: CommsResult['comms'] = [];
-
-      for (let i = 0; i < txs.length; i++) {
-        const tx = txs[i];
-        if (!tx?.meta || tx.meta.err) continue;
-
-        const sig = signatures[i];
-
-        // Check top-level and inner instructions for memo
-        const allInstructions = [
-          ...tx.transaction.message.instructions,
-          ...(tx.meta.innerInstructions || []).flatMap(inner => inner.instructions),
-        ];
-
-        for (const ix of allInstructions) {
-          const programId = 'programId' in ix ? ix.programId.toString() : '';
-          const programName = 'program' in ix ? (ix as { program: string }).program : '';
-          const isMemo = programId === MEMO_PROGRAM || programName === 'spl-memo';
-
-          if (isMemo) {
-            let memoText = '';
-            if ('parsed' in ix) {
-              memoText = typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed);
-            } else if ('data' in ix && typeof ix.data === 'string') {
-              try {
-                memoText = new TextDecoder().decode(bs58.decode(ix.data));
-              } catch {
-                memoText = ix.data;
-              }
-            }
-
-            if (memoText && memoText.trim()) {
-              const sender = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || 'Unknown';
-              comms.push({
-                signature: sig.signature,
-                memo: memoText.trim(),
-                sender,
-                timestamp: sig.blockTime || 0,
-              });
-              break;
-            }
-          }
-        }
-      }
-
-      return { comms, total: comms.length };
-    } catch {
-      return { comms: [], total: 0 };
-    }
-  })();
-
-  const [bondingResult, poolResult] = await Promise.all([bondingCommsPromise, poolCommsPromise]);
-
-  // Merge, dedupe by signature, sort newest first, trim to limit
-  const seen = new Set<string>();
-  const allComms: CommsResult['comms'] = [];
-
-  for (const c of [...bondingResult.comms, ...poolResult.comms]) {
-    if (!seen.has(c.signature)) {
-      seen.add(c.signature);
-      allComms.push(c);
-    }
-  }
-
-  allComms.sort((a, b) => b.timestamp - a.timestamp);
-
-  return {
-    comms: allComms.slice(0, safeLimit),
-    total: allComms.length,
-  };
+  const result = await getMessages(connection, mint, limit);
+  return mapMessagesResult(result);
 }
 
 /** Get a quote for joining a faction (buying tokens) */
@@ -368,64 +274,13 @@ export async function getAllWarLoans(
   return mapAllLoansResult(result);
 }
 
-/**
- * Compute max borrowable SOL for a given collateral amount.
- *
- * Mirrors the burnfun LendingDashboard logic — effective max borrow is the
- * minimum of three caps:
- *   1. LTV limit: collateral_value_sol * (max_ltv_bps / 10000)
- *   2. Pool available: treasury_sol * utilization_cap - total_lent
- *   3. Per-user cap: (collateral / total_supply) * borrow_share_multiplier * max_lendable
- *
- * All values in lamports. Accounts for Token-2022 transfer fee (4 bps).
- */
+/** Compute max borrowable SOL for a given collateral amount */
 export async function getMaxWarLoan(
   connection: Connection,
   mint: string,
   collateralAmount: number,
 ): Promise<WarLoanQuote> {
-  const TOTAL_SUPPLY = 1_000_000_000_000_000; // 1B tokens * 1e6 multiplier (base units)
-  const TRANSFER_FEE_BPS = 4;
-  const LAMPORTS_PER_SOL = 1_000_000_000;
-
-  const [lending, detail] = await Promise.all([
-    getLendingInfo(connection, mint),
-    getToken(connection, mint),
-  ]);
-
-  // Price per base-unit token in SOL (lamports)
-  const pricePerToken = detail.price_sol; // SOL per display token
-  const TOKEN_MULTIPLIER = 1_000_000;
-
-  // Collateral value in SOL (lamports)
-  const collateralDisplayTokens = collateralAmount / TOKEN_MULTIPLIER;
-  const collateralValueSol = collateralDisplayTokens * pricePerToken * LAMPORTS_PER_SOL;
-
-  // 1. LTV cap
-  const ltvMaxSol = collateralValueSol * (lending.max_ltv_bps / 10000);
-
-  // 2. Pool available
-  const treasurySol = detail.treasury_sol_balance * LAMPORTS_PER_SOL;
-  const maxLendableSol = treasurySol * lending.utilization_cap_bps / 10000;
-  const totalLent = (lending.total_sol_lent ?? 0);
-  const poolAvailableSol = Math.max(0, maxLendableSol - totalLent);
-
-  // 3. Per-user cap (accounts for transfer fee reducing net collateral)
-  const netCollateral = collateralAmount * (1 - TRANSFER_FEE_BPS / 10000);
-  const borrowMultiplier = lending.borrow_share_multiplier || 3;
-  const perUserCapSol = maxLendableSol * netCollateral * borrowMultiplier / TOTAL_SUPPLY;
-
-  const maxBorrowSol = Math.max(0, Math.min(ltvMaxSol, poolAvailableSol, perUserCapSol));
-
-  return {
-    max_borrow_sol: Math.floor(maxBorrowSol),
-    collateral_value_sol: Math.floor(collateralValueSol),
-    ltv_max_sol: Math.floor(ltvMaxSol),
-    pool_available_sol: Math.floor(poolAvailableSol),
-    per_user_cap_sol: Math.floor(perUserCapSol),
-    interest_rate_bps: lending.interest_rate_bps,
-    liquidation_threshold_bps: lending.liquidation_threshold_bps,
-  };
+  return getBorrowQuote(connection, mint, collateralAmount);
 }
 
 // ─── Faction Operations (controller) ───────────────────────────────

@@ -126,42 +126,37 @@ export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentSta
   const pct = Math.floor(Math.random() * 45 + 5)
   const members = Math.floor(Math.random() * 30 + 3)
 
-  // Pool of templates — heavily biased toward MESSAGE, all actions show messages
+  // Pool of comms-only examples
   const messageExamples = [
     `MESSAGE ${s1} "${s2} is gaining power, we need more resources."`,
     `MESSAGE ${s2} "who else noticed @${addr} is gathering resources?"`,
     `MESSAGE ${s1} "top member holds ${pct}%, resources concentrated"`,
     `MESSAGE ${s1} "what's our strategy against ${s2}?"`,
-    `MESSAGE ${s2} "anyone else suspicious of @${addr}?"`,
-    `MESSAGE ${s1} "we need to rally before ${s2} overtakes us"`,
-    `MESSAGE ${s2} "${members} members strong, keep building"`,
-    `MESSAGE ${s1} "intel says @${addr} is about to defect"`,
     `FUD ${s2} "only ${members} members, dead faction"`,
-    `FUD ${s1} "only ${members} members and top holder has ${pct}%? explain"`,
-    `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
     `FUD ${s1} "treasury growing but where's the activity?"`,
   ]
 
+  // Pool of action+message examples (the LLM should prefer these)
   const actionExamples = NETWORK === 'mainnet' ? [
     `JOIN ${s1} "heard good things, scouting this one"`,
     `DEFECT ${s2} "time to explore elsewhere"`,
+    `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
   ] : [
     `JOIN ${s1} "deploying capital, let's build this"`,
-    `JOIN ${s2} "following ${addr} into this one"`,
-    `JOIN ${s2} "following ${addr} into this one"`,
-    `JOIN ${s1} "heard good things, scouting this one"`,
+    `JOIN ${s2} "following @${addr} into this one"`,
     `JOIN ${s1} "@${addr}, ready to form an alliance if you are"`,
-    `DEFECT ${s1} "${members} are losing faith"`,
-    `DEFECT ${s2} "saw ${addr} dump ${pct}%"`,
-    `INFILTRATE ${s2} "this one's undervalued"`,
+    `DEFECT ${s1} "${members} are losing faith, taking profits"`,
+    `DEFECT ${s2} "saw @${addr} dump ${pct}%, I'm out"`,
+    `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
+    `INFILTRATE ${s2} "this one's undervalued, sneaking in"`,
     `RALLY ${s1}`,
     `WAR_LOAN ${s1}`,
   ]
 
-  // Mainnet: more MESSAGE examples, fewer action examples
-  const msgCount = NETWORK === 'mainnet' ? 4 : 3
-  const actCount = NETWORK === 'mainnet' ? 1 : 2
+  // Devnet: action-heavy (4 actions, 1 message). Mainnet: comms-heavy (4 messages, 1 action).
+  const msgCount = NETWORK === 'mainnet' ? 4 : 1
+  const actCount = NETWORK === 'mainnet' ? 1 : 4
   const msgShuffled = messageExamples.sort(() => Math.random() - 0.5).slice(0, msgCount)
   const actShuffled = actionExamples.sort(() => Math.random() - 0.5).slice(0, actCount)
-  return [...msgShuffled, ...actShuffled].sort(() => Math.random() - 0.5).join('\n')
+  return [...actShuffled, ...msgShuffled].sort(() => Math.random() - 0.5).join('\n')
 }

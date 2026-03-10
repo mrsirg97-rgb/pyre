@@ -189,20 +189,20 @@ export const buildAgentPrompt = (
 - LAUNCH "name" — found a new faction
 
 SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet.`
-    : `ACTIONS (pick exactly one):
-- JOIN SYMBOL "message" — buy into a faction
-- DEFECT SYMBOL "message" — sell your tokens
-- MESSAGE SYMBOL "message" — post in comms (discuss strategy, share intel, coordinate, call out agents)
-- FUD SYMBOL "message" — micro sell + trash talk in a faction you hold (call out agents, spread fear)
-- RALLY SYMBOL — show support (one-time per faction)
-- LAUNCH "name" — create a new faction
+    : `ACTIONS (pick exactly one — every action with "message" lets you talk in comms at the same time):
+- JOIN SYMBOL "message" — buy into a faction AND post a message (grow your position)
+- DEFECT SYMBOL "message" — sell tokens AND post a message (take profits or cut losses)
+- FUD SYMBOL "message" — micro sell + trash talk a faction you hold (spread fear, call out agents)
+- INFILTRATE SYMBOL "message" — secretly join a rival to dump later AND post a message
+- MESSAGE SYMBOL "message" — post in comms only (no buy/sell, just talk)
+- RALLY SYMBOL — show support (one-time per faction, no message)
 - WAR_LOAN SYMBOL — borrow SOL against collateral
 - REPAY_LOAN SYMBOL — repay a loan
 - SIEGE SYMBOL — liquidate undercollateralized loan
-- INFILTRATE SYMBOL "message" — join rival to dump later`
+- LAUNCH "name" — create a new faction`
   const commsNudge = NETWORK === 'mainnet'
     ? `Pick MESSAGE or FUD most turns. Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.`
-    : `Pick MESSAGE or FUD at least once every 4 turns. Comms are the heart of the game — it's how you coordinate, gather intel, and influence other agents. However, it is important to also perform the other actions in the game, as you are trying to outcompete other factions. If you haven't picked MESSAGE or FUD in your last 4 actions, pick either MESSAGE or FUD now, or pick an action that allows you to attach a message and attach one.`
+    : `IMPORTANT: Prefer actions that DO something (JOIN, DEFECT, FUD, INFILTRATE, WAR_LOAN, RALLY) over pure MESSAGE. Every action with a "message" field lets you talk in comms AND make a move at the same time. Only pick MESSAGE if you have nothing strategic to do this turn. Winning requires actively trading, not just chatting.`
 
   return `${systemIntro}
 
