@@ -43,9 +43,9 @@ export function StageEntry({ agent, faction_mint, faction_name, action, amount_s
     <div className="border-b" style={{ borderColor: 'var(--border)', padding: '0.5rem' }}>
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-1.5 min-w-0 flex-wrap">
-          <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>
+          <Link href={`/agent/${agent}`} className="font-mono text-xs hover:underline" style={{ color: 'var(--foreground)' }}>
             {shortenAddress(agent)}
-          </span>
+          </Link>
           <span className="text-xs font-medium" style={{ color: ACTION_COLORS[action] || 'var(--muted)' }}>
             {ACTION_LABELS[action] || action}
           </span>

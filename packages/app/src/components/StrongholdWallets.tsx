@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
 import { PublicKey } from '@solana/web3.js'
-import { recruitAgent, exileAgent, getAgentLink } from 'pyre-world-kit'
-import type { Stronghold } from 'pyre-world-kit'
+import Link from 'next/link'
+import { recruitAgent, exileAgent, getAgentLink, getLinkedAgents } from 'pyre-world-kit'
+import type { Stronghold, AgentLink } from 'pyre-world-kit'
 import { shortenAddress } from '@/lib/utils'
 
 interface StrongholdWalletsProps {
@@ -21,12 +22,35 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const [checkAddress, setCheckAddress] = useState('')
-  const [checkResult, setCheckResult] = useState<{ wallet: string; linked: boolean } | null>(null)
-  const [checking, setChecking] = useState(false)
-  const [unlinkLoading, setUnlinkLoading] = useState(false)
+  const [agents, setAgents] = useState<AgentLink[]>([])
+  const [agentsLoading, setAgentsLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [unlinkingWallet, setUnlinkingWallet] = useState<string | null>(null)
 
   const isAuthority = wallet.publicKey?.toString() === vault.authority
+
+  async function fetchAgents() {
+    setAgentsLoading(true)
+    try {
+      const links = await getLinkedAgents(connection, vault.address)
+      setAgents(links.sort((a, b) => b.linked_at - a.linked_at))
+    } catch {
+      setAgents([])
+    } finally {
+      setAgentsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchAgents()
+  }, [vault.address])
+
+  const filteredAgents = useMemo(() => {
+    const nonAuthority = agents.filter(a => a.wallet !== vault.authority && a.wallet !== vault.creator)
+    if (!search.trim()) return nonAuthority
+    const q = search.trim().toLowerCase()
+    return nonAuthority.filter(a => a.wallet.toLowerCase().includes(q))
+  }, [agents, search, vault.authority, vault.creator])
 
   async function handleLink() {
     if (!wallet.publicKey || !wallet.signTransaction || !isAuthority) return
@@ -53,7 +77,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
 
       setWalletAddress('')
       setSuccess(`Linked ${shortenAddress(addr)}`)
-      setTimeout(onSuccess, 1500)
+      setTimeout(() => { onSuccess(); fetchAgents() }, 1500)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed'
       setError(msg.includes('User rejected') ? 'Cancelled' : msg)
@@ -62,28 +86,10 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
     }
   }
 
-  async function handleCheck() {
-    const addr = checkAddress.trim()
-    if (!addr) { setError('Enter an address to check'); return }
-    try { new PublicKey(addr) } catch { setError('Invalid address'); return }
-
-    setChecking(true)
-    setError(null)
-
-    try {
-      const link = await getAgentLink(connection, addr)
-      setCheckResult({ wallet: addr, linked: !!(link && link.stronghold === vault.address) })
-    } catch {
-      setCheckResult({ wallet: addr, linked: false })
-    } finally {
-      setChecking(false)
-    }
-  }
-
   async function handleUnlink(addr: string) {
     if (!wallet.publicKey || !wallet.signTransaction || !isAuthority) return
 
-    setUnlinkLoading(true)
+    setUnlinkingWallet(addr)
     setError(null)
     setSuccess(null)
 
@@ -99,14 +105,12 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
       await connection.confirmTransaction(txId, 'confirmed')
 
       setSuccess(`Unlinked ${shortenAddress(addr)}`)
-      setCheckResult(null)
-      setCheckAddress('')
-      setTimeout(onSuccess, 1500)
+      setTimeout(() => { onSuccess(); fetchAgents() }, 1500)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed'
       setError(msg.includes('User rejected') ? 'Cancelled' : msg)
     } finally {
-      setUnlinkLoading(false)
+      setUnlinkingWallet(null)
     }
   }
 
@@ -122,13 +126,14 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
   }
 
   return (
-    <div className="border rounded-lg p-4" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
+    <div className="border rounded-lg" style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium">Linked Agents</h3>
         <span className="text-xs" style={{ color: 'var(--muted)' }}>{vault.linked_agents} linked</span>
       </div>
 
       <div className="space-y-3">
+        {/* Link new agent */}
         <div>
           <label className="text-xs mb-1 block" style={{ color: 'var(--muted)' }}>Link Agent</label>
           <div className="flex gap-2">
@@ -137,60 +142,66 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
               value={walletAddress}
               onChange={(e) => setWalletAddress(e.target.value)}
               placeholder="Agent wallet address..."
-              className="flex-1 rounded-lg px-3 py-2 text-xs min-w-0 focus:outline-none"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground)' }}
+              className="flex-1 rounded-lg text-xs min-w-0 focus:outline-none"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground)', padding: '0.25rem', marginBottom: '0.25rem' }}
             />
             <button
               onClick={handleLink}
               disabled={loading || !walletAddress.trim()}
-              className="px-3 py-2 text-xs rounded-lg cursor-pointer disabled:opacity-40 transition-colors"
-              style={{ background: 'var(--surface)', color: 'var(--foreground)' }}
+              className="text-xs rounded-lg cursor-pointer disabled:opacity-40 transition-colors"
+              style={{ background: 'var(--surface)', color: 'var(--foreground)', padding: '0.25rem' }}
             >
               {loading ? '...' : 'Link'}
             </button>
           </div>
         </div>
 
+        {/* Agent list with search */}
         <div>
-          <label className="text-xs mb-1 block" style={{ color: 'var(--muted)' }}>Check / Unlink</label>
-          <div className="flex gap-2">
+          <label className="text-xs mb-1 block" style={{ color: 'var(--muted)' }}>Agents</label>
+          {agents.length > 0 && (
             <input
               type="text"
-              value={checkAddress}
-              onChange={(e) => { setCheckAddress(e.target.value); setCheckResult(null) }}
-              placeholder="Check if agent is linked..."
-              className="flex-1 rounded-lg px-3 py-2 text-xs min-w-0 focus:outline-none"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground)' }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by address..."
+              className="w-full rounded-lg text-xs focus:outline-none"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground)', padding: '0.25rem', marginBottom: '0.25rem' }}
             />
-            <button
-              onClick={handleCheck}
-              disabled={checking || !checkAddress.trim()}
-              className="px-3 py-2 text-xs rounded-lg cursor-pointer disabled:opacity-40 transition-colors"
-              style={{ background: 'var(--surface)', color: 'var(--foreground)' }}
-            >
-              {checking ? '...' : 'Check'}
-            </button>
-          </div>
-          {checkResult && (
-            <div className="mt-2 flex items-center justify-between">
-              <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                {shortenAddress(checkResult.wallet)}:{' '}
-                {checkResult.linked ? (
-                  <span style={{ color: 'var(--success)' }}>linked</span>
-                ) : (
-                  <span>not linked</span>
-                )}
-              </span>
-              {checkResult.linked && (
-                <button
-                  onClick={() => handleUnlink(checkResult.wallet)}
-                  disabled={unlinkLoading}
-                  className="px-2 py-1 text-xs rounded cursor-pointer disabled:opacity-40"
-                  style={{ color: 'var(--danger)' }}
+          )}
+
+          {agentsLoading ? (
+            <p className="text-xs py-2" style={{ color: 'var(--muted)' }}>Loading agents...</p>
+          ) : agents.length === 0 ? (
+            <p className="text-xs py-2" style={{ color: 'var(--muted)' }}>No agents linked yet.</p>
+          ) : filteredAgents.length === 0 ? (
+            <p className="text-xs py-2" style={{ color: 'var(--muted)' }}>No agents match "{search}"</p>
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto">
+              {filteredAgents.map((agent) => (
+                <div
+                  key={agent.wallet}
+                  className="flex items-center justify-between rounded-lg text-xs"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '0.25rem' }}
                 >
-                  {unlinkLoading ? '...' : 'Unlink'}
-                </button>
-              )}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Link href={`/agent/${agent.wallet}`} className="font-mono truncate hover:underline" title={agent.wallet} style={{ color: 'var(--foreground)' }}>
+                      {shortenAddress(agent.wallet)}
+                    </Link>
+                    <span style={{ color: 'var(--muted)' }}>
+                      {new Date(agent.linked_at * 1000).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleUnlink(agent.wallet)}
+                    disabled={unlinkingWallet === agent.wallet}
+                    className="text-xs rounded-lg cursor-pointer disabled:opacity-40 shrink-0 ml-3"
+                    style={{ color: 'var(--danger)', padding: '0.25rem' }}
+                  >
+                    {unlinkingWallet === agent.wallet ? '...' : 'Unlink'}
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

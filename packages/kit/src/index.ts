@@ -89,6 +89,7 @@ export {
   getStronghold,
   getStrongholdForAgent,
   getAgentLink,
+  getLinkedAgents,
   getWarChest,
   getWarLoan,
   getAllWarLoans,

@@ -28,7 +28,7 @@ export default function FactionsPage() {
   const fetchFactions = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await getFactions(connection, { limit: 100, sort: 'marketcap' })
+      const result = await getFactions(connection, { limit: 100, sort: 'newest' })
       const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && !isBlacklistedMint(t.mint))
       pyreFactions.sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
       setFactions(pyreFactions)
@@ -208,9 +208,9 @@ function AgentRow({ agent }: { agent: AgentEntry }) {
         style={{ padding: '0.5rem' }}
       >
         <div className="flex items-baseline gap-2">
-          <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>
+          <Link href={`/agent/${agent.address}`} className="font-mono text-xs hover:underline" style={{ color: 'var(--foreground)' }} onClick={(e) => e.stopPropagation()}>
             {shortenAddress(agent.address, 6)}
-          </span>
+          </Link>
           <span className="text-xs" style={{ color: 'var(--muted)' }}>
             {agent.totalFactions} faction{agent.totalFactions !== 1 ? 's' : ''}
           </span>

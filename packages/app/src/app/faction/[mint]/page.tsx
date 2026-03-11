@@ -89,7 +89,7 @@ export default function FactionPage() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        <div className="w-full px-4 sm:px-6 lg:px-8" style={{ padding: '0.25rem' }}>
+        <div className="w-full">
           <Link href="/factions" className="text-xs hover:underline mb-4 inline-block" style={{ color: 'var(--muted)' }}>
             back to factions
           </Link>
@@ -101,7 +101,7 @@ export default function FactionPage() {
           ) : (
             <>
               {/* Header */}
-              <div className="mb-6">
+              <div style={{ padding: '0.25rem', margin: '0.25rem' }}>
                 <div className="flex items-baseline gap-2 mb-1">
                   <h1 className="text-lg font-medium">{faction.name}</h1>
                   <span className="font-mono text-sm" style={{ color: 'var(--muted)' }}>{faction.symbol}</span>
@@ -112,7 +112,7 @@ export default function FactionPage() {
                   <span>mcap {faction.market_cap_sol.toFixed(2)}</span>
                   <span>{faction.status === 'ascended' || faction.status === 'ready' ? '100' : Math.round(faction.progress_percent)}%</span>
                   <span>{faction.rallies} rallies</span>
-                  <span>founder {shortenAddress(faction.founder)}</span>
+                  <Link href={`/agent/${faction.founder}`} className="hover:underline">founder {shortenAddress(faction.founder)}</Link>
                 </div>
                 {faction.description && (
                   <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>{faction.description}</p>
@@ -127,27 +127,39 @@ export default function FactionPage() {
 
                 return (
                   <>
-                    {treasury && (
-                      <div className="mb-6">
-                        <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)' }}>
-                          treasury
-                        </h2>
+                    <div className="mb-6">
+                      <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)' }}>
+                        treasury
+                      </h2>
+                      {treasury && (
                         <div
                           className="flex items-center justify-between border-b text-xs"
                           style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
                         >
-                          <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                            bonding curve reserve
-                          </span>
-                          <span style={{ color: 'var(--muted)' }}>
-                            {treasury.percentage.toFixed(2)}%
-                          </span>
+                          <span style={{ color: 'var(--muted)' }}>bonding curve reserve</span>
+                          <span style={{ color: 'var(--muted)' }}>{treasury.percentage.toFixed(2)}%</span>
                         </div>
+                      )}
+                      <div
+                        className="flex items-center justify-between border-b text-xs"
+                        style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
+                      >
+                        <span style={{ color: 'var(--muted)' }}>SOL raised</span>
+                        <span style={{ color: 'var(--muted)' }}>{(faction.status === 'ascended' || faction.status === 'ready' ? faction.sol_target : faction.sol_raised).toFixed(2)} SOL</span>
                       </div>
-                    )}
+                      {faction.war_chest_sol > 0 && (
+                        <div
+                          className="flex items-center justify-between border-b text-xs"
+                          style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
+                        >
+                          <span style={{ color: 'var(--muted)' }}>war chest</span>
+                          <span style={{ color: 'var(--muted)' }}>{faction.war_chest_sol.toFixed(4)} SOL</span>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Members */}
-                    <div className="mb-6">
+                    <div style={{ padding: '0.25rem', margin: '0.25rem' }}>
                       <button
                         onClick={() => setAgentsExpanded(!agentsExpanded)}
                         className="flex items-center justify-between w-full text-sm font-medium mb-3 cursor-pointer"
@@ -167,9 +179,9 @@ export default function FactionPage() {
                                 className="flex items-center justify-between border-b text-xs"
                                 style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
                               >
-                                <span className="font-mono" style={{ color: 'var(--foreground)' }}>
+                                <Link href={`/agent/${m.address}`} className="font-mono hover:underline" style={{ color: 'var(--foreground)' }}>
                                   {shortenAddress(m.address, 6)}
-                                </span>
+                                </Link>
                                 <span style={{ color: 'var(--muted)' }}>
                                   {m.percentage.toFixed(2)}%
                                 </span>
@@ -185,7 +197,7 @@ export default function FactionPage() {
 
               {/* Comms */}
               <div>
-                <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)' }}>
+                <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)', padding: '0.25rem', margin: '0.25rem' }}>
                   comms ({messages.length})
                 </h2>
                 <MessageFeed messages={messages} />

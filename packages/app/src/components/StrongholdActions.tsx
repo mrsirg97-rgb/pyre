@@ -77,10 +77,10 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
   }
 
   return (
-    <div className="border rounded-lg p-5" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
+    <div className="border rounded-lg p-5" style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}>
       <h3 className="text-sm font-medium mb-3">SOL</h3>
 
-      <div className="flex mb-3 border-b" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex mb-3 border-b" style={{ borderColor: 'var(--border)', marginBottom: '2px' }}>
         <button
           onClick={() => { setTab('deposit'); setError(null); setSuccess(null) }}
           className="flex-1 pb-2 text-sm text-center transition-colors cursor-pointer"
@@ -105,7 +105,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
 
       <div className="space-y-3">
         <div>
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between" style={{ marginBottom: '2px' }}>
             <label className="text-xs" style={{ color: 'var(--muted)' }}>Amount (SOL)</label>
             <span className="text-xs" style={{ color: 'var(--muted)' }}>
               Balance: {fmtSol(vault.sol_balance)}
@@ -116,11 +116,12 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.0"
-            className="w-full rounded-lg px-3 py-2.5 text-sm focus:outline-none transition-colors"
+            className="w-full rounded-lg text-sm focus:outline-none transition-colors"
             style={{
               background: 'var(--surface)',
               border: '1px solid var(--border)',
               color: 'var(--foreground)',
+              padding: '0.25rem'
             }}
           />
         </div>
@@ -136,7 +137,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
           onClick={handleAction}
           disabled={loading || !wallet.publicKey || (tab === 'withdraw' && !isAuthority)}
           className="w-full py-2.5 text-sm rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: 'var(--surface)', color: 'var(--foreground)' }}
+          style={{ background: 'var(--surface)', color: 'var(--foreground)', marginTop: '0.25rem' }}
         >
           {loading ? 'Processing...' : tab === 'deposit' ? 'Deposit' : 'Withdraw'}
         </button>

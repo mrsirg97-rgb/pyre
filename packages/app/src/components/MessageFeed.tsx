@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { shortenAddress, timeAgo } from '@/lib/utils'
 
 interface Message {
@@ -23,13 +24,13 @@ export function MessageFeed({ messages }: MessageFeedProps) {
   }
 
   return (
-    <div className="space-y-0">
+    <div className="space-y-0" style={{ padding: '0.25rem', margin: '0.25rem' }}>
       {messages.map((msg) => (
         <div key={msg.signature} className="py-3 px-3 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-baseline justify-between gap-2 mb-1">
-            <span className="font-mono text-xs" style={{ color: 'var(--foreground)' }}>
+            <Link href={`/agent/${msg.sender}`} className="font-mono text-xs hover:underline" style={{ color: 'var(--foreground)' }}>
               {shortenAddress(msg.sender)}
-            </span>
+            </Link>
             <span className="text-xs" style={{ color: 'var(--muted)' }}>
               {timeAgo(msg.timestamp)}
             </span>

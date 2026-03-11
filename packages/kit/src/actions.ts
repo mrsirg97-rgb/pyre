@@ -5,7 +5,7 @@
  * into game-semantic Pyre types. No new on-chain logic.
  */
 
-import { Connection, PublicKey } from '@solana/web3.js';
+import { Connection, PublicKey, type GetProgramAccountsFilter } from '@solana/web3.js';
 import {
   // Read operations
   getTokens,
@@ -47,6 +47,7 @@ import {
   // Utilities
   verifySaid,
   confirmTransaction,
+  PROGRAM_ID,
 } from 'torchsdk';
 
 import type { BuyQuoteResult, SellQuoteResult, TransactionResult, SaidVerification, ConfirmResult } from 'torchsdk';
@@ -262,6 +263,35 @@ export async function getAgentLink(
 ): Promise<AgentLink | null> {
   const link = await getVaultWalletLink(connection, wallet);
   return link ? mapWalletLinkToAgentLink(link) : null;
+}
+
+/** Get all linked agents for a vault (via getProgramAccounts) */
+export async function getLinkedAgents(
+  connection: Connection,
+  vaultAddress: string,
+): Promise<AgentLink[]> {
+  // VaultWalletLink account layout: 8-byte discriminator + 32-byte vault + 32-byte wallet + 8-byte linked_at + 1-byte bump
+  const DISCRIMINATOR = Buffer.from([111, 59, 70, 89, 148, 117, 217, 156]); // sha256("account:VaultWalletLink")[0..8]
+  const vaultPubkey = new PublicKey(vaultAddress);
+
+  const filters: GetProgramAccountsFilter[] = [
+    { dataSize: 81 }, // 8 + 32 + 32 + 8 + 1
+    { memcmp: { offset: 8, bytes: vaultPubkey.toBase58() } },
+  ];
+
+  const accounts = await connection.getProgramAccounts(PROGRAM_ID, { filters });
+
+  return accounts.map((acc) => {
+    const data = acc.account.data;
+    const wallet = new PublicKey(data.subarray(40, 72)).toBase58();
+    const linked_at = Number(data.readBigInt64LE(72));
+    return {
+      address: acc.pubkey.toBase58(),
+      stronghold: vaultAddress,
+      wallet,
+      linked_at,
+    };
+  });
 }
 
 /** Get war chest (lending info) for a faction */
