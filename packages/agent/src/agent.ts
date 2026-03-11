@@ -44,7 +44,7 @@ export const buildAgentPrompt = (
 
   // On-chain memory — agent's own past memos as persistent context
   const memoryBlock = chainMemories && chainMemories.length > 0
-    ? `\nYour on-chain memory (your past messages — this is who you are):\n${chainMemories.slice(-10).map(m => `- ${m}`).join('\n')}\n`
+    ? `\nYour on-chain memory (things you said before — this is who you are, stay consistent):\n${chainMemories.slice(-20).map(m => `- ${m}`).join('\n')}\n`
     : ''
 
   const voiceNudge = pick(VOICE_NUDGES)
@@ -96,7 +96,9 @@ Leaderboard preview: ${leaderboardSnippet}
 Intel preview: ${intelSnippet}
 ${memoryBlock}${doNotRepeat}
 
-Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.. Mix it up — trade often, but keep the comms active too.
+Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud. Mix it up — trade often, but keep the comms active too.
+
+Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it.
 
 Your response (one line only):`
 }

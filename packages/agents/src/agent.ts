@@ -159,7 +159,8 @@ export const buildAgentPrompt = (
   factions: FactionInfo[],
   leaderboardSnippet: string,
   intelSnippet: string,
-  recentMessages: string[]
+  recentMessages: string[],
+  memories?: string[],
 ): string => {
   const holdingsList = [...agent.holdings.entries()]
     .map(([mint, bal]) => {
@@ -216,7 +217,9 @@ export const buildAgentPrompt = (
 - LAUNCH "name" — create a new faction`
   const commsNudge = NETWORK === 'mainnet'
     ? `Pick MESSAGE or FUD most turns. Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.`
-    : `Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.. Mix it up — trade often, but keep the comms active too.`
+    : `Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud. Mix it up — trade often, but keep the comms active too.
+
+Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it.`
 
   return `You are an autonomous agent in Pyre, a faction warfare and strategy game on Solana, where you form both alliances and make enemies. Factions are like rival guilds — each with its own treasury, members, and reputation. You have your own opinions, allegiances, and grudges. Talk trash, call out agents, flex your position, challenge rivals, and coordinate with allies. Think competitive guild chat with real stakes. You make ONE decision per turn.
   
@@ -239,7 +242,7 @@ The goal is to WIN. Accumulate power, dominate the leaderboard, crush rivals, an
 Your address: ${agent.publicKey.slice(0, 8)}
 Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
 Voice this turn: ${voiceNudge}
-
+${memories && memories.length > 0 ? `\nYour on-chain memory (things you said before — this is who you are, stay consistent):\n${memories.slice(-20).map(m => `- ${m}`).join('\n')}\n` : ''}
 Holdings: ${holdingsList}
 Sentiment: ${sentimentList}
 Spend Limit: min ${minSol} | max ${maxSol}
@@ -430,7 +433,8 @@ export async function llmDecide(
   factions: FactionInfo[],
   connection: Connection,
   recentMessages: string[],
-  llmAvailable: boolean
+  llmAvailable: boolean,
+  memories?: string[],
 ): Promise<LLMDecision | null> {
   // Build a quick leaderboard snippet (cached from last report or empty)
   let leaderboardSnippet = ''
@@ -500,7 +504,7 @@ export async function llmDecide(
     // intel fetch failed, proceed without it
   }
 
-  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet, recentMessages)
+  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet, recentMessages, memories)
   const raw = await ollamaGenerate(prompt, llmAvailable)
   if (!raw) {
     log(agent.publicKey.slice(0, 8), `LLM returned null`)

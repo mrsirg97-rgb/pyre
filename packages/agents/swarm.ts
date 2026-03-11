@@ -147,7 +147,7 @@ async function agentTick(
   let usedLLM = false
 
   if (llmAvailable && knownFactions.length > 0) {
-    decision = await llmDecide(agent, knownFactions, connection, RECENT_GLOBAL_MESSAGES, llmAvailable)
+    decision = await llmDecide(agent, knownFactions, connection, RECENT_GLOBAL_MESSAGES, llmAvailable, agentMemories.get(agent.publicKey))
     if (decision) usedLLM = true
   }
 
@@ -781,6 +781,20 @@ async function agentTick(
 
     // Track action for live personality evolution
     recordAgentAction(agent.publicKey, action, decision?.message)
+
+    // Accumulate memories from runtime messages
+    if (decision?.message?.trim()) {
+      const factionSymbol = decision.faction ?? '?'
+      const memoryLine = action === 'fud' ? `fudded ${factionSymbol}: "${decision.message}"`
+        : action === 'message' ? `said in ${factionSymbol}: "${decision.message}"`
+        : action === 'join' ? `joined ${factionSymbol}: "${decision.message}"`
+        : action === 'defect' ? `defected ${factionSymbol}: "${decision.message}"`
+        : `${action} ${factionSymbol}: "${decision.message}"`
+      const mems = agentMemories.get(agent.publicKey) ?? []
+      mems.push(memoryLine)
+      if (mems.length > 150) mems.splice(0, mems.length - 150) // keep last 150
+      agentMemories.set(agent.publicKey, mems)
+    }
 
     // Sentiment decay — agents get restless, don't stay loyal forever
     for (const [mint, score] of agent.sentiment) {
