@@ -4,6 +4,7 @@ import { getFactions, isPyreMint } from 'pyre-world-kit'
 import {
   PyreAgentConfig, PyreAgent, AgentState, AgentTickResult,
   FactionInfo, LLMDecision, SerializedAgentState, ChainDerivedState,
+  Personality,
 } from './types'
 import { PERSONALITY_SOL, assignPersonality } from './defaults'
 import { chooseAction, sentimentBuySize } from './action'
@@ -50,6 +51,8 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
   // Runtime action tracking for live personality evolution
   const actionCounts = new Array(14).fill(0)
   const memoBuffer: string[] = []
+  const driftScores: Record<Personality, number> = { loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0 }
+  const DRIFT_THRESHOLD = 3
 
   // Discover existing factions
   try {
@@ -264,13 +267,18 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
 
     const weights = weightsFromCounts(actionCounts, seedPersonality)
     const llmGen = llm ? (p: string) => llm.generate(p) : undefined
-    const newPersonality = await classifyPersonality(weights, memoBuffer, undefined, llmGen, undefined, state.personality)
+    const suggested = await classifyPersonality(weights, memoBuffer, undefined, llmGen)
 
     dynamicWeights = weights
 
-    if (newPersonality !== state.personality) {
-      logger(`[${publicKey.slice(0, 8)}] personality evolved: ${state.personality} → ${newPersonality} (${total} runtime actions)`)
-      state.personality = newPersonality
+    // Gradual drift — track suggestions, only flip after consistent lead
+    driftScores[suggested]++
+    const currentScore = driftScores[state.personality]
+    const suggestedScore = driftScores[suggested]
+
+    if (suggested !== state.personality && suggestedScore - currentScore >= DRIFT_THRESHOLD) {
+      logger(`[${publicKey.slice(0, 8)}] personality drifted: ${state.personality} → ${suggested} (drift: ${suggestedScore} vs ${currentScore}, ${total} actions)`)
+      state.personality = suggested
       return true
     }
     return false

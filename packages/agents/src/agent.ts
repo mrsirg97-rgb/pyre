@@ -392,6 +392,7 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   const action = rawAction as Action
   const target = match[2] || match[3]
   const rawMsg = match[4]?.trim()
+    ?.replace(/[^\x20-\x7E@]/g, '') // strip non-ASCII (non-English characters)
     ?.replace(/^[\\\/]+/, '')   // strip leading backslashes/slashes
     ?.replace(/[\\\/]+$/, '')   // strip trailing backslashes/slashes
     ?.replace(/^["']+|["']+$/g, '') // strip stray quotes

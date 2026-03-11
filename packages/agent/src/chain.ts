@@ -429,10 +429,9 @@ export async function classifyPersonality(
   perFactionHistory?: Map<string, number[]>,
   llmGenerate?: (prompt: string) => Promise<string | null>,
   factionNames?: Map<string, string>,
-  currentPersonality?: Personality,
 ): Promise<Personality> {
   const total = weights.reduce((a, b) => a + b, 0)
-  if (total === 0) return currentPersonality ?? 'loyalist'
+  if (total === 0) return 'loyalist'
 
   if (llmGenerate) {
     try {
@@ -442,21 +441,12 @@ export async function classifyPersonality(
         const cleaned = response.toLowerCase().replace(/[^a-z]/g, '').trim()
         const valid: Personality[] = ['loyalist', 'mercenary', 'provocateur', 'scout', 'whale']
         const match = valid.find(p => cleaned.includes(p))
-        if (match) {
-          if (currentPersonality && match !== currentPersonality && total < 20) {
-            return currentPersonality
-          }
-          return match
-        }
+        if (match) return match
       }
     } catch { /* fall through to formula */ }
   }
 
-  const formula = classifyPersonalityFormula(weights, memos)
-  if (currentPersonality && formula !== currentPersonality && total < 20) {
-    return currentPersonality
-  }
-  return formula
+  return classifyPersonalityFormula(weights, memos)
 }
 
 // ─── Sentiment from On-Chain Data ────────────────────────────────

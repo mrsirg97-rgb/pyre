@@ -2,14 +2,14 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js'
 import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token'
 import {
   launchFaction, joinFaction, defect, messageFaction, fudFaction, rally,
-  tradeOnDex, createStronghold, fundStronghold,
+  tradeOnDex, fundStronghold,
   requestWarLoan, repayWarLoan, getWarLoan, getAllWarLoans, getMaxWarLoan,
   siege, ascend, raze, tithe, convertTithe, isPyreMint,
 } from 'pyre-world-kit'
 import type { WarLoan } from 'pyre-world-kit'
 
 import { Action, AgentState, FactionInfo, LLMAdapter, LLMDecision } from './types'
-import { PERSONALITY_SOL, STRONGHOLD_FUND_SOL } from './defaults'
+import { PERSONALITY_SOL } from './defaults'
 import { sendAndConfirm } from './tx'
 import { ensureStronghold } from './stronghold'
 import { sentimentBuySize } from './action'
@@ -192,20 +192,9 @@ const handlers: Record<Action, ActionHandler> = {
 
   async stronghold(ctx) {
     if (ctx.agent.hasStronghold) return null
-    const result = await createStronghold(ctx.connection, { creator: ctx.agent.publicKey })
-    await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
-    ctx.agent.hasStronghold = true
-
-    const fundAmt = Math.floor((ctx.strongholdOpts?.fundSol ?? STRONGHOLD_FUND_SOL) * LAMPORTS_PER_SOL)
-    try {
-      const fundResult = await fundStronghold(ctx.connection, {
-        depositor: ctx.agent.publicKey, stronghold_creator: ctx.agent.publicKey, amount_sol: fundAmt,
-      })
-      await sendAndConfirm(ctx.connection, ctx.agent.keypair, fundResult)
-    } catch { /* fund failed, stronghold still created */ }
-
-    ctx.agent.lastAction = 'created stronghold'
-    return `created stronghold + funded ${(fundAmt / LAMPORTS_PER_SOL).toFixed(1)} SOL`
+    // Kit agents don't create vaults — they must be created on pyre.world
+    ctx.log(`[${ctx.agent.publicKey.slice(0, 8)}] no vault — create one at pyre.world and link agent key ${ctx.agent.publicKey}`)
+    return null
   },
 
   async war_loan(ctx) {

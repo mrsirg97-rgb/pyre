@@ -74,7 +74,7 @@ export interface PyreAgentConfig {
   solRange?: [number, number]
   /** Max factions this agent can found (default: 2) */
   maxFoundedFactions?: number
-  /** SOL to fund stronghold vault on creation */
+  /** SOL to fund stronghold vault when topping up */
   strongholdFundSol?: number
   /** Vault balance threshold below which to top up */
   strongholdTopupThresholdSol?: number

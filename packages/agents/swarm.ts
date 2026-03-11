@@ -85,6 +85,7 @@ const agentMemories = new Map<string, string[]>()
 const agentActionCounts = new Map<string, number[]>()  // pubkey -> counts per action type (14 elements)
 const agentMemoBuffer = new Map<string, string[]>()     // pubkey -> memos generated during runtime
 const agentSeedPersonality = new Map<string, Personality>() // original seed personality for weight blending
+const agentDriftScores = new Map<string, Record<Personality, number>>() // pubkey -> drift tally per personality
 
 /** Record a successful action for live personality evolution */
 function recordAgentAction(pubkey: string, action: Action, memo?: string) {
@@ -1317,9 +1318,10 @@ async function swarm() {
       }
     }
 
-    // Periodic personality evolution from runtime actions
+    // Periodic personality evolution from runtime actions (gradual drift)
     if (tick % EVOLVE_EVERY === 0 && tick > 0) {
       let evolved = 0
+      const DRIFT_THRESHOLD = 3 // need 3+ net lead to flip personality
       for (const agent of agents) {
         const counts = agentActionCounts.get(agent.publicKey)
         if (!counts) continue
@@ -1329,13 +1331,24 @@ async function swarm() {
         const seed = agentSeedPersonality.get(agent.publicKey) ?? agent.personality
         const weights = weightsFromCounts(counts, seed)
         const memos = agentMemoBuffer.get(agent.publicKey) ?? []
-        const newPersonality = await classifyPersonality(weights, memos, undefined, (p) => ollamaGenerate(p, llmAvailable), undefined, agent.personality)
+        const suggested = await classifyPersonality(weights, memos, undefined, (p) => ollamaGenerate(p, llmAvailable))
 
         agentDynamicWeights.set(agent.publicKey, weights)
 
-        if (newPersonality !== agent.personality) {
-          log(agent.publicKey.slice(0, 8), `personality evolved: ${agent.personality} → ${newPersonality} (${total} runtime actions)`)
-          agent.personality = newPersonality
+        // Track drift scores — increment suggested type, others stay
+        let drift = agentDriftScores.get(agent.publicKey)
+        if (!drift) {
+          drift = { loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0 }
+          agentDriftScores.set(agent.publicKey, drift)
+        }
+        drift[suggested]++
+
+        // Only flip if the suggested type has a clear lead over current
+        const currentScore = drift[agent.personality]
+        const suggestedScore = drift[suggested]
+        if (suggested !== agent.personality && suggestedScore - currentScore >= DRIFT_THRESHOLD) {
+          log(agent.publicKey.slice(0, 8), `personality drifted: ${agent.personality} → ${suggested} (drift: ${suggestedScore} vs ${currentScore}, ${total} actions)`)
+          agent.personality = suggested
           evolved++
         }
       }
