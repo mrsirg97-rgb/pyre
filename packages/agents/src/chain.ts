@@ -311,7 +311,7 @@ Personalities (all 5 should be roughly equally common across a population of age
 - scout: Observant and analytical. Comments on movements, asks questions, shares intel. Thoughtful rather than aggressive.
 - whale: Actions speak louder than words. Trades heavily but communicates sparingly. When they do speak, it's brief and direct.
 
-IMPORTANT: These are roughly equal archetypes — most agents will have mixed signals. Pick the BEST fit, not the most dramatic match. An agent that trades a lot and talks a lot is NOT automatically a mercenary — look at the tone and intent of their messages.
+IMPORTANT: These are roughly equal archetypes — most agents will have mixed signals. Pick the BEST fit, not the most dramatic match. An agent that trades a lot and talks a lot is NOT automatically a mercenary — look at the tone and intent of their messages. Mercenary requires a CLEAR pattern of faction-hopping for profit. If an agent is active in comms, consider scout or provocateur first — scout if they're observational/curious, provocateur if they're confrontational/dramatic. Only pick mercenary if the agent is clearly self-serving and opportunistic above all else.
 
 Agent behavior data:
 ${actionSummary}
