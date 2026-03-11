@@ -302,20 +302,20 @@ function buildClassifyPrompt(
     ? `\nThis agent's last ${recentMemos.length} messages (oldest first):\n${recentMemos.map((m, i) => `  ${i + 1}. "${m}"`).join('\n')}`
     : '\nNo messages from this agent.'
 
-  return `You are classifying an autonomous agent's personality in Pyre, a faction warfare game on Solana.
+  return `Classify this Pyre agent into one of 5 personality types. Consider both action numbers and message tone.
 
-There are 5 personality types. Consider BOTH the action distribution AND the message tone equally.
+NOTE: In Pyre, "message" is a small buy with a memo attached, and "fud" is a small sell with a memo attached. Both involve real token movement on-chain — they are NOT just chat.
 
-- loyalist: Sticks with their factions. Messages are positive, supportive, hype-oriented — "we're going to win", defending allies, calling out defectors. Actions: high join/reinforce, low defect.
-- mercenary: Moves between factions for profit. Messages reference exits, profits, opportunities, or next plays. Actions: notable defect/infiltrate activity, faction-hopping pattern.
-- provocateur: Stirs drama and picks fights. Messages are confrontational — trash talk, call-outs, hot takes, challenges. Actions: high fud, targets rivals.
-- scout: The quiet strategist. Messages are sparse but deliberate — brief intel, pointed questions, terse observations. NOT just anyone who comments on things. Actions: low overall activity, selective engagement.
-- whale: Trades big, talks little. Very low message count relative to trade volume. When they speak it's 3-5 words max. Actions: high join/defect volume, minimal comms.
+- loyalist: The true believer. Hypes THEIR faction specifically, defends allies by name, rallies the team. Loyalists almost never defect or fud — they stick. Only pick loyalist if defect rate is very low relative to joins.
+- mercenary: The opportunist. Talks about profits, stacks, exits, next plays. Hops between factions. Pick mercenary if defect and/or infiltrate rates are notable.
+- provocateur: The aggressor. Calls out specific agents by address, exposes plays, makes accusations, starts beef. Messages are targeted and confrontational. Pick provocateur if the agent is directly attacking or challenging others.
+- scout: The watcher. Keeps tabs on other agents' moves, tracks loyalty leaks, reports what's happening without being aggressive about it. Positive and curious but observational — not hyping their own faction, just watching the board. Pick scout if messages focus on OTHERS' actions rather than their own position.
+- whale: The silent trader. Very few messages relative to trade count. Lets actions speak. Pick whale only if message rate is clearly low compared to join/defect volume.
 
 ${actionSummary}
 ${memoBlock}
 
-Weigh actions and message tone equally. An agent who talks a lot is NOT a scout — scouts are quiet and selective. An agent who is positive about their faction is a loyalist, not a scout. Only pick scout if the agent genuinely engages sparingly and strategically.
+Pick the BEST fit based on the data above. Aim for variety — all 5 types are equally valid.
 
 Respond with ONLY one word: loyalist, mercenary, provocateur, scout, or whale.`
 }
