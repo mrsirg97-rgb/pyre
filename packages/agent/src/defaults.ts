@@ -93,6 +93,8 @@ export const ACTION_MAP: Record<string, string> = {
   'ALERT': 'FUD', 'EXPOSE': 'FUD',
   'QUESTION': 'MESSAGE', 'ASK': 'MESSAGE', 'TAUNT': 'FUD', 'RALLYING': 'RALLY',
   'TICKER': 'MESSAGE', 'ACTION': 'MESSAGE',  // LLM copies placeholder words from prompt
+  'RECRUIT': 'JOIN', 'REJOIN': 'JOIN', 'JOINED': 'JOIN', 'RECENT': 'MESSAGE',
+  'COMMIT': 'JOIN',
 }
 
 // Stronghold defaults

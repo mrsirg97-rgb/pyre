@@ -278,6 +278,8 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       .replace(/[Рр]/g, 'P').replace(/[Тт]/g, 'T').replace(/[Уу]/g, 'U').replace(/[Хх]/g, 'X')
       .replace(/[фФ]/g, 'f').replace(/[иИ]/g, 'i').replace(/[лЛ]/g, 'l').replace(/[дД]/g, 'd')
       .replace(/\\/g, '') // strip backslash escapes (Mistral escapes underscores as markdown)
+      .replace(/\s+for\s+\d+\.?\d*\s*SOL/i, '') // strip "for 0.1234 SOL" narration
+      .replace(/\s*[-;:]+\s*(?=")/g, ' ') // normalize separators before quotes ("; " or "-- " → " ")
 
     // All valid actions + aliases mapped to real actions
     const ACTION_MAP: Record<string, string> = {
@@ -312,6 +314,8 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'ALERT': 'FUD', 'EXPOSE': 'FUD',
       'QUESTION': 'MESSAGE', 'ASK': 'MESSAGE', 'TAUNT': 'FUD', 'RALLYING': 'RALLY',
       'TICKER': 'MESSAGE', 'ACTION': 'MESSAGE',  // LLM copies placeholder words from prompt
+      'RECRUIT': 'JOIN', 'REJOIN': 'JOIN', 'JOINED': 'JOIN', 'RECENT': 'MESSAGE',
+      'SUPPORT': 'RALLY', 'BACK': 'JOIN', 'COMMIT': 'JOIN', 'PLEDGE': 'JOIN',
     }
 
     // Try to extract action — handle both "ACTION SYMBOL" and "ACTIONSYMBOL" (no space)

@@ -163,6 +163,8 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       .replace(/[Рр]/g, 'P').replace(/[Тт]/g, 'T').replace(/[Уу]/g, 'U').replace(/[Хх]/g, 'X')
       .replace(/[фФ]/g, 'f').replace(/[иИ]/g, 'i').replace(/[лЛ]/g, 'l').replace(/[дД]/g, 'd')
       .replace(/\\/g, '') // strip backslash escapes
+      .replace(/\s+for\s+\d+\.?\d*\s*SOL/i, '') // strip "for 0.1234 SOL" narration
+      .replace(/\s*[-;:]+\s*(?=")/g, ' ') // normalize separators before quotes
 
     let normalized = cleaned
     const upper = cleaned.toUpperCase()
