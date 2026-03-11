@@ -76,7 +76,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
   try {
     chainState = await reconstructFromChain(
       connection, publicKey, knownFactions, seedPersonality,
-      { maxSignatures: 500 },
+      { maxSignatures: 500, llmGenerate: llm ? (p: string) => llm.generate(p) : undefined },
     )
 
     if (chainState.actionCount > 0) {
@@ -258,12 +258,13 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     }
   }
 
-  function evolve(): boolean {
+  async function evolve(): Promise<boolean> {
     const total = actionCounts.reduce((a: number, b: number) => a + b, 0)
     if (total < 5) return false // not enough data
 
     const weights = weightsFromCounts(actionCounts, seedPersonality)
-    const newPersonality = classifyPersonality(weights, memoBuffer)
+    const llmGen = llm ? (p: string) => llm.generate(p) : undefined
+    const newPersonality = await classifyPersonality(weights, memoBuffer, undefined, llmGen)
 
     dynamicWeights = weights
 

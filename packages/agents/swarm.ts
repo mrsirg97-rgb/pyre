@@ -1140,7 +1140,7 @@ async function swarm() {
     const results = await Promise.allSettled(
       batch.map(agent =>
         Promise.race([
-          reconstructFromChain(connection, agent.publicKey, knownFactions, agent.personality),
+          reconstructFromChain(connection, agent.publicKey, knownFactions, agent.personality, 500, (p) => ollamaGenerate(p, llmAvailable)),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), PER_AGENT_TIMEOUT)),
         ])
       )
@@ -1315,7 +1315,7 @@ async function swarm() {
         const seed = agentSeedPersonality.get(agent.publicKey) ?? agent.personality
         const weights = weightsFromCounts(counts, seed)
         const memos = agentMemoBuffer.get(agent.publicKey) ?? []
-        const newPersonality = classifyPersonality(weights, memos)
+        const newPersonality = await classifyPersonality(weights, memos, undefined, (p) => ollamaGenerate(p, llmAvailable))
 
         agentDynamicWeights.set(agent.publicKey, weights)
 

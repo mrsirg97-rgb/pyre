@@ -125,7 +125,7 @@ export interface PyreAgent {
   /** Run one decision+action cycle */
   tick(factions?: FactionInfo[]): Promise<AgentTickResult>
   /** Recompute personality + weights from accumulated runtime actions. Returns true if personality changed. */
-  evolve(): boolean
+  evolve(): Promise<boolean>
   /** Get current mutable state */
   getState(): AgentState
   /** Serialize state for persistence */

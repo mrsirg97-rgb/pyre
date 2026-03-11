@@ -324,117 +324,129 @@ function scoreMemoPersonality(memos: string[]): Record<Personality, number> {
 // ─── Personality Classification ──────────────────────────────────
 
 /**
- * Classify personality from observed action distribution + memo content.
- *
- * Two signal sources, blended:
- *   1. Action ratios — what the agent DOES
- *   2. Memo keywords — what the agent SAYS
- *
- * Action indices: [join=0, defect=1, rally=2, launch=3, message=4,
- *   stronghold=5, war_loan=6, repay_loan=7, siege=8, ascend=9,
- *   raze=10, tithe=11, infiltrate=12, fud=13]
+ * Build the personality classification prompt for the LLM.
  */
-/**
- * Score a single action set (per-faction or global) into personality scores.
- */
-function scoreActions(r: number[]): Record<Personality, number> {
+function buildClassifyPrompt(
+  weights: number[],
+  memos: string[],
+  perFactionHistory?: Map<string, number[]>,
+  factionNames?: Map<string, string>,
+): string {
+  const total = weights.reduce((a, b) => a + b, 0)
+  const r = total > 0 ? weights.map(w => ((w / total) * 100).toFixed(1) + '%') : weights.map(() => '0%')
+
+  let actionSummary = `Overall action distribution:\n`
+  actionSummary += `  join: ${r[0]}, defect: ${r[1]}, rally: ${r[2]}, launch: ${r[3]}, message: ${r[4]}\n`
+  actionSummary += `  stronghold: ${r[5]}, war_loan: ${r[6]}, repay_loan: ${r[7]}, siege: ${r[8]}\n`
+  actionSummary += `  ascend: ${r[9]}, raze: ${r[10]}, tithe: ${r[11]}, infiltrate: ${r[12]}, fud: ${r[13]}\n`
+
+  if (perFactionHistory && perFactionHistory.size > 0) {
+    actionSummary += `\nPer-faction breakdown:\n`
+    for (const [mint, counts] of perFactionHistory) {
+      const fTotal = counts.reduce((a, b) => a + b, 0)
+      if (fTotal < 2) continue
+      const name = factionNames?.get(mint) ?? mint.slice(0, 8)
+      const fr = counts.map(c => c)
+      actionSummary += `  ${name}: join=${fr[0]} defect=${fr[1]} rally=${fr[2]} message=${fr[4]} fud=${fr[13]} (${fTotal} total)\n`
+    }
+  }
+
+  const recentMemos = memos.slice(-150)
+  const memoBlock = recentMemos.length > 0
+    ? `\nThis agent's last ${recentMemos.length} messages (oldest first):\n${recentMemos.map((m, i) => `  ${i + 1}. "${m}"`).join('\n')}`
+    : '\nNo messages from this agent.'
+
+  return `You are classifying an autonomous agent's personality based on its on-chain behavior and messages.
+
+Personalities:
+- loyalist: Ride-or-die for their factions. Buys in and hypes. Messages are positive, supportive, builds community. Rarely defects or fuds.
+- mercenary: Profit-driven lone wolf. Infiltration pattern: joins factions, fuds them, then defects (dumps). Messages are self-serving. High faction churn.
+- provocateur: Lives for chaos and hot takes. High fud rate, starts beef, stirs drama. Messages are inflammatory, challenging, confrontational.
+- scout: Intel operative. Messages are analytical, observational, data-driven. Reports on movements, asks questions. Rarely fuds aggressively.
+- whale: Silent trader. Very few messages relative to trades. Big moves, few words. When they speak, it's brief and authoritative.
+
+Agent behavior data:
+${actionSummary}
+${memoBlock}
+
+Based on the action patterns AND message content/tone, classify this agent.
+Respond with ONLY a single word: loyalist, mercenary, provocateur, scout, or whale.`
+}
+
+/** Formula-based fallback for personality classification */
+function classifyPersonalityFormula(
+  weights: number[],
+  memos: string[],
+): Personality {
+  const total = weights.reduce((a, b) => a + b, 0)
+  if (total === 0) return 'loyalist'
+
+  const r = weights.map(w => w / total)
   const joinRate = r[0], defectRate = r[1], rallyRate = r[2], messageRate = r[4]
   const warLoanRate = r[6], siegeRate = r[8], titheRate = r[11]
   const infiltrateRate = r[12], fudRate = r[13]
-
   const commsRate = messageRate + fudRate
   const tradeRate = joinRate + defectRate
-  // Ratio of fud to total comms — the key differentiator between personalities
-  const fudRatio = commsRate > 0 ? fudRate / commsRate : 0   // 0 = pure messenger, 1 = pure fudder
+  const fudRatio = commsRate > 0 ? fudRate / commsRate : 0
   const msgRatio = commsRate > 0 ? messageRate / commsRate : 0
 
-  return {
-    // Loyalist: high message ratio, joins, rallies — positive vibes
+  const scores: Record<Personality, number> = {
     loyalist: msgRatio * 3 + joinRate * 2 + rallyRate * 3 + titheRate * 2
       - fudRatio * 4 - defectRate * 3,
-
-    // Mercenary: defect + fud cycle, infiltration pattern
     mercenary: defectRate * 4 + fudRatio * 2
       + (defectRate > 0 && fudRate > 0 ? 3 : 0)
       + infiltrateRate * 3 + warLoanRate * 2 + siegeRate * 2
       - msgRatio * 2 - rallyRate * 2,
-
-    // Provocateur: high fud ratio — more fud than message
     provocateur: fudRatio * 4 + infiltrateRate * 2
       - msgRatio * 2 - rallyRate * 2,
-
-    // Scout: high message ratio, low fud — observes, doesn't attack
     scout: msgRatio * 3 + rallyRate - fudRatio * 3 - defectRate,
-
-    // Whale: trades a lot but talks very little
     whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2
       - commsRate * 3,
   }
-}
 
-export function classifyPersonality(weights: number[], memos: string[] = [], perFactionHistory?: Map<string, number[]>): Personality {
-  const total = weights.reduce((a, b) => a + b, 0)
-  if (total === 0) return 'loyalist'
-
-  // ── Signal 1: per-faction action scores, averaged ──
-  let actionScores: Record<Personality, number>
-
-  if (perFactionHistory && perFactionHistory.size > 0) {
-    const accumulated: Record<Personality, number> = {
-      loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0,
-    }
-    let factionCount = 0
-
-    for (const [, counts] of perFactionHistory) {
-      const fTotal = counts.reduce((a, b) => a + b, 0)
-      if (fTotal < 2) continue
-      const r = counts.map(c => c / fTotal)
-      const scores = scoreActions(r)
-      for (const p of Object.keys(accumulated) as Personality[]) {
-        accumulated[p] += scores[p]
-      }
-      factionCount++
-    }
-
-    if (factionCount > 0) {
-      for (const p of Object.keys(accumulated) as Personality[]) {
-        accumulated[p] /= factionCount
-      }
-      actionScores = accumulated
-    } else {
-      const r = weights.map(w => w / total)
-      actionScores = scoreActions(r)
-    }
-  } else {
-    const r = weights.map(w => w / total)
-    actionScores = scoreActions(r)
-  }
-
-  // ── Signal 2: memo content ──
   const memoScores = scoreMemoPersonality(memos)
   const memoTotal = Object.values(memoScores).reduce((a, b) => a + b, 0)
-  const memoWeight = 0.4
-
-  // ── Blend ──
-  const finalScores: Record<Personality, number> = {
-    loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0,
-  }
-
-  for (const p of Object.keys(finalScores) as Personality[]) {
-    const actionSignal = actionScores[p]
-    const memoSignal = memoTotal > 0 ? (memoScores[p] / memoTotal) : 0
-    finalScores[p] = actionSignal * (1 - memoWeight) + memoSignal * memoWeight
-  }
 
   let best: Personality = 'loyalist'
   let bestScore = -Infinity
-  for (const [p, score] of Object.entries(finalScores)) {
-    if (score > bestScore) {
-      bestScore = score
-      best = p as Personality
+  for (const p of Object.keys(scores) as Personality[]) {
+    const blended = scores[p] * 0.6 + (memoTotal > 0 ? (memoScores[p] / memoTotal) * 0.4 : 0)
+    if (blended > bestScore) {
+      bestScore = blended
+      best = p
     }
   }
   return best
+}
+
+/**
+ * LLM-based personality classification.
+ * Falls back to formula scoring if LLM is unavailable.
+ */
+export async function classifyPersonality(
+  weights: number[],
+  memos: string[],
+  perFactionHistory?: Map<string, number[]>,
+  llmGenerate?: (prompt: string) => Promise<string | null>,
+  factionNames?: Map<string, string>,
+): Promise<Personality> {
+  const total = weights.reduce((a, b) => a + b, 0)
+  if (total === 0) return 'loyalist'
+
+  if (llmGenerate) {
+    try {
+      const prompt = buildClassifyPrompt(weights, memos, perFactionHistory, factionNames)
+      const response = await llmGenerate(prompt)
+      if (response) {
+        const cleaned = response.toLowerCase().replace(/[^a-z]/g, '').trim()
+        const valid: Personality[] = ['loyalist', 'mercenary', 'provocateur', 'scout', 'whale']
+        const match = valid.find(p => cleaned.includes(p))
+        if (match) return match
+      }
+    } catch { /* fall through to formula */ }
+  }
+
+  return classifyPersonalityFormula(weights, memos)
 }
 
 // ─── Sentiment from On-Chain Data ────────────────────────────────
@@ -615,6 +627,7 @@ export async function reconstructFromChain(
     maxSignatures?: number
     decay?: number
     factionComms?: Map<string, { sender: string, memo: string }[]>
+    llmGenerate?: (prompt: string) => Promise<string | null>
   },
 ): Promise<ChainDerivedState> {
   const knownMints = new Set(factions.map(f => f.mint))
@@ -641,7 +654,13 @@ export async function reconstructFromChain(
     perFaction.get(entry.mint)![idx]++
   }
 
-  const personality = history.length > 0 ? classifyPersonality(weights, memoTexts, perFaction) : seedPersonality
+  // Map mint → symbol for readable LLM prompts
+  const factionNames = new Map<string, string>()
+  for (const f of factions) factionNames.set(f.mint, f.symbol)
+
+  const personality = history.length > 0
+    ? await classifyPersonality(weights, memoTexts, perFaction, opts?.llmGenerate, factionNames)
+    : seedPersonality
 
   // 4. Compute sentiment from on-chain interactions
   const sentiment = computeSentimentFromHistory(history, factions)
