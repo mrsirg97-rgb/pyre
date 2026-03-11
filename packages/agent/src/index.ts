@@ -264,7 +264,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
 
     const weights = weightsFromCounts(actionCounts, seedPersonality)
     const llmGen = llm ? (p: string) => llm.generate(p) : undefined
-    const newPersonality = await classifyPersonality(weights, memoBuffer, undefined, llmGen)
+    const newPersonality = await classifyPersonality(weights, memoBuffer, undefined, llmGen, undefined, state.personality)
 
     dynamicWeights = weights
 

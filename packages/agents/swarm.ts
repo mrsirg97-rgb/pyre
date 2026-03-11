@@ -1329,7 +1329,7 @@ async function swarm() {
         const seed = agentSeedPersonality.get(agent.publicKey) ?? agent.personality
         const weights = weightsFromCounts(counts, seed)
         const memos = agentMemoBuffer.get(agent.publicKey) ?? []
-        const newPersonality = await classifyPersonality(weights, memos, undefined, (p) => ollamaGenerate(p, llmAvailable))
+        const newPersonality = await classifyPersonality(weights, memos, undefined, (p) => ollamaGenerate(p, llmAvailable), undefined, agent.personality)
 
         agentDynamicWeights.set(agent.publicKey, weights)
 

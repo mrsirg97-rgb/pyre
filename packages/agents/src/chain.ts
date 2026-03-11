@@ -302,23 +302,22 @@ function buildClassifyPrompt(
     ? `\nThis agent's last ${recentMemos.length} messages (oldest first):\n${recentMemos.map((m, i) => `  ${i + 1}. "${m}"`).join('\n')}`
     : '\nNo messages from this agent.'
 
-  return `You are classifying an autonomous agent's personality based on its on-chain behavior and messages.
+  return `You are classifying an autonomous agent's personality in Pyre, a faction warfare game on Solana.
 
-Personalities (all 5 should be roughly equally common across a population of agents — do NOT over-index on any single type):
-- loyalist: Committed to their factions. Positive, supportive messages. Builds community. Sticks around.
-- mercenary: Profit-driven. Moves between factions opportunistically. Self-serving messages. Not necessarily hostile — just always looking for the next edge.
-- provocateur: Stirs the pot. Confrontational, inflammatory, loves drama. Challenges others and starts beef.
-- scout: Observant and analytical. Comments on movements, asks questions, shares intel. Thoughtful rather than aggressive.
-- whale: Actions speak louder than words. Trades heavily but communicates sparingly. When they do speak, it's brief and direct.
+There are 5 personality types. Read the data carefully — the MESSAGE TONE matters as much as the action numbers. Two agents with similar trade patterns can be completely different personalities based on HOW they talk.
 
-IMPORTANT: These are roughly equal archetypes — most agents will have mixed signals. Pick the BEST fit, not the most dramatic match. An agent that trades a lot and talks a lot is NOT automatically a mercenary — look at the tone and intent of their messages. Mercenary requires a CLEAR pattern of faction-hopping for profit. If an agent is active in comms, consider scout or provocateur first — scout if they're observational/curious, provocateur if they're confrontational/dramatic. Only pick mercenary if the agent is clearly self-serving and opportunistic above all else.
+- loyalist: Their messages are positive, encouraging, community-building. They hype their factions and defend allies. Actions: tends to join and stick around.
+- mercenary: Their messages are self-interested — talking about profits, exits, opportunities. They move between factions looking for edges. Actions: higher defect/infiltrate relative to others.
+- provocateur: Their messages are confrontational, dramatic, trash-talking. They call people out, start arguments, stir chaos. Actions: high fud, challenges rivals.
+- scout: Their messages are observational, analytical, curious. They comment on what's happening, ask questions, share intel. Actions: active in comms but measured.
+- whale: They barely talk. When they do, it's short and authoritative. Actions: trades a lot relative to messages sent.
 
-Agent behavior data:
 ${actionSummary}
 ${memoBlock}
 
-Based on the action patterns AND message content/tone, classify this agent.
-Respond with ONLY a single word: loyalist, mercenary, provocateur, scout, or whale.`
+Read the messages above carefully. What personality does this agent's VOICE sound like? Focus on tone, word choice, and attitude — not just action counts.
+
+Respond with ONLY one word: loyalist, mercenary, provocateur, scout, or whale.`
 }
 
 /**
@@ -331,9 +330,10 @@ export async function classifyPersonality(
   perFactionHistory?: Map<string, number[]>,
   llmGenerate?: (prompt: string) => Promise<string | null>,
   factionNames?: Map<string, string>,
+  currentPersonality?: Personality,
 ): Promise<Personality> {
   const total = weights.reduce((a, b) => a + b, 0)
-  if (total === 0) return 'loyalist'
+  if (total === 0) return currentPersonality ?? 'loyalist'
 
   // Try LLM classification first
   if (llmGenerate) {
@@ -344,13 +344,24 @@ export async function classifyPersonality(
         const cleaned = response.toLowerCase().replace(/[^a-z]/g, '').trim()
         const valid: Personality[] = ['loyalist', 'mercenary', 'provocateur', 'scout', 'whale']
         const match = valid.find(p => cleaned.includes(p))
-        if (match) return match
+        if (match) {
+          // Only change personality if we have enough data (20+ actions)
+          // and the LLM is suggesting something different
+          if (currentPersonality && match !== currentPersonality && total < 20) {
+            return currentPersonality // not enough data to justify a shift
+          }
+          return match
+        }
       }
     } catch { /* fall through to formula */ }
   }
 
   // Fallback: formula-based scoring
-  return classifyPersonalityFormula(weights, memos, perFactionHistory)
+  const formula = classifyPersonalityFormula(weights, memos, perFactionHistory)
+  if (currentPersonality && formula !== currentPersonality && total < 20) {
+    return currentPersonality
+  }
+  return formula
 }
 
 /** Formula-based fallback for personality classification */
