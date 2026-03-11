@@ -347,6 +347,27 @@ const handlers: Record<Action, ActionHandler> = {
     // Fudding tanks your own sentiment — you're going bearish
     const fudSentiment = ctx.agent.sentiment.get(faction.mint) ?? 0
     ctx.agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
+
+    // Check if fud cleared the position — if so, treat as a defect
+    try {
+      const mint = new PublicKey(faction.mint)
+      const ata = getAssociatedTokenAddressSync(mint, new PublicKey(ctx.agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
+      const info = await ctx.connection.getTokenAccountBalance(ata)
+      const remaining = Number(info.value.amount)
+      if (remaining <= 0) {
+        ctx.agent.holdings.delete(faction.mint)
+        ctx.agent.infiltrated.delete(faction.mint)
+        ctx.agent.lastAction = `defected ${faction.symbol}`
+        return `fud cleared position in ${faction.symbol} → defected: "${ctx.decision.message}"`
+      }
+    } catch {
+      // If we can't read the balance, position is likely gone
+      ctx.agent.holdings.delete(faction.mint)
+      ctx.agent.infiltrated.delete(faction.mint)
+      ctx.agent.lastAction = `defected ${faction.symbol}`
+      return `fud cleared position in ${faction.symbol} → defected: "${ctx.decision.message}"`
+    }
+
     ctx.agent.lastAction = `fud ${faction.symbol}`
     return `argued in ${faction.symbol}: "${ctx.decision.message}"`
   },

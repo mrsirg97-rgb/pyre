@@ -764,10 +764,30 @@ async function agentTick(
         const fudSentiment = agent.sentiment.get(faction.mint) ?? 0
         agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
 
-        agent.lastAction = `fud ${faction.symbol}`
-        const desc = `argued in ${faction.symbol}: "${message}"`
-        agent.recentHistory.push(desc)
-        log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        // Check if fud cleared the position — if so, treat as a defect
+        let fudCleared = false
+        try {
+          const mint = new PublicKey(faction.mint)
+          const ata = getAssociatedTokenAddressSync(mint, new PublicKey(agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
+          const info = await connection.getTokenAccountBalance(ata)
+          if (Number(info.value.amount) <= 0) fudCleared = true
+        } catch {
+          fudCleared = true
+        }
+
+        if (fudCleared) {
+          agent.holdings.delete(faction.mint)
+          agent.infiltrated.delete(faction.mint)
+          agent.lastAction = `defected ${faction.symbol}`
+          const desc = `fud cleared position in ${faction.symbol} → defected: "${message}"`
+          agent.recentHistory.push(desc)
+          log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        } else {
+          agent.lastAction = `fud ${faction.symbol}`
+          const desc = `argued in ${faction.symbol}: "${message}"`
+          agent.recentHistory.push(desc)
+          log(short, `[${agent.personality}] [${brain}] ${desc}`)
+        }
         break
       }
     }

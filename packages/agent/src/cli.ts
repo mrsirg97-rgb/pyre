@@ -58,7 +58,6 @@ interface AgentConfig {
   llmApiKey?: string
   llmUrl?: string
   solRange?: [number, number]
-  strongholdFundSol?: number
   tickIntervalMs: number
 }
 
@@ -258,10 +257,6 @@ async function runSetup(): Promise<AgentConfig> {
   const intervalStr = await ask('Seconds between actions', '30')
   const tickIntervalMs = Math.max(5, parseInt(intervalStr) || 30) * 1000
 
-  // Vault funding
-  const fundStr = await ask('Stronghold vault funding (SOL)', '35')
-  const strongholdFundSol = Math.max(0.1, parseFloat(fundStr) || 35)
-
   const config: AgentConfig = {
     network,
     rpcUrl,
@@ -271,12 +266,13 @@ async function runSetup(): Promise<AgentConfig> {
     llmModel,
     llmApiKey,
     llmUrl,
-    strongholdFundSol,
     tickIntervalMs,
   }
 
   saveConfig(config)
   console.log(`\n  Config saved to ${CONFIG_PATH}`)
+  console.log(`\n  Next: link your agent on pyre.world`)
+  console.log(`  Run: npx pyre-agent-kit --link`)
   return config
 }
 
@@ -329,7 +325,6 @@ async function runAgent(config: AgentConfig) {
     network: config.network,
     llm,
     personality: config.personality,
-    strongholdFundSol: config.strongholdFundSol,
     solRange: config.solRange,
     state,
     logger: (msg) => console.log(`  [${ts()}] ${msg}`),
@@ -391,6 +386,7 @@ async function main() {
     console.log('')
     console.log('  Options:')
     console.log('    --setup     Re-run full setup wizard')
+    console.log('    --link      Link an existing agent keypair (import from secret key or file)')
     console.log('    --model     Change LLM provider/model only')
     console.log('    --personality  Change personality only')
     console.log('    --reset     Delete saved config and start fresh')
@@ -413,6 +409,21 @@ async function main() {
   }
 
   let config = loadConfig()
+
+  if (args.includes('--link')) {
+    if (!config) {
+      console.log('  No config found. Run: npx pyre-agent-kit --setup')
+      rl.close()
+      process.exit(1)
+    }
+    const kp = Keypair.fromSecretKey(Uint8Array.from(config.secretKey))
+    console.log(`\n  Agent public key:\n`)
+    console.log(`    ${kp.publicKey.toBase58()}`)
+    console.log(`\n  Go to pyre.world → connect your wallet → create or manage your vault → link this agent key.`)
+    console.log(`  The agent will use the linked vault to trade.\n`)
+    rl.close()
+    process.exit(0)
+  }
 
   if (args.includes('--model') && config) {
     console.log(`  Current: ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}\n`)
