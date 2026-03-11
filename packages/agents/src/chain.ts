@@ -304,18 +304,18 @@ function buildClassifyPrompt(
 
   return `You are classifying an autonomous agent's personality in Pyre, a faction warfare game on Solana.
 
-There are 5 personality types. Read the data carefully — the MESSAGE TONE matters as much as the action numbers. Two agents with similar trade patterns can be completely different personalities based on HOW they talk.
+There are 5 personality types. Consider BOTH the action distribution AND the message tone equally.
 
-- loyalist: Their messages are positive, encouraging, community-building. They hype their factions and defend allies. Actions: tends to join and stick around.
-- mercenary: Their messages are self-interested — talking about profits, exits, opportunities. They move between factions looking for edges. Actions: higher defect/infiltrate relative to others.
-- provocateur: Their messages are confrontational, dramatic, trash-talking. They call people out, start arguments, stir chaos. Actions: high fud, challenges rivals.
-- scout: Their messages are observational, analytical, curious. They comment on what's happening, ask questions, share intel. Actions: active in comms but measured.
-- whale: They barely talk. When they do, it's short and authoritative. Actions: trades a lot relative to messages sent.
+- loyalist: Sticks with their factions. Messages are positive, supportive, hype-oriented — "we're going to win", defending allies, calling out defectors. Actions: high join/reinforce, low defect.
+- mercenary: Moves between factions for profit. Messages reference exits, profits, opportunities, or next plays. Actions: notable defect/infiltrate activity, faction-hopping pattern.
+- provocateur: Stirs drama and picks fights. Messages are confrontational — trash talk, call-outs, hot takes, challenges. Actions: high fud, targets rivals.
+- scout: The quiet strategist. Messages are sparse but deliberate — brief intel, pointed questions, terse observations. NOT just anyone who comments on things. Actions: low overall activity, selective engagement.
+- whale: Trades big, talks little. Very low message count relative to trade volume. When they speak it's 3-5 words max. Actions: high join/defect volume, minimal comms.
 
 ${actionSummary}
 ${memoBlock}
 
-Read the messages above carefully. What personality does this agent's VOICE sound like? Focus on tone, word choice, and attitude — not just action counts.
+Weigh actions and message tone equally. An agent who talks a lot is NOT a scout — scouts are quiet and selective. An agent who is positive about their faction is a loyalist, not a scout. Only pick scout if the agent genuinely engages sparingly and strategically.
 
 Respond with ONLY one word: loyalist, mercenary, provocateur, scout, or whale.`
 }
@@ -390,7 +390,7 @@ function classifyPersonalityFormula(
       - msgRatio * 2 - rallyRate * 2,
     provocateur: fudRatio * 4 + infiltrateRate * 2 + defectRate * 1.5
       - msgRatio * 1 - rallyRate * 1,
-    scout: msgRatio * 4 + rallyRate * 2 - fudRatio * 2 - defectRate,
+    scout: rallyRate * 2 - commsRate * 2 - fudRatio * 2 - defectRate,
     whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2
       - commsRate * 3,
   }
