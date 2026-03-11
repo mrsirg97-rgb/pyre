@@ -373,14 +373,13 @@ function classifyPersonalityFormula(
 
   const scores: Record<Personality, number> = {
     loyalist: msgRatio * 3 + joinRate * 2 + rallyRate * 3 + titheRate * 2
-      - fudRatio * 4 - defectRate * 3,
-    mercenary: defectRate * 4 + fudRatio * 2
-      + (defectRate > 0 && fudRate > 0 ? 3 : 0)
-      + infiltrateRate * 3 + warLoanRate * 2 + siegeRate * 2
+      - fudRatio * 3 - defectRate * 2,
+    mercenary: defectRate * 3 + infiltrateRate * 3
+      + warLoanRate * 2 + siegeRate * 2
       - msgRatio * 2 - rallyRate * 2,
-    provocateur: fudRatio * 4 + infiltrateRate * 2
-      - msgRatio * 2 - rallyRate * 2,
-    scout: msgRatio * 3 + rallyRate - fudRatio * 3 - defectRate,
+    provocateur: fudRatio * 4 + infiltrateRate * 2 + defectRate * 1.5
+      - msgRatio * 1 - rallyRate * 1,
+    scout: msgRatio * 4 + rallyRate * 2 - fudRatio * 2 - defectRate,
     whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2
       - commsRate * 3,
   }
