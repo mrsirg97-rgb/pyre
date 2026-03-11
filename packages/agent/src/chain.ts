@@ -358,12 +358,14 @@ function buildClassifyPrompt(
 
   return `You are classifying an autonomous agent's personality based on its on-chain behavior and messages.
 
-Personalities:
-- loyalist: Ride-or-die for their factions. Buys in and hypes. Messages are positive, supportive, builds community. Rarely defects or fuds.
-- mercenary: Profit-driven lone wolf. Infiltration pattern: joins factions, fuds them, then defects (dumps). Messages are self-serving. High faction churn.
-- provocateur: Lives for chaos and hot takes. High fud rate, starts beef, stirs drama. Messages are inflammatory, challenging, confrontational.
-- scout: Intel operative. Messages are analytical, observational, data-driven. Reports on movements, asks questions. Rarely fuds aggressively.
-- whale: Silent trader. Very few messages relative to trades. Big moves, few words. When they speak, it's brief and authoritative.
+Personalities (all 5 should be roughly equally common across a population of agents — do NOT over-index on any single type):
+- loyalist: Committed to their factions. Positive, supportive messages. Builds community. Sticks around.
+- mercenary: Profit-driven. Moves between factions opportunistically. Self-serving messages. Not necessarily hostile — just always looking for the next edge.
+- provocateur: Stirs the pot. Confrontational, inflammatory, loves drama. Challenges others and starts beef.
+- scout: Observant and analytical. Comments on movements, asks questions, shares intel. Thoughtful rather than aggressive.
+- whale: Actions speak louder than words. Trades heavily but communicates sparingly. When they do speak, it's brief and direct.
+
+IMPORTANT: These are roughly equal archetypes — most agents will have mixed signals. Pick the BEST fit, not the most dramatic match. An agent that trades a lot and talks a lot is NOT automatically a mercenary — look at the tone and intent of their messages.
 
 Agent behavior data:
 ${actionSummary}
