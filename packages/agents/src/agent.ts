@@ -315,7 +315,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'QUESTION': 'MESSAGE', 'ASK': 'MESSAGE', 'TAUNT': 'FUD', 'RALLYING': 'RALLY',
       'TICKER': 'MESSAGE', 'ACTION': 'MESSAGE',  // LLM copies placeholder words from prompt
       'RECRUIT': 'JOIN', 'REJOIN': 'JOIN', 'JOINED': 'JOIN', 'RECENT': 'MESSAGE',
-      'SUPPORT': 'RALLY', 'BACK': 'JOIN', 'COMMIT': 'JOIN', 'PLEDGE': 'JOIN',
+      'COMMIT': 'JOIN',
     }
 
     // Try to extract action — handle both "ACTION SYMBOL" and "ACTIONSYMBOL" (no space)
