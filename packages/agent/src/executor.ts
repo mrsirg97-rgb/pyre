@@ -34,6 +34,9 @@ type ActionHandler = (ctx: ExecutorContext) => Promise<string | null>
 const findFaction = (factions: FactionInfo[], symbol?: string) =>
   factions.find(f => f.symbol === symbol)
 
+/** Vault creator key — may differ from agent key for linked vaults */
+const vault = (agent: AgentState) => agent.vaultCreator ?? agent.publicKey
+
 const handlers: Record<Action, ActionHandler> = {
   async join(ctx) {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
@@ -46,7 +49,7 @@ const handlers: Record<Action, ActionHandler> = {
 
     if (faction.status === 'ascended') {
       const result = await tradeOnDex(ctx.connection, {
-        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: ctx.agent.publicKey,
+        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: vault(ctx.agent),
         amount_in: lamports, minimum_amount_out: 1, is_buy: true, message: ctx.decision.message,
       })
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
@@ -54,7 +57,7 @@ const handlers: Record<Action, ActionHandler> = {
       const alreadyVoted = ctx.agent.voted.has(faction.mint)
       const params: any = {
         mint: faction.mint, agent: ctx.agent.publicKey, amount_sol: lamports,
-        message: ctx.decision.message, stronghold: ctx.agent.publicKey,
+        message: ctx.decision.message, stronghold: vault(ctx.agent),
       }
       if (!alreadyVoted) params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
       const result = await joinFaction(ctx.connection, params)
@@ -94,14 +97,14 @@ const handlers: Record<Action, ActionHandler> = {
       await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
       if (!ctx.agent.hasStronghold) return null
       const result = await tradeOnDex(ctx.connection, {
-        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: ctx.agent.publicKey,
+        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: vault(ctx.agent),
         amount_in: sellAmount, minimum_amount_out: 1, is_buy: false, message: ctx.decision.message,
       })
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     } else {
       const result = await defect(ctx.connection, {
         mint: faction.mint, agent: ctx.agent.publicKey, amount_tokens: sellAmount,
-        message: ctx.decision.message, stronghold: ctx.agent.publicKey,
+        message: ctx.decision.message, stronghold: vault(ctx.agent),
       })
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     }
@@ -119,7 +122,7 @@ const handlers: Record<Action, ActionHandler> = {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
     if (!faction || ctx.agent.rallied.has(faction.mint)) return null
     const result = await rally(ctx.connection, {
-      mint: faction.mint, agent: ctx.agent.publicKey, stronghold: ctx.agent.publicKey,
+      mint: faction.mint, agent: ctx.agent.publicKey, stronghold: vault(ctx.agent),
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     ctx.agent.rallied.add(faction.mint)
@@ -166,7 +169,7 @@ const handlers: Record<Action, ActionHandler> = {
 
     let result = await messageFaction(ctx.connection, {
       mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
-      stronghold: ctx.agent.publicKey, ascended: faction.status === 'ascended',
+      stronghold: vault(ctx.agent), ascended: faction.status === 'ascended',
       first_buy: !ctx.agent.voted.has(faction.mint),
     })
     try {
@@ -177,7 +180,7 @@ const handlers: Record<Action, ActionHandler> = {
         ctx.agent.voted.add(faction.mint)
         result = await messageFaction(ctx.connection, {
           mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
-          stronghold: ctx.agent.publicKey, ascended: faction.status === 'ascended', first_buy: false,
+          stronghold: vault(ctx.agent), ascended: faction.status === 'ascended', first_buy: false,
         })
         await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
       } else { throw retryErr }
@@ -216,7 +219,7 @@ const handlers: Record<Action, ActionHandler> = {
     await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
     const result = await requestWarLoan(ctx.connection, {
       mint: faction.mint, borrower: ctx.agent.publicKey, collateral_amount: collateral,
-      sol_to_borrow: borrowLamports, stronghold: ctx.agent.publicKey,
+      sol_to_borrow: borrowLamports, stronghold: vault(ctx.agent),
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     ctx.agent.activeLoans.add(faction.mint)
@@ -234,7 +237,7 @@ const handlers: Record<Action, ActionHandler> = {
 
     const result = await repayWarLoan(ctx.connection, {
       mint: faction.mint, borrower: ctx.agent.publicKey,
-      sol_amount: Math.ceil(loan.total_owed), stronghold: ctx.agent.publicKey,
+      sol_amount: Math.ceil(loan.total_owed), stronghold: vault(ctx.agent),
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     ctx.agent.activeLoans.delete(faction.mint)
@@ -257,7 +260,7 @@ const handlers: Record<Action, ActionHandler> = {
 
     const result = await siege(ctx.connection, {
       mint: faction.mint, liquidator: ctx.agent.publicKey,
-      borrower: targetBorrower, stronghold: ctx.agent.publicKey,
+      borrower: targetBorrower, stronghold: vault(ctx.agent),
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     ctx.agent.lastAction = `siege ${faction.symbol}`
@@ -308,7 +311,7 @@ const handlers: Record<Action, ActionHandler> = {
 
     if (faction.status === 'ascended') {
       const result = await tradeOnDex(ctx.connection, {
-        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: ctx.agent.publicKey,
+        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: vault(ctx.agent),
         amount_in: lamports, minimum_amount_out: 1, is_buy: true, message: ctx.decision.message,
       })
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
@@ -316,7 +319,7 @@ const handlers: Record<Action, ActionHandler> = {
       const alreadyVoted = ctx.agent.voted.has(faction.mint)
       const params: any = {
         mint: faction.mint, agent: ctx.agent.publicKey, amount_sol: lamports,
-        message: ctx.decision.message, stronghold: ctx.agent.publicKey,
+        message: ctx.decision.message, stronghold: vault(ctx.agent),
       }
       if (!alreadyVoted) params.strategy = 'scorched_earth'
       const result = await joinFaction(ctx.connection, params)
@@ -341,7 +344,7 @@ const handlers: Record<Action, ActionHandler> = {
 
     const result = await fudFaction(ctx.connection, {
       mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
-      stronghold: ctx.agent.publicKey, ascended: faction.status === 'ascended',
+      stronghold: vault(ctx.agent), ascended: faction.status === 'ascended',
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     // Fudding tanks your own sentiment — you're going bearish

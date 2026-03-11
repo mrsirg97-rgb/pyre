@@ -41,6 +41,7 @@ export interface AgentState {
   rallied: Set<string>            // mints already rallied
   voted: Set<string>              // mints already voted on
   hasStronghold: boolean
+  vaultCreator?: string           // creator pubkey of linked vault (if different from agent)
   activeLoans: Set<string>        // mints with active war loans
   infiltrated: Set<string>        // mints we joined to sabotage (dump later)
   sentiment: Map<string, number>  // mint -> sentiment score (-10 to +10)
@@ -106,6 +107,7 @@ export interface SerializedAgentState {
   rallied: string[]
   voted: string[]
   hasStronghold: boolean
+  vaultCreator?: string
   activeLoans: string[]
   infiltrated: string[]
   sentiment: Record<string, number>

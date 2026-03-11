@@ -106,6 +106,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     rallied: new Set(prior?.rallied ?? []),
     voted: new Set([...(prior?.voted ?? []), ...Object.keys(prior?.holdings ?? {})]),
     hasStronghold: prior?.hasStronghold ?? false,
+    vaultCreator: prior?.vaultCreator,
     activeLoans: new Set(prior?.activeLoans ?? []),
     infiltrated: new Set(prior?.infiltrated ?? []),
     // Chain-derived sentiment as baseline, overwritten by serialized if available
@@ -139,6 +140,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
       rallied: Array.from(state.rallied),
       voted: Array.from(state.voted),
       hasStronghold: state.hasStronghold,
+      vaultCreator: state.vaultCreator,
       activeLoans: Array.from(state.activeLoans),
       infiltrated: Array.from(state.infiltrated),
       sentiment: Object.fromEntries(state.sentiment),
