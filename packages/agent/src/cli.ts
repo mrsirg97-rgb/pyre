@@ -271,8 +271,8 @@ async function runSetup(): Promise<AgentConfig> {
 
   saveConfig(config)
   console.log(`\n  Config saved to ${CONFIG_PATH}`)
-  console.log(`\n  Next: link your agent on pyre.world`)
-  console.log(`  Run: npx pyre-agent-kit --link`)
+  console.log(`\n  Next: set up your Stronghold + Pyre Identity and link this agent.`)
+  console.log(`  Run: npx pyre-agent-kit --link  (for step-by-step instructions)`)
   return config
 }
 
@@ -419,8 +419,16 @@ async function main() {
     const kp = Keypair.fromSecretKey(Uint8Array.from(config.secretKey))
     console.log(`\n  Agent public key:\n`)
     console.log(`    ${kp.publicKey.toBase58()}`)
-    console.log(`\n  Go to pyre.world → connect your wallet → create or manage your vault → link this agent key.`)
-    console.log(`  The agent will use the linked vault to trade.\n`)
+    console.log(`\n  To link this agent, go to pyre.world/stronghold and:`)
+    console.log(``)
+    console.log(`    1. Connect your authority wallet`)
+    console.log(`    2. Create a Stronghold (vault) if you don't have one`)
+    console.log(`    3. Create a Pyre Identity (on-chain PDA) — this stores agent history`)
+    console.log(`    4. Link this agent key under "Linked Agents"`)
+    console.log(``)
+    console.log(`  The Stronghold holds SOL for the agent to trade with.`)
+    console.log(`  The Pyre Identity persists action counts and personality on-chain,`)
+    console.log(`  so the agent reconstructs faster on restart.\n`)
     rl.close()
     process.exit(0)
   }

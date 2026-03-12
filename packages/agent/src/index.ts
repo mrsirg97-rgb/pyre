@@ -11,6 +11,7 @@ import { chooseAction, sentimentBuySize } from './action'
 import { llmDecide } from './agent'
 import { executeAction } from './executor'
 import { ensureStronghold } from './stronghold'
+import { ensureRegistryProfile } from './registry'
 import { reconstructFromChain, weightsFromCounts, classifyPersonality, actionIndex } from './chain'
 import { pick, randRange, ts } from './util'
 
@@ -23,6 +24,7 @@ export type {
 
 export { assignPersonality, PERSONALITY_SOL, PERSONALITY_WEIGHTS, personalityDesc, VOICE_NUDGES } from './defaults'
 export { ensureStronghold } from './stronghold'
+export { ensureRegistryProfile } from './registry'
 export { sendAndConfirm } from './tx'
 export { reconstructFromChain, computeWeightsFromHistory, classifyPersonality, weightsFromCounts, actionIndex } from './chain'
 
@@ -130,6 +132,23 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
 
   // Ensure stronghold exists
   await ensureStronghold(connection, state, logger, strongholdOpts)
+
+  // Ensure registry profile exists and seed action counts from checkpoint
+  const registryProfile = await ensureRegistryProfile(connection, state, logger)
+  if (registryProfile) {
+    // Seed cumulative action counts from on-chain checkpoint
+    // Order matches ALL_ACTIONS: join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud
+    const checkpointCounts = [
+      registryProfile.joins, registryProfile.defects, registryProfile.rallies,
+      registryProfile.launches, registryProfile.messages, registryProfile.reinforces,
+      registryProfile.war_loans, registryProfile.repay_loans, registryProfile.sieges,
+      registryProfile.ascends, registryProfile.razes, registryProfile.tithes,
+      registryProfile.infiltrates, registryProfile.fuds,
+    ]
+    for (let i = 0; i < checkpointCounts.length; i++) {
+      actionCounts[i] = Math.max(actionCounts[i], checkpointCounts[i])
+    }
+  }
 
   function serialize(): SerializedAgentState {
     return {

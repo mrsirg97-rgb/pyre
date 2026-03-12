@@ -15,6 +15,8 @@
  */
 
 import { Connection, PublicKey, ParsedTransactionWithMeta } from '@solana/web3.js'
+import { getRegistryProfile } from 'pyre-world-kit'
+import type { RegistryProfile } from 'pyre-world-kit'
 import { PERSONALITY_WEIGHTS, PERSONALITY_SOL } from './defaults'
 import type { Action, Personality, FactionInfo, OnChainAction, ChainDerivedState } from './types'
 
@@ -40,17 +42,19 @@ export async function fetchAgentHistory(
   connection: Connection,
   agentPubkey: string,
   knownMints: Set<string>,
-  opts?: { maxSignatures?: number },
+  opts?: { maxSignatures?: number, afterTimestamp?: number },
 ): Promise<OnChainAction[]> {
   const pubkey = new PublicKey(agentPubkey)
   const maxSigs = opts?.maxSignatures ?? 500
+  const afterTs = opts?.afterTimestamp ?? 0
   const allActions: OnChainAction[] = []
 
   // Paginate through signature history
   let before: string | undefined
   let fetched = 0
+  let reachedCheckpoint = false
 
-  while (fetched < maxSigs) {
+  while (fetched < maxSigs && !reachedCheckpoint) {
     const batchSize = Math.min(maxSigs - fetched, 1000)
     const signatures = await connection.getSignaturesForAddress(
       pubkey,
@@ -59,6 +63,13 @@ export async function fetchAgentHistory(
     )
 
     if (signatures.length === 0) break
+
+    // If we have an afterTimestamp, stop paginating once we reach older txs
+    if (afterTs > 0) {
+      const oldestInBatch = signatures[signatures.length - 1].blockTime ?? 0
+      if (oldestInBatch < afterTs) reachedCheckpoint = true
+    }
+
     fetched += signatures.length
     before = signatures[signatures.length - 1].signature
 
@@ -81,7 +92,11 @@ export async function fetchAgentHistory(
         const tx = txs[j]
         if (!tx?.meta || tx.meta.err) continue
 
-        const parsed = parseTransaction(tx, batch[j].signature, batch[j].blockTime ?? 0, agentPubkey, knownMints)
+        const blockTime = batch[j].blockTime ?? 0
+        // Skip transactions before checkpoint
+        if (afterTs > 0 && blockTime <= afterTs) continue
+
+        const parsed = parseTransaction(tx, batch[j].signature, blockTime, agentPubkey, knownMints)
         if (parsed) allActions.push(parsed)
       }
     }
@@ -632,13 +647,49 @@ export async function reconstructFromChain(
 ): Promise<ChainDerivedState> {
   const knownMints = new Set(factions.map(f => f.mint))
 
-  // 1. Fetch on-chain history
+  // Check for registry checkpoint — if exists, only replay history after last checkpoint
+  let registryProfile: RegistryProfile | null = null
+  try {
+    registryProfile = await getRegistryProfile(connection, agentPubkey)
+  } catch { /* registry unavailable, fall through to full replay */ }
+
+  const afterTimestamp = registryProfile?.last_checkpoint ?? 0
+
+  // 1. Fetch on-chain history (incremental if checkpoint exists)
   const history = await fetchAgentHistory(connection, agentPubkey, knownMints, {
     maxSignatures: opts?.maxSignatures,
+    afterTimestamp,
   })
 
-  // 2. Compute personality weights from action frequency
-  const weights = computeWeightsFromHistory(history, seedPersonality, opts?.decay)
+  // 2. Compute personality weights — seed from registry checkpoint if available
+  let baselineCounts: number[] | null = null
+  if (registryProfile && registryProfile.last_checkpoint > 0) {
+    // Registry field order matches ALL_ACTIONS:
+    // join, defect, rally, launch, message, stronghold(reinforces), war_loan, repay_loan,
+    // siege, ascend, raze, tithe, infiltrate, fud
+    baselineCounts = [
+      registryProfile.joins, registryProfile.defects, registryProfile.rallies,
+      registryProfile.launches, registryProfile.messages, registryProfile.reinforces,
+      registryProfile.war_loans, registryProfile.repay_loans, registryProfile.sieges,
+      registryProfile.ascends, registryProfile.razes, registryProfile.tithes,
+      registryProfile.infiltrates, registryProfile.fuds,
+    ]
+  }
+
+  // Merge baseline counts with incremental history
+  const incrementalCounts = new Array(ALL_ACTIONS.length).fill(0)
+  for (const entry of history) {
+    const normalized = normalizeChainAction(entry.action)
+    const idx = ALL_ACTIONS.indexOf(normalized)
+    if (idx >= 0) incrementalCounts[idx]++
+  }
+
+  const totalCounts = baselineCounts
+    ? baselineCounts.map((base, i) => base + incrementalCounts[i])
+    : incrementalCounts
+
+  const weights = weightsFromCounts(totalCounts, seedPersonality, opts?.decay)
+  const totalActionCount = totalCounts.reduce((a, b) => a + b, 0)
 
   // 3. Classify emergent personality (action ratios + memo content, per-faction)
   const memoTexts = history.filter(h => h.memo?.trim()).map(h => h.memo!)
@@ -658,7 +709,7 @@ export async function reconstructFromChain(
   const factionNames = new Map<string, string>()
   for (const f of factions) factionNames.set(f.mint, f.symbol)
 
-  const personality = history.length > 0
+  const personality = totalActionCount > 0
     ? await classifyPersonality(weights, memoTexts, perFaction, opts?.llmGenerate, factionNames)
     : seedPersonality
 
@@ -714,7 +765,7 @@ export async function reconstructFromChain(
     allies,
     rivals,
     solRange,
-    actionCount: history.length,
+    actionCount: totalActionCount,
     recentHistory,
     founded,
     memories,

@@ -8,12 +8,15 @@ import { Header } from '@/components/Header'
 import { StrongholdDashboard } from '@/components/StrongholdDashboard'
 import { StrongholdActions } from '@/components/StrongholdActions'
 import { StrongholdWallets } from '@/components/StrongholdWallets'
+import { PyreIdentity } from '@/components/PyreIdentity'
 import { useVault } from '@/hooks/useVault'
+import { useRegistryProfile } from '@/hooks/useRegistryProfile'
 
 export default function StrongholdPage() {
   const { connection } = useConnection()
   const wallet = useWallet()
   const { vault, linkedVault, activeVault, loading, refetch } = useVault()
+  const { profile: registryProfile, loading: registryLoading, refetch: refetchRegistry } = useRegistryProfile()
 
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -92,6 +95,12 @@ export default function StrongholdPage() {
               <StrongholdDashboard vault={activeVault} />
               <StrongholdActions vault={activeVault} onSuccess={refetch} />
               <StrongholdWallets vault={activeVault} onSuccess={refetch} />
+              <PyreIdentity
+                profile={registryProfile}
+                loading={registryLoading}
+                isAuthority={wallet.publicKey?.toString() === activeVault.authority}
+                onSuccess={refetchRegistry}
+              />
             </div>
           )}
         </div>

@@ -7,8 +7,9 @@ import { useConnection } from '@solana/wallet-adapter-react'
 import { PublicKey, type ParsedTransactionWithMeta } from '@solana/web3.js'
 import {
   getAgentProfile, getComms, getFactions, isPyreMint, isBlacklistedMint,
+  getRegistryProfile,
 } from 'pyre-world-kit'
-import type { AgentProfile, Comms } from 'pyre-world-kit'
+import type { AgentProfile, Comms, RegistryProfile } from 'pyre-world-kit'
 import { Header } from '@/components/Header'
 import { shortenAddress, fmtSol, timeAgo } from '@/lib/utils'
 
@@ -145,12 +146,13 @@ export default function AgentPage() {
   const { connection } = useConnection()
 
   const [profile, setProfile] = useState<AgentProfile | null>(null)
+  const [registryProfile, setRegistryProfile] = useState<RegistryProfile | null>(null)
   const [comms, setComms] = useState<AgentComm[]>([])
   const [personalityData, setPersonalityData] = useState<PersonalityData | null>(null)
   const [loading, setLoading] = useState(true)
   const [commsLoading, setCommsLoading] = useState(false)
   const [personalityLoading, setPersonalityLoading] = useState(false)
-  const [factionsExpanded, setFactionsExpanded] = useState(false)
+  const [factionsExpanded, setFactionsExpanded] = useState(true)
 
   const batchProcess = useCallback(async <T, R>(
     items: T[],
@@ -172,15 +174,34 @@ export default function AgentPage() {
     return results
   }, [])
 
-  // Fetch personality from on-chain tx history
+  // Fetch personality — try registry PDA first (instant), fall back to chain parsing
   const fetchPersonality = useCallback(async () => {
     setPersonalityLoading(true)
     try {
+      // Try registry PDA first
+      const reg = await getRegistryProfile(connection, address)
+      if (reg) {
+        setRegistryProfile(reg)
+        // Registry field order → ALL_ACTIONS order
+        const counts = [
+          reg.joins, reg.defects, reg.rallies, reg.launches, reg.messages,
+          reg.reinforces, reg.war_loans, reg.repay_loans, reg.sieges,
+          reg.ascends, reg.razes, reg.tithes, reg.infiltrates, reg.fuds,
+        ]
+        const totalActions = counts.reduce((a, b) => a + b, 0)
+        if (totalActions > 0) {
+          const personality = classifyPersonality(counts)
+          setPersonalityData({ weights: counts, personality, actionCount: totalActions })
+          setPersonalityLoading(false)
+          return
+        }
+      }
+
+      // Fallback: parse chain history
       const pubkey = new PublicKey(address)
       const counts = new Array(14).fill(0)
       let totalActions = 0
 
-      // Fetch signatures in batches
       let before: string | undefined
       let fetched = 0
       const MAX_SIGS = 150
@@ -193,7 +214,6 @@ export default function AgentPage() {
         fetched += sigs.length
         before = sigs[sigs.length - 1].signature
 
-        // Parse in batches of 50 with delay
         const sigStrings = sigs.map(s => s.signature)
         for (let i = 0; i < sigStrings.length; i += 50) {
           const batch = sigStrings.slice(i, i + 50)
@@ -211,7 +231,6 @@ export default function AgentPage() {
             let action = categorizeFromLogs(logs)
             const memo = extractMemo(tx)
 
-            // message = buy+memo, fud = sell+memo
             if (memo?.trim()) {
               if (action === 'join') action = 'message'
               else if (action === 'defect') action = 'fud'
@@ -221,13 +240,11 @@ export default function AgentPage() {
             if (idx >= 0) { counts[idx]++; totalActions++ }
           }
 
-          // Delay between tx batches
           if (i + 50 < sigStrings.length) {
             await new Promise(resolve => setTimeout(resolve, 200))
           }
         }
 
-        // Delay between signature pages
         await new Promise(resolve => setTimeout(resolve, 300))
       }
 
@@ -314,16 +331,37 @@ export default function AgentPage() {
                     </span>
                   )}
                 </div>
-                <a
-                  href={`https://solscan.io/account/${address}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs hover:underline"
-                  style={{ color: 'var(--muted)' }}
-                >
-                  {address}
-                </a>
+                <div className="flex items-baseline gap-3">
+                  <a
+                    href={`https://solscan.io/account/${address}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs hover:underline"
+                    style={{ color: 'var(--muted)' }}
+                  >
+                    {address}
+                  </a>
+                  {personalityData && (
+                    <span className="text-xs" style={{ color: 'var(--accent)' }}>
+                      {personalityData.personality}
+                    </span>
+                  )}
+                  {registryProfile && registryProfile.last_checkpoint > 0 && (
+                    <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                      checkpoint {timeAgo(registryProfile.last_checkpoint)}
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {/* Personality Summary from Registry */}
+              {registryProfile?.personality_summary && (
+                <div style={{ padding: '0.25rem', margin: '0.25rem' }}>
+                  <p className="text-xs leading-relaxed rounded" style={{ background: 'var(--surface)', padding: '0.5rem', color: 'var(--muted)' }}>
+                    {registryProfile.personality_summary}
+                  </p>
+                </div>
+              )}
 
               {/* Personality Weights */}
               <div style={{ padding: '0.25rem', margin: '0.25rem' }}>

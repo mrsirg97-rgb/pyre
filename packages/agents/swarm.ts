@@ -62,6 +62,7 @@ import {
   getRegistryProfile,
   buildRegisterAgentTransaction,
   buildCheckpointTransaction,
+  buildUnlinkAgentWalletTransaction,
 } from 'pyre-world-kit'
 import type { WarLoan } from 'pyre-world-kit'
 import * as fs from 'fs'
@@ -177,6 +178,37 @@ async function checkpointAgent(connection: Connection, agent: AgentState): Promi
     await sendAndConfirm(connection, agent.keypair, result)
     return true
   } catch (err: any) {
+    // Recovery: if linked_wallet was changed (e.g. by old auto-link), unlink and retry
+    try {
+      const profile = await getRegistryProfile(connection, agent.publicKey)
+      if (profile && profile.linked_wallet !== profile.creator && profile.linked_wallet !== agent.publicKey) {
+        log(agent.publicKey.slice(0, 8), `[registry] stale linked_wallet ${profile.linked_wallet.slice(0, 8)}, unlinking...`)
+        const unlinkResult = await buildUnlinkAgentWalletTransaction(connection, {
+          authority: agent.publicKey,
+          creator: agent.publicKey,
+          wallet_to_unlink: profile.linked_wallet,
+        })
+        await sendAndConfirm(connection, agent.keypair, unlinkResult)
+        log(agent.publicKey.slice(0, 8), `[registry] unlinked stale wallet, retrying checkpoint`)
+
+        // Retry checkpoint — linked_wallet is now back to creator (sentinel)
+        const retry = await buildCheckpointTransaction(connection, {
+          signer: agent.publicKey,
+          creator: agent.publicKey,
+          joins: counts[0], defects: counts[1], rallies: counts[2], launches: counts[3],
+          messages: counts[4], fuds: counts[13], infiltrates: counts[12], reinforces: counts[5],
+          war_loans: counts[6], repay_loans: counts[7], sieges: counts[8], ascends: counts[9],
+          razes: counts[10], tithes: counts[11],
+          personality_summary: personalitySummary,
+        })
+        await sendAndConfirm(connection, agent.keypair, retry)
+        log(agent.publicKey.slice(0, 8), `[registry] checkpoint recovered`)
+        return true
+      }
+    } catch (recoveryErr: any) {
+      log(agent.publicKey.slice(0, 8), `[registry] recovery failed: ${recoveryErr.message?.slice(0, 80)}`)
+    }
+
     log(agent.publicKey.slice(0, 8), `[registry] checkpoint failed: ${err.message?.slice(0, 80)}`)
     return false
   }
