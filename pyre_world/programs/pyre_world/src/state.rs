@@ -41,6 +41,12 @@ pub struct AgentProfile {
     pub created_at: i64,
     /// PDA bump
     pub bump: u8,
+
+    // ── P&L tracking (lamports, monotonically increasing) ──
+    /// Cumulative SOL spent on joins/buys/infiltrates (lamports)
+    pub total_sol_spent: u64,
+    /// Cumulative SOL received from defects/sells (lamports)
+    pub total_sol_received: u64,
 }
 
 impl AgentProfile {
@@ -65,7 +71,9 @@ impl AgentProfile {
         + 8   // razes
         + 8   // tithes
         + 8   // created_at
-        + 1;  // bump
+        + 1   // bump
+        + 8   // total_sol_spent
+        + 8;  // total_sol_received
 }
 
 /// Reverse pointer: given a wallet, find its AgentProfile.

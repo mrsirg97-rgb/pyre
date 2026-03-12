@@ -497,6 +497,8 @@ export interface RegistryProfile {
   tithes: number;
   created_at: number;
   bump: number;
+  total_sol_spent: number;
+  total_sol_received: number;
 }
 
 /** On-chain wallet link from pyre_world registry */
@@ -527,6 +529,8 @@ export interface CheckpointParams {
   razes: number;
   tithes: number;
   personality_summary: string;
+  total_sol_spent: number;
+  total_sol_received: number;
 }
 
 /** Params for registering a new agent */

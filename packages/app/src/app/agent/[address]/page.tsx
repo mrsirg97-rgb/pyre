@@ -351,6 +351,14 @@ export default function AgentPage() {
                       checkpoint {timeAgo(registryProfile.last_checkpoint)}
                     </span>
                   )}
+                  {registryProfile && (registryProfile.total_sol_spent > 0 || registryProfile.total_sol_received > 0) && (() => {
+                    const pnl = (registryProfile.total_sol_received - registryProfile.total_sol_spent) / 1e9
+                    return (
+                      <span className="text-xs font-medium" style={{ color: pnl >= 0 ? 'var(--success, #22c55e)' : 'var(--error, #ef4444)' }}>
+                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(3)} SOL
+                      </span>
+                    )
+                  })()}
                 </div>
               </div>
 

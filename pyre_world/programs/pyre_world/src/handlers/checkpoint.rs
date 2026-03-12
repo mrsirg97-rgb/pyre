@@ -3,8 +3,9 @@ use anchor_lang::prelude::*;
 use crate::constants::MAX_PERSONALITY_LEN;
 use crate::contexts::{Checkpoint, CheckpointArgs};
 use crate::errors::PyreWorldError;
+use crate::state::AgentProfile;
 
-/// Update action counters and personality summary.
+/// Update action counters, P&L, and personality summary.
 /// Only the linked wallet can call this.
 /// All counters must be >= existing values (monotonic constraint).
 pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> {
@@ -15,6 +16,25 @@ pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> 
     );
 
     let profile = &mut ctx.accounts.profile;
+
+    // Realloc if account was created before P&L fields were added
+    let account_info = profile.to_account_info();
+    if account_info.data_len() < AgentProfile::LEN {
+        let new_len = AgentProfile::LEN;
+        let rent = Rent::get()?;
+        let new_minimum_balance = rent.minimum_balance(new_len);
+        let current_balance = account_info.lamports();
+
+        if current_balance < new_minimum_balance {
+            let diff = new_minimum_balance - current_balance;
+            let signer_info = ctx.accounts.signer.to_account_info();
+            // Transfer rent difference from signer to profile
+            **signer_info.try_borrow_mut_lamports()? -= diff;
+            **account_info.try_borrow_mut_lamports()? += diff;
+        }
+
+        account_info.resize(new_len)?;
+    }
 
     // Monotonic counter validation — each new value must be >= existing
     require!(args.joins >= profile.joins, PyreWorldError::CounterNotMonotonic);
@@ -31,6 +51,8 @@ pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> 
     require!(args.ascends >= profile.ascends, PyreWorldError::CounterNotMonotonic);
     require!(args.razes >= profile.razes, PyreWorldError::CounterNotMonotonic);
     require!(args.tithes >= profile.tithes, PyreWorldError::CounterNotMonotonic);
+    require!(args.total_sol_spent >= profile.total_sol_spent, PyreWorldError::CounterNotMonotonic);
+    require!(args.total_sol_received >= profile.total_sol_received, PyreWorldError::CounterNotMonotonic);
 
     // Update counters
     profile.joins = args.joins;
@@ -47,6 +69,10 @@ pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> 
     profile.ascends = args.ascends;
     profile.razes = args.razes;
     profile.tithes = args.tithes;
+
+    // Update P&L
+    profile.total_sol_spent = args.total_sol_spent;
+    profile.total_sol_received = args.total_sol_received;
 
     // Update personality and timestamp
     profile.personality_summary = args.personality_summary;

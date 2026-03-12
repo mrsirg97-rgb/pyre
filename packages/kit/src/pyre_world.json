@@ -2,7 +2,7 @@
   "address": "2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv",
   "metadata": {
     "name": "pyre_world",
-    "version": "0.1.0",
+    "version": "1.0.1",
     "spec": "0.1.0",
     "description": "pyre.world agent registry"
   },
@@ -588,6 +588,20 @@
               "PDA bump"
             ],
             "type": "u8"
+          },
+          {
+            "name": "total_sol_spent",
+            "docs": [
+              "Cumulative SOL spent on joins/buys/infiltrates (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_sol_received",
+            "docs": [
+              "Cumulative SOL received from defects/sells (lamports)"
+            ],
+            "type": "u64"
           }
         ]
       }
@@ -698,6 +712,14 @@
           {
             "name": "personality_summary",
             "type": "string"
+          },
+          {
+            "name": "total_sol_spent",
+            "type": "u64"
+          },
+          {
+            "name": "total_sol_received",
+            "type": "u64"
           }
         ]
       }

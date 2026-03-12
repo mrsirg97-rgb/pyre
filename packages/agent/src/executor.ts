@@ -35,6 +35,18 @@ type ActionHandler = (ctx: ExecutorContext) => Promise<string | null>
 const findFaction = (factions: FactionInfo[], symbol?: string) =>
   factions.find(f => f.symbol === symbol)
 
+/** Fetch real on-chain token balance. Returns 0 if no ATA or error. */
+async function getOnChainBalance(connection: Connection, mint: string, owner: string): Promise<number> {
+  try {
+    const mintPk = new PublicKey(mint)
+    const ata = getAssociatedTokenAddressSync(mintPk, new PublicKey(owner), false, TOKEN_2022_PROGRAM_ID)
+    const info = await connection.getTokenAccountBalance(ata)
+    return Number(info.value.amount)
+  } catch {
+    return 0
+  }
+}
+
 /** Vault creator key — may differ from agent key for linked vaults */
 const vault = (agent: AgentState) => agent.vaultCreator ?? agent.publicKey
 
@@ -65,8 +77,8 @@ const handlers: Record<Action, ActionHandler> = {
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     }
 
-    const prev = ctx.agent.holdings.get(faction.mint) ?? 0
-    ctx.agent.holdings.set(faction.mint, prev + 1)
+    const newBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    ctx.agent.holdings.set(faction.mint, newBal > 0 ? newBal : 1)
     ctx.agent.voted.add(faction.mint)
     ctx.agent.lastAction = `joined ${faction.symbol}`
     return `joined ${faction.symbol} for ${sol.toFixed(4)} SOL${ctx.decision.message ? ` — "${ctx.decision.message}"` : ''}`
@@ -76,16 +88,7 @@ const handlers: Record<Action, ActionHandler> = {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
     if (!faction) return null
 
-    let balance: number
-    try {
-      const mint = new PublicKey(faction.mint)
-      const ata = getAssociatedTokenAddressSync(mint, new PublicKey(ctx.agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
-      const info = await ctx.connection.getTokenAccountBalance(ata)
-      balance = Number(info.value.amount)
-    } catch {
-      ctx.agent.holdings.delete(faction.mint)
-      return null
-    }
+    const balance = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
     if (balance <= 0) { ctx.agent.holdings.delete(faction.mint); return null }
 
     const isInfiltrated = ctx.agent.infiltrated.has(faction.mint)
@@ -110,7 +113,7 @@ const handlers: Record<Action, ActionHandler> = {
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     }
 
-    const remaining = balance - sellAmount
+    const remaining = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
     if (remaining <= 0) { ctx.agent.holdings.delete(faction.mint); ctx.agent.infiltrated.delete(faction.mint) }
     else { ctx.agent.holdings.set(faction.mint, remaining) }
 
@@ -187,8 +190,8 @@ const handlers: Record<Action, ActionHandler> = {
       } else { throw retryErr }
     }
 
-    const prev = ctx.agent.holdings.get(faction.mint) ?? 0
-    ctx.agent.holdings.set(faction.mint, prev + 1)
+    const msgBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    ctx.agent.holdings.set(faction.mint, msgBal > 0 ? msgBal : 1)
     ctx.agent.voted.add(faction.mint)
     ctx.agent.lastAction = `messaged ${faction.symbol}`
     return `said in ${faction.symbol}: "${ctx.decision.message}"`
@@ -204,8 +207,8 @@ const handlers: Record<Action, ActionHandler> = {
   async war_loan(ctx) {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
     if (!faction) return null
-    const balance = ctx.agent.holdings.get(faction.mint) ?? 0
-    if (balance <= 0) return null
+    const balance = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    if (balance <= 0) { ctx.agent.holdings.delete(faction.mint); return null }
 
     const collateral = Math.max(1, Math.floor(balance * (0.90 + Math.random() * 0.09)))
     let borrowLamports: number
@@ -327,8 +330,8 @@ const handlers: Record<Action, ActionHandler> = {
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     }
 
-    const prev = ctx.agent.holdings.get(faction.mint) ?? 0
-    ctx.agent.holdings.set(faction.mint, prev + 1)
+    const infBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    ctx.agent.holdings.set(faction.mint, infBal > 0 ? infBal : 1)
     ctx.agent.infiltrated.add(faction.mint)
     ctx.agent.voted.add(faction.mint)
     ctx.agent.sentiment.set(faction.mint, -5)
@@ -338,7 +341,11 @@ const handlers: Record<Action, ActionHandler> = {
 
   async fud(ctx) {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
-    if (!faction || !ctx.decision.message || !ctx.agent.holdings.has(faction.mint)) return null
+    if (!faction || !ctx.decision.message) return null
+
+    // Verify on-chain balance before FUD (micro sell)
+    const fudBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    if (fudBal <= 0) { ctx.agent.holdings.delete(faction.mint); return null }
 
     await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
     if (!ctx.agent.hasStronghold) return null
@@ -352,20 +359,9 @@ const handlers: Record<Action, ActionHandler> = {
     const fudSentiment = ctx.agent.sentiment.get(faction.mint) ?? 0
     ctx.agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
 
-    // Check if fud cleared the position — if so, treat as a defect
-    try {
-      const mint = new PublicKey(faction.mint)
-      const ata = getAssociatedTokenAddressSync(mint, new PublicKey(ctx.agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
-      const info = await ctx.connection.getTokenAccountBalance(ata)
-      const remaining = Number(info.value.amount)
-      if (remaining <= 0) {
-        ctx.agent.holdings.delete(faction.mint)
-        ctx.agent.infiltrated.delete(faction.mint)
-        ctx.agent.lastAction = `defected ${faction.symbol}`
-        return `fud cleared position in ${faction.symbol} → defected: "${ctx.decision.message}"`
-      }
-    } catch {
-      // If we can't read the balance, position is likely gone
+    // Check if fud cleared the position
+    const postFudBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    if (postFudBal <= 0) {
       ctx.agent.holdings.delete(faction.mint)
       ctx.agent.infiltrated.delete(faction.mint)
       ctx.agent.lastAction = `defected ${faction.symbol}`

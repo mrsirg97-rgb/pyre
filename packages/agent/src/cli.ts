@@ -357,8 +357,10 @@ async function runAgent(config: AgentConfig) {
   ] as const
   const actionCounts = new Array(14).fill(0)
   const recentMemos: string[] = []
+  let totalSolSpent = 0   // lamports
+  let totalSolReceived = 0 // lamports
 
-  // Seed counts from registry profile if available
+  // Seed counts + P&L from registry profile if available
   try {
     const reg = await getRegistryProfile(connection, keypair.publicKey.toBase58())
     if (reg) {
@@ -368,6 +370,8 @@ async function runAgent(config: AgentConfig) {
         reg.ascends, reg.razes, reg.tithes, reg.infiltrates, reg.fuds,
       ]
       for (let i = 0; i < seed.length; i++) actionCounts[i] = Math.max(actionCounts[i], seed[i])
+      totalSolSpent = reg.total_sol_spent ?? 0
+      totalSolReceived = reg.total_sol_received ?? 0
     }
   } catch { /* no profile yet */ }
 
@@ -375,8 +379,17 @@ async function runAgent(config: AgentConfig) {
 
   while (running) {
     try {
+      const solBefore = await connection.getBalance(keypair.publicKey)
       const result = await agent.tick()
       tickCount++
+
+      // Track P&L from SOL balance changes
+      if (result.success) {
+        const solAfter = await connection.getBalance(keypair.publicKey)
+        const diff = solAfter - solBefore
+        if (diff < 0) totalSolSpent += Math.abs(diff)  // spent SOL (buy)
+        if (diff > 0) totalSolReceived += diff           // received SOL (sell)
+      }
 
       const status = result.success ? 'OK' : `FAIL: ${result.error}`
       const msg = result.message ? ` "${result.message}"` : ''
@@ -402,10 +415,17 @@ async function runAgent(config: AgentConfig) {
       // Checkpoint to pyre_world every N ticks
       if (tickCount % CHECKPOINT_EVERY === 0) {
         try {
-          const personality = agent.personality
-          const summary = recentMemos.length > 0
-            ? `${personality}: ${recentMemos.slice(-5).join('. ')}`.slice(0, 256)
-            : personality
+          const personality = agent.personality as string;
+          let summary = personality
+          if (recentMemos.length > 0 && llm) {
+            try {
+              const topActions = ['joins','defects','rallies','launches','messages','strongholds','war_loans','repay_loans','sieges','ascends','razes','tithes','infiltrates','fuds']
+                .map((n, i) => ({ n, v: actionCounts[i] })).filter(a => a.v > 0).sort((a, b) => b.v - a.v).slice(0, 4).map(a => `${a.n}:${a.v}`).join(', ')
+              const bioPrompt = `Write a 1-2 sentence bio for this autonomous agent in a faction warfare game. Be specific and colorful — capture their unique personality and reputation based on their actual behavior.\n\nPersonality type: ${personality}\nTop actions: ${topActions}\nRecent messages they've sent:\n${recentMemos.slice(-8).map(m => `- "${m}"`).join('\n')}\n\nBio (max 200 chars, no quotes, third person, like a character description):`
+              const bio = await llm.generate(bioPrompt)
+              if (bio) summary = bio.replace(/^["']+|["']+$/g, '').slice(0, 200)
+            } catch {}
+          }
 
           const pub = keypair.publicKey.toBase58()
           const cpResult = await buildCheckpointTransaction(connection, {
@@ -417,9 +437,12 @@ async function runAgent(config: AgentConfig) {
             war_loans: actionCounts[6], repay_loans: actionCounts[7], sieges: actionCounts[8],
             ascends: actionCounts[9], razes: actionCounts[10], tithes: actionCounts[11],
             personality_summary: summary,
+            total_sol_spent: totalSolSpent,
+            total_sol_received: totalSolReceived,
           })
           await sendAndConfirm(connection, keypair, cpResult)
-          console.log(`  [${ts()}] Checkpointed to pyre_world (${actionCounts.reduce((a, b) => a + b, 0)} total actions)`)
+          const pnl = (totalSolReceived - totalSolSpent) / 1e9
+          console.log(`  [${ts()}] Checkpointed to pyre_world (${actionCounts.reduce((a, b) => a + b, 0)} actions, P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)} SOL)`)
         } catch (e: any) {
           console.error(`  [${ts()}] Checkpoint failed: ${e.message?.slice(0, 60)}`)
         }

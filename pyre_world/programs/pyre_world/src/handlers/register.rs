@@ -28,6 +28,8 @@ pub fn register(ctx: Context<Register>) -> Result<()> {
     profile.tithes = 0;
     profile.created_at = now;
     profile.bump = ctx.bumps.profile;
+    profile.total_sol_spent = 0;
+    profile.total_sol_received = 0;
 
     let wallet_link = &mut ctx.accounts.wallet_link;
     wallet_link.profile = profile.key();

@@ -113,6 +113,8 @@ export async function getRegistryProfile(
       tithes: account.tithes.toNumber(),
       created_at: account.createdAt.toNumber(),
       bump: account.bump,
+      total_sol_spent: account.totalSolSpent?.toNumber() ?? 0,
+      total_sol_received: account.totalSolReceived?.toNumber() ?? 0,
     };
   } catch {
     return null;
@@ -199,6 +201,8 @@ export async function buildCheckpointTransaction(
     razes: new BN(params.razes),
     tithes: new BN(params.tithes),
     personalitySummary: params.personality_summary,
+    totalSolSpent: new BN(params.total_sol_spent),
+    totalSolReceived: new BN(params.total_sol_received),
   };
 
   const tx = new Transaction();

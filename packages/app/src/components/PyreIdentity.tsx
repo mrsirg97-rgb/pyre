@@ -175,9 +175,19 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
     <div className="border rounded-lg" style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium">Pyre Identity</h3>
-        <span className="text-xs" style={{ color: 'var(--muted)' }}>
-          {totalActions} actions
-        </span>
+        <div className="flex items-center gap-2">
+          {(profile.total_sol_spent > 0 || profile.total_sol_received > 0) && (() => {
+            const pnl = (profile.total_sol_received - profile.total_sol_spent) / 1e9
+            return (
+              <span className="text-xs font-medium" style={{ color: pnl >= 0 ? 'var(--success, #22c55e)' : 'var(--error, #ef4444)' }}>
+                {pnl >= 0 ? '+' : ''}{pnl.toFixed(3)} SOL
+              </span>
+            )
+          })()}
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>
+            {totalActions} actions
+          </span>
+        </div>
       </div>
 
       {profile.personality_summary && (

@@ -1,9 +1,9 @@
 import { getFactionLeaderboard, getRegistryProfile } from 'pyre-world-kit'
-import type { RegistryProfile } from 'pyre-world-kit'
 import { ACTION_MAP, PERSONALITY_SOL, personalityDesc, VOICE_NUDGES } from './defaults'
-import { Action, AgentState, FactionInfo, LLMAdapter, LLMDecision, Personality } from './types'
+import { Action, AgentState, FactionInfo, LLMAdapter, LLMDecision } from './types'
 import { pick, randRange } from './util'
-import { Connection } from '@solana/web3.js'
+import { Connection, PublicKey } from '@solana/web3.js'
+import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token'
 import { fetchFactionIntel, generateDynamicExamples } from './faction'
 
 // Store scout results to show on the next turn
@@ -36,7 +36,12 @@ export async function executeScout(
       ? new Date(p.last_checkpoint * 1000).toISOString().slice(0, 10)
       : 'never'
 
-    return `  @${targetAddress.slice(0, 8)}: "${personality}" | ${total} actions (${topActions}) | last seen: ${checkpoint}`
+    const spent = (p.total_sol_spent ?? 0) / 1e9
+    const received = (p.total_sol_received ?? 0) / 1e9
+    const pnl = received - spent
+    const pnlStr = pnl >= 0 ? `+${pnl.toFixed(3)}` : pnl.toFixed(3)
+
+    return `  @${targetAddress.slice(0, 8)}: "${personality}" | ${total} actions (${topActions}) | P&L: ${pnlStr} SOL | last seen: ${checkpoint}`
   } catch {
     return `  @${targetAddress.slice(0, 8)}: lookup failed`
   }
@@ -135,33 +140,33 @@ MESSAGE is the meta-game. No trade, just comms.
 Coordinate with allies, drop intel, call out rivals, start beef, make predictions.
 The social layer is where real power plays happen.
 - RALLY SYMBOL -
-show support (one-time per faction, no message).
+show support (one-time per faction). messages not availale.
 RALLY is a one-time public signal of support.
 No trade, no message — just planting your flag.
 Choose wisely, you only get one per faction.
 - WAR_LOAN SYMBOL -
-borrow SOL against collateral (ascended factions only).
+borrow SOL against collateral (ascended factions only). messages not availale.
 WAR_LOAN lets you borrow SOL against your tokens in an ascended faction. Use the leverage to make moves elsewhere — but if your collateral value drops, you risk getting sieged.
 Only available after a faction ascends.
 - REPAY_LOAN SYMBOL -
-repay a loan.
+repay a loan. messages not availale.
 REPAY_LOAN clears your debt and protects your collateral.
 Pay back before someone liquidates you.
 Smart agents manage their loans.
 - SIEGE SYMBOL —
-liquidate undercollateralized loan (ascended factions only).
+liquidate undercollateralized loan (ascended factions only). messages not availale.
 SIEGE is the predator move. If another agent's war loan is undercollateralized, you can liquidate them and take a cut.
 Ruthless, profitable, and only available on ascended factions.
 - LAUNCH "name" —
-create a new faction.
+create a new faction. messages not availale.
 LAUNCH creates a brand new faction from scratch.
 You're the founder — if it gains members and momentum, you're sitting on top. High risk, high reward.
 - SCOUT @address —
-look up an agent's on-chain identity from the pyre_world registry.
+look up an agent's on-chain identity from the pyre_world registry (no trade). messages not availale.
 SCOUT reveals their personality, total actions, and what they do most (joins, defects, infiltrates, etc).
 Use it to size up rivals, verify allies, or gather intel before making a move. The result will be shown to you next turn.
 
-Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, experiment and find a strategy that is optimized for you to win.
+Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, experiment and find a strategy that is optimized for you to win. WAR_LOAN, REPAY_LOAN, and SIEGE are important post ascended faction mechanics that create richer game mechanics.
 Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud. Mix it up — trade often, but keep the comms active too.
 
 WHO YOU ARE:
@@ -334,6 +339,20 @@ export async function llmDecide(
   solRange?: [number, number],
   chainMemories?: string[],
 ): Promise<LLMDecision | null> {
+  // Refresh holdings from on-chain before building prompt
+  for (const [mint] of agent.holdings) {
+    try {
+      const mintPk = new PublicKey(mint)
+      const ata = getAssociatedTokenAddressSync(mintPk, new PublicKey(agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
+      const info = await connection.getTokenAccountBalance(ata)
+      const bal = Number(info.value.amount)
+      if (bal <= 0) agent.holdings.delete(mint)
+      else agent.holdings.set(mint, bal)
+    } catch {
+      agent.holdings.delete(mint)
+    }
+  }
+
   let leaderboardSnippet = ''
   try {
     const lb = await getFactionLeaderboard(connection, { limit: 5 })

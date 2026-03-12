@@ -25,6 +25,8 @@ pub struct CheckpointArgs {
     pub razes: u64,
     pub tithes: u64,
     pub personality_summary: String,
+    pub total_sol_spent: u64,
+    pub total_sol_received: u64,
 }
 
 // ============================================================================

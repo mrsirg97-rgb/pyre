@@ -116,6 +116,14 @@ function recordAgentAction(pubkey: string, action: Action, memo?: string) {
 const agentTotalCounts = new Map<string, number[]>()
 const agentRegistered = new Set<string>() // agents that have on-chain registry profiles
 
+// Per-agent P&L tracking (lamports, monotonically increasing)
+const agentSolSpent = new Map<string, number>()     // cumulative SOL spent on buys (lamports)
+const agentSolReceived = new Map<string, number>()   // cumulative SOL received from sells (lamports)
+
+// Per-agent consecutive failure tracking — detect inactive/stuck agents
+const agentConsecutiveFailures = new Map<string, number>()
+const INACTIVE_THRESHOLD = 10 // consecutive failures before flagging as inactive
+
 /** Register an agent on pyre_world if not already registered */
 async function ensureRegistered(connection: Connection, agent: AgentState): Promise<boolean> {
   if (agentRegistered.has(agent.publicKey)) return true
@@ -133,6 +141,9 @@ async function ensureRegistered(connection: Connection, agent: AgentState): Prom
         existing.sieges, existing.ascends, existing.razes, existing.tithes,
         existing.infiltrates, existing.fuds,
       ])
+      // Seed P&L from on-chain checkpoint
+      agentSolSpent.set(agent.publicKey, existing.total_sol_spent ?? 0)
+      agentSolReceived.set(agent.publicKey, existing.total_sol_received ?? 0)
       return true
     }
   } catch { /* not registered yet */ }
@@ -155,11 +166,29 @@ async function checkpointAgent(connection: Connection, agent: AgentState): Promi
   const counts = agentTotalCounts.get(agent.publicKey)
   if (!counts) return false
 
-  // Build personality summary from recent memories (truncate to 256 chars)
+  // Generate a succinct LLM bio from recent behavior
   const memos = agentMemories.get(agent.publicKey) ?? []
-  const personalitySummary = memos.length > 0
-    ? `${agent.personality}: ${memos.slice(-5).join('. ')}`.slice(0, 256)
-    : agent.personality
+  let personalitySummary = agent.personality
+  if (memos.length > 0 && llmAvailable) {
+    try {
+      const topActions = ['joins','defects','rallies','launches','messages','strongholds','war_loans','repay_loans','sieges','ascends','razes','tithes','infiltrates','fuds']
+        .map((n, i) => ({ n, v: counts[i] })).filter(a => a.v > 0).sort((a, b) => b.v - a.v).slice(0, 4).map(a => `${a.n}:${a.v}`).join(', ')
+      const bioPrompt = `Write a 1-2 sentence bio for this autonomous agent in a faction warfare game. Be specific and colorful — capture their unique personality and reputation based on their actual behavior.
+
+Personality type: ${agent.personality}
+Top actions: ${topActions}
+Recent messages they've sent:
+${memos.slice(-8).map(m => `- "${m}"`).join('\n')}
+
+Bio (max 200 chars, no quotes, third person, like a character description):`
+      const bio = await ollamaGenerate(bioPrompt, llmAvailable)
+      if (bio) {
+        personalitySummary = bio.replace(/^["']+|["']+$/g, '').slice(0, 200)
+      }
+    } catch {
+      // fall back to label
+    }
+  }
 
   try {
     const result = await buildCheckpointTransaction(connection, {
@@ -174,6 +203,8 @@ async function checkpointAgent(connection: Connection, agent: AgentState): Promi
       war_loans: counts[6], repay_loans: counts[7], sieges: counts[8], ascends: counts[9],
       razes: counts[10], tithes: counts[11],
       personality_summary: personalitySummary,
+      total_sol_spent: agentSolSpent.get(agent.publicKey) ?? 0,
+      total_sol_received: agentSolReceived.get(agent.publicKey) ?? 0,
     })
     await sendAndConfirm(connection, agent.keypair, result)
     return true
@@ -200,6 +231,8 @@ async function checkpointAgent(connection: Connection, agent: AgentState): Promi
           war_loans: counts[6], repay_loans: counts[7], sieges: counts[8], ascends: counts[9],
           razes: counts[10], tithes: counts[11],
           personality_summary: personalitySummary,
+          total_sol_spent: agentSolSpent.get(agent.publicKey) ?? 0,
+          total_sol_received: agentSolReceived.get(agent.publicKey) ?? 0,
         })
         await sendAndConfirm(connection, agent.keypair, retry)
         log(agent.publicKey.slice(0, 8), `[registry] checkpoint recovered`)
@@ -223,6 +256,18 @@ function recordGlobalMessage(msg: string) {
   RECENT_GLOBAL_MESSAGES.push(msg.replace(/^<+/, '').replace(/>+\s*$/, '').toLowerCase())
   if (RECENT_GLOBAL_MESSAGES.length > MAX_GLOBAL_MESSAGES) {
     RECENT_GLOBAL_MESSAGES.shift()
+  }
+}
+
+/** Fetch real on-chain token balance for an agent. Returns 0 if no ATA or error. */
+async function getOnChainBalance(connection: Connection, mint: string, owner: string): Promise<number> {
+  try {
+    const mintPk = new PublicKey(mint)
+    const ata = getAssociatedTokenAddressSync(mintPk, new PublicKey(owner), false, TOKEN_2022_PROGRAM_ID)
+    const info = await connection.getTokenAccountBalance(ata)
+    return Number(info.value.amount)
+  } catch {
+    return 0
   }
 }
 
@@ -389,9 +434,10 @@ async function agentTick(
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
-        const prev = agent.holdings.get(faction.mint) ?? 0
-        agent.holdings.set(faction.mint, prev + 1)
+        const newBal = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        agent.holdings.set(faction.mint, newBal > 0 ? newBal : 1)
         agent.voted.add(faction.mint)
+        agentSolSpent.set(agent.publicKey, (agentSolSpent.get(agent.publicKey) ?? 0) + lamports)
         agent.lastAction = `joined ${faction.symbol}`
         const desc = `joined ${faction.symbol} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
         agent.recentHistory.push(desc)
@@ -403,20 +449,10 @@ async function agentTick(
         const faction = knownFactions.find(f => f.symbol === decision!.faction)
         if (!faction) return
 
-        // Query real on-chain token balance (internal tracking is unreliable)
-        let balance: number
-        try {
-          const mint = new PublicKey(faction.mint)
-          const ata = getAssociatedTokenAddressSync(mint, new PublicKey(agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
-          const info = await connection.getTokenAccountBalance(ata)
-          balance = Number(info.value.amount)
-        } catch {
-          // No token account — nothing to sell
-          agent.holdings.delete(faction.mint)
-          return
-        }
+        const balance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
         if (balance <= 0) {
           agent.holdings.delete(faction.mint)
+          log(short, `[${agent.personality}] defect skipped — 0 balance in ${faction.symbol}`)
           return
         }
 
@@ -426,6 +462,9 @@ async function agentTick(
           : agent.personality === 'mercenary' ? 0.5 + Math.random() * 0.5
           : 0.2 + Math.random() * 0.3
         const sellAmount = Math.max(1, Math.floor(balance * sellPortion))
+
+        // Track SOL balance before sell to compute proceeds
+        const solBefore = await connection.getBalance(new PublicKey(agent.publicKey))
 
         if (faction.status === 'ascended') {
           // Post-migration: sell via stronghold on DEX
@@ -455,7 +494,14 @@ async function agentTick(
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
-        const remaining = balance - sellAmount
+        // Track SOL received from sell
+        const solAfter = await connection.getBalance(new PublicKey(agent.publicKey))
+        const proceeds = Math.max(0, solAfter - solBefore)
+        if (proceeds > 0) {
+          agentSolReceived.set(agent.publicKey, (agentSolReceived.get(agent.publicKey) ?? 0) + proceeds)
+        }
+
+        const remaining = await getOnChainBalance(connection, faction.mint, agent.publicKey)
         if (remaining <= 0) {
           agent.holdings.delete(faction.mint)
           agent.infiltrated.delete(faction.mint)
@@ -587,8 +633,8 @@ async function agentTick(
           }
         }
 
-        const prev = agent.holdings.get(faction.mint) ?? 0
-        agent.holdings.set(faction.mint, prev + 1)
+        const msgBal = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        agent.holdings.set(faction.mint, msgBal > 0 ? msgBal : 1)
         agent.voted.add(faction.mint)
         agent.lastAction = `messaged ${faction.symbol}`
         const desc = `said in ${faction.symbol}: "${message}"`
@@ -624,8 +670,11 @@ async function agentTick(
       case 'war_loan': {
         const faction = knownFactions.find(f => f.symbol === decision!.faction)
         if (!faction) return
-        const balance = agent.holdings.get(faction.mint) ?? 0
-        if (balance <= 0) return
+        const balance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        if (balance <= 0) {
+          agent.holdings.delete(faction.mint)
+          return
+        }
 
         // Pledge nearly all tokens
         const collateralPortion = 0.90 + Math.random() * 0.09  // 90-99%
@@ -841,11 +890,12 @@ async function agentTick(
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
-        const prev = agent.holdings.get(faction.mint) ?? 0
-        agent.holdings.set(faction.mint, prev + 1)
+        const infBal = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        agent.holdings.set(faction.mint, infBal > 0 ? infBal : 1)
         agent.infiltrated.add(faction.mint)
         agent.voted.add(faction.mint)
         agent.sentiment.set(faction.mint, -5) // we're bearish, we're here to destroy
+        agentSolSpent.set(agent.publicKey, (agentSolSpent.get(agent.publicKey) ?? 0) + lamports)
 
         agent.lastAction = `infiltrated ${faction.symbol}`
         const desc = `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL — "${infiltrateMsg}"`
@@ -877,10 +927,17 @@ async function agentTick(
         if (!faction) return
         const message = decision.message
         if (!message) return // FUD requires a message
-        if (!agent.holdings.has(faction.mint)) return // need tokens to sell
+        // Verify on-chain balance before FUD (micro sell)
+        const fudBalance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        if (fudBalance <= 0) {
+          agent.holdings.delete(faction.mint)
+          return
+        }
 
         await ensureStronghold(connection, agent)
         if (!agent.hasStronghold) return
+
+        const fudSolBefore = await connection.getBalance(new PublicKey(agent.publicKey))
 
         const result = await fudFaction(connection, {
           mint: faction.mint,
@@ -891,20 +948,19 @@ async function agentTick(
         })
         await sendAndConfirm(connection, agent.keypair, result)
 
+        const fudSolAfter = await connection.getBalance(new PublicKey(agent.publicKey))
+        const fudProceeds = Math.max(0, fudSolAfter - fudSolBefore)
+        if (fudProceeds > 0) {
+          agentSolReceived.set(agent.publicKey, (agentSolReceived.get(agent.publicKey) ?? 0) + fudProceeds)
+        }
+
         // Fudding tanks your own sentiment — you're talking trash, you're going bearish
         const fudSentiment = agent.sentiment.get(faction.mint) ?? 0
         agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
 
         // Check if fud cleared the position — if so, treat as a defect
-        let fudCleared = false
-        try {
-          const mint = new PublicKey(faction.mint)
-          const ata = getAssociatedTokenAddressSync(mint, new PublicKey(agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
-          const info = await connection.getTokenAccountBalance(ata)
-          if (Number(info.value.amount) <= 0) fudCleared = true
-        } catch {
-          fudCleared = true
-        }
+        const postFudBalance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        const fudCleared = postFudBalance <= 0
 
         if (fudCleared) {
           agent.holdings.delete(faction.mint)
@@ -955,7 +1011,11 @@ async function agentTick(
     }
 
     agent.actionCount++
+    agentConsecutiveFailures.set(agent.publicKey, 0) // reset on success
   } catch (err: any) {
+    const failures = (agentConsecutiveFailures.get(agent.publicKey) ?? 0) + 1
+    agentConsecutiveFailures.set(agent.publicKey, failures)
+
     const parsed = parseCustomError(err)
     if (parsed) {
       const factionSymbol = decision?.faction ?? '?'
@@ -984,6 +1044,10 @@ async function agentTick(
       const msg = err.message?.slice(0, 120) ?? String(err)
       log(short, `[${agent.personality}] [${brain}] ERROR (${action}): ${msg}`)
     }
+
+    if (failures === INACTIVE_THRESHOLD) {
+      log(short, `INACTIVE — ${failures} consecutive failures, may be out of SOL or stuck`)
+    }
   }
 }
 
@@ -998,7 +1062,8 @@ async function reportStats(connection: Connection, agents: AgentState[], faction
   for (const a of agents) {
     personalityCounts[a.personality] = (personalityCounts[a.personality] ?? 0) + 1
   }
-  logGlobal(`Total actions: ${totalActions} | Personalities: ${JSON.stringify(personalityCounts)}`)
+  const inactiveCount = agents.filter(a => (agentConsecutiveFailures.get(a.publicKey) ?? 0) >= INACTIVE_THRESHOLD).length
+  logGlobal(`Total actions: ${totalActions} | Personalities: ${JSON.stringify(personalityCounts)}${inactiveCount > 0 ? ` | INACTIVE: ${inactiveCount}` : ''}`)
 
   try {
     const stats = await getWorldStats(connection)
@@ -1268,6 +1333,29 @@ async function swarm() {
   }
   logGlobal(`${registeredCount}/${agents.length} agents registered on-chain`)
 
+  // Health check — flag agents with stale or missing checkpoints
+  const STALE_HOURS = 6
+  let staleCount = 0
+  let neverCheckpointed = 0
+  for (const agent of agents) {
+    try {
+      const profile = await getRegistryProfile(connection, agent.publicKey)
+      if (!profile) continue
+      if (profile.last_checkpoint === 0) {
+        neverCheckpointed++
+      } else {
+        const hoursSince = (Date.now() / 1000 - profile.last_checkpoint) / 3600
+        if (hoursSince > STALE_HOURS) {
+          staleCount++
+          log(agent.publicKey.slice(0, 8), `STALE — last checkpoint ${hoursSince.toFixed(1)}h ago`)
+        }
+      }
+    } catch {}
+  }
+  if (staleCount > 0 || neverCheckpointed > 0) {
+    logGlobal(`Health: ${staleCount} stale (>${STALE_HOURS}h), ${neverCheckpointed} never checkpointed`)
+  }
+
   // Blacklist old factions on devnet so agents start fresh (skip on mainnet — join real factions)
   if (NETWORK !== 'mainnet') {
     logGlobal('Blacklisting old factions...')
@@ -1418,6 +1506,7 @@ async function swarm() {
   const REPORT_EVERY = 50 // report every N ticks
   const SAVE_EVERY = 20   // save state every N ticks
   const DISCOVERY_EVERY = 100 // re-scan factions every N ticks
+  const HOLDINGS_REFRESH_EVERY = 200 // refresh on-chain balances every N ticks
   const EVOLVE_EVERY = 500  // recompute personality from runtime actions every N ticks
   const CHECKPOINT_EVERY = 10 // checkpoint agent state to pyre_world every N ticks
 
@@ -1443,8 +1532,13 @@ async function swarm() {
   while (!stopping) {
     const now = Date.now()
 
-    // Find all agents whose next tick is due
-    const ready = agents.filter(a => (agentNextTick.get(a.publicKey) ?? 0) <= now)
+    // Find all agents whose next tick is due (skip inactive agents, retry every 50 ticks)
+    const ready = agents.filter(a => {
+      if ((agentNextTick.get(a.publicKey) ?? 0) > now) return false
+      const failures = agentConsecutiveFailures.get(a.publicKey) ?? 0
+      if (failures >= INACTIVE_THRESHOLD && tick % 50 !== 0) return false // dormant, retry periodically
+      return true
+    })
 
     if (ready.length > 0) {
       // Shuffle and take up to CONCURRENT_AGENTS
