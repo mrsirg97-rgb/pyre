@@ -15,6 +15,7 @@ import { ensureStronghold } from './stronghold'
 import { sentimentBuySize } from './action'
 import { parseCustomError } from './error'
 import { generateFactionIdentity, FALLBACK_FACTION_NAMES, FALLBACK_FACTION_SYMBOLS } from './faction'
+import { executeScout, pendingScoutResults } from './agent'
 
 interface ExecutorContext {
   connection: Connection
@@ -373,6 +374,22 @@ const handlers: Record<Action, ActionHandler> = {
 
     ctx.agent.lastAction = `fud ${faction.symbol}`
     return `argued in ${faction.symbol}: "${ctx.decision.message}"`
+  },
+
+  scout: async (ctx) => {
+    const target = ctx.decision.faction // holds the address for scout
+    if (!target) return null
+
+    const result = await executeScout(ctx.connection, target)
+
+    // Store result to show in next turn's prompt
+    const existing = pendingScoutResults.get(ctx.agent.publicKey) ?? []
+    existing.push(result)
+    if (existing.length > 5) existing.shift()
+    pendingScoutResults.set(ctx.agent.publicKey, existing)
+
+    ctx.agent.lastAction = `scouted @${target.slice(0, 8)}`
+    return `scouted @${target.slice(0, 8)}`
   },
 }
 

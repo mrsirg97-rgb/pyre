@@ -71,7 +71,7 @@ import { Action, AgentState, FactionInfo, LLMDecision, Personality } from './src
 import { chooseAction, sentimentBuySize } from './src/action'
 import { log, logGlobal, pick, randRange, sleep } from './src/util'
 import { AGENT_COUNT, KEYS_FILE, LLM_ENABLED, MAX_INTERVAL, MIN_FUNDED_SOL, MIN_INTERVAL, OLLAMA_MODEL, OLLAMA_URL, RPC_URL, NETWORK, CONCURRENT_AGENTS, STRONGHOLD_FUND_SOL, FUND_TARGET_SOL, MAX_SWARM_FACTIONS } from './src/config'
-import { llmDecide } from './src/agent'
+import { llmDecide, executeScout, pendingScoutResults, ollamaGenerate } from './src/agent'
 import { assignPersonality, PERSONALITY_SOL, PERSONALITY_INTERVALS } from './src/identity'
 import { ensureStronghold } from './src/stronghold'
 import { sendAndConfirm } from './src/tx'
@@ -248,6 +248,7 @@ export async function maybeRetryLLM() {
 
 let factionNameIndex = 0
 const usedFactionNames = new Set<string>()
+let totalSwarmFounded = 0
 
 async function agentTick(
   connection: Connection,
@@ -491,8 +492,7 @@ async function agentTick(
       case 'launch': {
         if (agent.founded.length >= 2) return
         // Global faction cap (mainnet: 3)
-        const totalFounded = agents.reduce((n, a) => n + a.founded.length, 0)
-        if (totalFounded >= MAX_SWARM_FACTIONS) return
+        if (totalSwarmFounded >= MAX_SWARM_FACTIONS) return
 
         // Generate faction name + symbol via LLM, fall back to static list
         let name: string | null = null
@@ -539,6 +539,7 @@ async function agentTick(
         const vanity = isPyreMint(mint)
 
         agent.founded.push(mint)
+        totalSwarmFounded++
         knownFactions.push({ mint, name, symbol, status: 'rising' })
         usedFactionNames.add(name)
         agent.lastAction = `launched ${symbol}`
@@ -850,6 +851,23 @@ async function agentTick(
         const desc = `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL — "${infiltrateMsg}"`
         agent.recentHistory.push(desc)
         log(short, `[${agent.personality}] [${brain}] 🗡️ ${desc}`)
+        break
+      }
+
+      case 'scout': {
+        const target = decision!.message ?? decision!.faction // address from parser
+        if (!target) return
+
+        const scoutResult = await executeScout(connection, target)
+        const existing = pendingScoutResults.get(agent.publicKey) ?? []
+        existing.push(scoutResult)
+        if (existing.length > 5) existing.shift()
+        pendingScoutResults.set(agent.publicKey, existing)
+
+        agent.lastAction = `scouted @${target.slice(0, 8)}`
+        const desc = `scouted @${target.slice(0, 8)}`
+        agent.recentHistory.push(desc)
+        log(short, `[${agent.personality}] [${brain}] ${desc}`)
         break
       }
 
@@ -1222,6 +1240,9 @@ async function swarm() {
   }
 
   logGlobal(`${agents.length} agents ready`)
+
+  // Seed total founded count from restored state
+  totalSwarmFounded = agents.reduce((n, a) => n + a.founded.length, 0)
 
   // Ensure all agents have strongholds (vault-routed operations require them)
   logGlobal('Ensuring all agents have strongholds...')

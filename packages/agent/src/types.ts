@@ -6,7 +6,7 @@ export type Personality = 'loyalist' | 'mercenary' | 'provocateur' | 'scout' | '
 
 export type Action = 'join' | 'defect' | 'rally' | 'launch' | 'message'
   | 'stronghold' | 'war_loan' | 'repay_loan' | 'siege' | 'ascend' | 'raze' | 'tithe'
-  | 'infiltrate' | 'fud'
+  | 'infiltrate' | 'fud' | 'scout'
 
 export interface LLMDecision {
   action: Action

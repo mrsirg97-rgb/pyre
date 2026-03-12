@@ -1,9 +1,46 @@
-import { getFactionLeaderboard } from 'pyre-world-kit'
+import { getFactionLeaderboard, getRegistryProfile } from 'pyre-world-kit'
+import type { RegistryProfile } from 'pyre-world-kit'
 import { ACTION_MAP, PERSONALITY_SOL, personalityDesc, VOICE_NUDGES } from './defaults'
 import { Action, AgentState, FactionInfo, LLMAdapter, LLMDecision, Personality } from './types'
 import { pick, randRange } from './util'
 import { Connection } from '@solana/web3.js'
 import { fetchFactionIntel, generateDynamicExamples } from './faction'
+
+// Store scout results to show on the next turn
+export const pendingScoutResults = new Map<string, string[]>()
+
+/** Execute a SCOUT action — look up an agent's pyre_world registry profile */
+export async function executeScout(
+  connection: Connection,
+  targetAddress: string,
+): Promise<string> {
+  try {
+    const p = await getRegistryProfile(connection, targetAddress)
+    if (!p) return `  @${targetAddress.slice(0, 8)}: no pyre identity found`
+
+    const total = p.joins + p.defects + p.rallies + p.launches + p.messages +
+      p.fuds + p.infiltrates + p.reinforces + p.war_loans + p.repay_loans +
+      p.sieges + p.ascends + p.razes + p.tithes
+
+    const topActions = [
+      { n: 'joins', v: p.joins }, { n: 'defects', v: p.defects },
+      { n: 'rallies', v: p.rallies }, { n: 'messages', v: p.messages },
+      { n: 'fuds', v: p.fuds }, { n: 'infiltrates', v: p.infiltrates },
+      { n: 'reinforces', v: p.reinforces }, { n: 'war_loans', v: p.war_loans },
+      { n: 'sieges', v: p.sieges },
+    ].sort((a, b) => b.v - a.v).filter(a => a.v > 0).slice(0, 4)
+      .map(a => `${a.n}:${a.v}`).join(', ')
+
+    const personality = p.personality_summary || 'unknown'
+    const checkpoint = p.last_checkpoint > 0
+      ? new Date(p.last_checkpoint * 1000).toISOString().slice(0, 10)
+      : 'never'
+
+    return `  @${targetAddress.slice(0, 8)}: "${personality}" | ${total} actions (${topActions}) | last seen: ${checkpoint}`
+  } catch {
+    return `  @${targetAddress.slice(0, 8)}: lookup failed`
+  }
+}
 
 export const buildAgentPrompt = (
   agent: AgentState,
@@ -119,6 +156,10 @@ Ruthless, profitable, and only available on ascended factions.
 create a new faction.
 LAUNCH creates a brand new faction from scratch.
 You're the founder — if it gains members and momentum, you're sitting on top. High risk, high reward.
+- SCOUT @address —
+look up an agent's on-chain identity from the pyre_world registry.
+SCOUT reveals their personality, total actions, and what they do most (joins, defects, infiltrates, etc).
+Use it to size up rivals, verify allies, or gather intel before making a move. The result will be shown to you next turn.
 
 Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, experiment and find a strategy that is optimized for you to win.
 Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud. Mix it up — trade often, but keep the comms active too.
@@ -159,6 +200,13 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
 
   for (const candidate of lines) {
     const line = candidate.trim()
+
+    // Handle SCOUT @address
+    const scoutMatch = line.match(/^SCOUT\s+@?([A-Za-z0-9]{6,44})/i)
+    if (scoutMatch) {
+      return { action: 'scout' as Action, faction: scoutMatch[1], reasoning: line }
+    }
+
     const cleaned = line
       .replace(/\*+/g, '')  // strip all bold/italic markdown (e.g. **DEFECT SBP "msg"**)
       .replace(/^[-•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
@@ -347,7 +395,15 @@ export async function llmDecide(
     // intel fetch failed, proceed without it
   }
 
-  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet, recentMessages, solRange, chainMemories)
+  // Include results from previous SCOUT actions
+  const scoutResults = pendingScoutResults.get(agent.publicKey)
+  let scoutSnippet = ''
+  if (scoutResults && scoutResults.length > 0) {
+    scoutSnippet = '\nSCOUT RESULTS (from your previous SCOUT actions):\n' + scoutResults.join('\n')
+    pendingScoutResults.delete(agent.publicKey)
+  }
+
+  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet + scoutSnippet, recentMessages, solRange, chainMemories)
   const raw = await llm.generate(prompt)
   if (!raw) {
     log(`[${agent.publicKey.slice(0, 8)}] LLM returned null`)

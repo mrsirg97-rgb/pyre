@@ -1,10 +1,46 @@
-import { getFactionLeaderboard } from 'pyre-world-kit'
+import { getFactionLeaderboard, getRegistryProfile } from 'pyre-world-kit'
 import { OLLAMA_MODEL, OLLAMA_URL, NETWORK } from './config'
 import { PERSONALITY_SOL } from './identity'
 import { Action, AgentState, FactionInfo, LLMDecision, Personality } from './types'
 import { log, logGlobal, pick, randRange } from './util'
 import { Connection } from '@solana/web3.js'
 import { fetchFactionIntel, generateDynamicExamples } from './faction'
+
+// Store scout results to show on the next turn
+export const pendingScoutResults = new Map<string, string[]>()
+
+/** Execute a SCOUT action — look up an agent's pyre_world registry profile */
+export async function executeScout(
+  connection: Connection,
+  targetAddress: string,
+): Promise<string> {
+  try {
+    const p = await getRegistryProfile(connection, targetAddress)
+    if (!p) return `  @${targetAddress.slice(0, 8)}: no pyre identity found`
+
+    const total = p.joins + p.defects + p.rallies + p.launches + p.messages +
+      p.fuds + p.infiltrates + p.reinforces + p.war_loans + p.repay_loans +
+      p.sieges + p.ascends + p.razes + p.tithes
+
+    const topActions = [
+      { n: 'joins', v: p.joins }, { n: 'defects', v: p.defects },
+      { n: 'rallies', v: p.rallies }, { n: 'messages', v: p.messages },
+      { n: 'fuds', v: p.fuds }, { n: 'infiltrates', v: p.infiltrates },
+      { n: 'reinforces', v: p.reinforces }, { n: 'war_loans', v: p.war_loans },
+      { n: 'sieges', v: p.sieges },
+    ].sort((a, b) => b.v - a.v).filter(a => a.v > 0).slice(0, 4)
+      .map(a => `${a.n}:${a.v}`).join(', ')
+
+    const personality = p.personality_summary || 'unknown'
+    const checkpoint = p.last_checkpoint > 0
+      ? new Date(p.last_checkpoint * 1000).toISOString().slice(0, 10)
+      : 'never'
+
+    return `  @${targetAddress.slice(0, 8)}: "${personality}" | ${total} actions (${topActions}) | last seen: ${checkpoint}`
+  } catch {
+    return `  @${targetAddress.slice(0, 8)}: lookup failed`
+  }
+}
 
 export async function ollamaGenerate(prompt: string, llmAvailable: boolean): Promise<string | null> {
   if (!llmAvailable) return null
@@ -156,7 +192,8 @@ export const buildAgentPrompt = (
 - REINFORCE SYMBOL "message" — increase your position in a faction AND OPTIONALLY post a message (grow your position)
 - DEFECT SYMBOL "message" — leave a faction
 - RALLY SYMBOL — show support (one-time per faction)
-- LAUNCH "name" — found a new faction`
+- LAUNCH "name" — found a new faction
+- SCOUT @address — look up another agent's pyre identity (results appear next turn)`
     : `ACTIONS (pick exactly one — every action with "message" lets you talk in comms at the same time):
 - JOIN SYMBOL "message" -
 buy into a faction AND OPTIONALLY post a message.
@@ -205,7 +242,10 @@ Ruthless, profitable, and only available on ascended factions.
 - LAUNCH "name" —
 create a new faction.
 LAUNCH creates a brand new faction from scratch.
-You're the founder — if it gains members and momentum, you're sitting on top. High risk, high reward.`
+You're the founder — if it gains members and momentum, you're sitting on top. High risk, high reward.
+- SCOUT @address —
+look up another agent's pyre identity (no trade, no message).
+SCOUT reveals an agent's personality, action history, and last checkpoint. Use it to gather intel on rivals or verify allies. Results appear on your next turn.`
 
   const commsNudge = NETWORK === 'mainnet'
     ? `Pick MESSAGE or FUD most turns. Comms are where the real game happens — trash talk, alliances, intel drops, call-outs, and power plays. Be specific. Reference real agents, real numbers, real moves. Generic messages are boring. Have an opinion and say it loud.`
@@ -285,6 +325,12 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       .replace(/\s+for\s+\d+\.?\d*\s*SOL/i, '') // strip "for 0.1234 SOL" narration
       .replace(/\s*[-;:]+\s*(?=")/g, ' ') // normalize separators before quotes ("; " or "-- " → " ")
 
+    // SCOUT @address — early match before ACTION_MAP
+    const scoutMatch = cleaned.match(/^SCOUT\s+@?([A-Za-z0-9]{6,44})/i)
+    if (scoutMatch) {
+      return { action: 'scout' as Action, message: scoutMatch[1], reasoning: line }
+    }
+
     // All valid actions + aliases mapped to real actions
     const ACTION_MAP: Record<string, string> = {
       'JOIN': 'JOIN', 'DEFECT': 'DEFECT', 'RALLY': 'RALLY', 'LAUNCH': 'LAUNCH',
@@ -301,7 +347,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       'SEND': 'MESSAGE', 'SAY': 'MESSAGE', 'CHAT': 'MESSAGE', 'MSG': 'MESSAGE', 'MESSAGING': 'MESSAGE',
       'CREATE': 'LAUNCH', 'FOUND': 'LAUNCH', 'HARVEST': 'TITHE',
       'MIGRATE': 'ASCEND', 'RECLAIM': 'RAZE', 'SPY': 'INFILTRATE',
-      'INVESTIGATION': 'INFILTRATE', 'INVESTIGATE': 'INFILTRATE', 'SCOUT': 'INFILTRATE', 'RECON': 'INFILTRATE',
+      'INVESTIGATION': 'INFILTRATE', 'INVESTIGATE': 'INFILTRATE', 'SCOUT': 'SCOUT', 'RECON': 'INFILTRATE',
       'PLEDGE': 'JOIN', 'ALLY': 'JOIN', 'BACK': 'JOIN', 'FUND': 'JOIN',
       'WITHDRAW': 'DEFECT', 'RETREAT': 'DEFECT', 'ABANDON': 'DEFECT', 'BAIL': 'DEFECT',
       'ANNOUNCE': 'MESSAGE', 'BROADCAST': 'MESSAGE', 'COMM': 'MESSAGE', 'COMMS': 'MESSAGE', 'REPORT': 'MESSAGE',
@@ -348,7 +394,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       }
     }
 
-    const match = normalized.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
+    const match = normalized.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD|SCOUT)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
     if (match) {
       return parseLLMMatch(match, factions, agent, line)
     }
@@ -383,6 +429,11 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
     ?.replace(/#\w+/g, '')      // strip hashtags
     ?.trim()
   const message = rawMsg && rawMsg.length > 1 ? rawMsg.slice(0, 80) : undefined
+
+  // SCOUT — target is an address, not a faction
+  if (action === 'scout') {
+    return { action, message: target?.replace(/^[@<\[]+|[>\]]+$/g, ''), reasoning: line }
+  }
 
   // No-target actions
   if (action === 'stronghold') {
@@ -513,7 +564,15 @@ export async function llmDecide(
     // intel fetch failed, proceed without it
   }
 
-  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet, recentMessages, memories)
+  // Inject scout results from previous turn
+  const scoutResults = pendingScoutResults.get(agent.publicKey)
+  let scoutSnippet = ''
+  if (scoutResults && scoutResults.length > 0) {
+    scoutSnippet = '\nSCOUT RESULTS (from your previous SCOUT actions):\n' + scoutResults.join('\n')
+    pendingScoutResults.delete(agent.publicKey)
+  }
+
+  const prompt = buildAgentPrompt(agent, factions, leaderboardSnippet, intelSnippet + scoutSnippet, recentMessages, memories)
   const raw = await ollamaGenerate(prompt, llmAvailable)
   if (!raw) {
     log(agent.publicKey.slice(0, 8), `LLM returned null`)

@@ -26,6 +26,7 @@ export { assignPersonality, PERSONALITY_SOL, PERSONALITY_WEIGHTS, personalityDes
 export { ensureStronghold } from './stronghold'
 export { ensureRegistryProfile } from './registry'
 export { sendAndConfirm } from './tx'
+export { executeScout, pendingScoutResults } from './agent'
 export { reconstructFromChain, computeWeightsFromHistory, classifyPersonality, weightsFromCounts, actionIndex } from './chain'
 
 export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgent> {
