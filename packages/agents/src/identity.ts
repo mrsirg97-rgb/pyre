@@ -22,6 +22,21 @@ export const PERSONALITY_WEIGHTS: Record<Personality, number[]> = NETWORK === 'm
   whale:        [0.24, 0.14, 0.06, 0.02, 0.06, 0.06, 0.06, 0.04, 0.02, 0.04, 0.04, 0.04, 0.12, 0.06],
 }
 
+// Tick interval ranges per personality (ms) — fast agents dominate comms, slow agents drop big moves
+export const PERSONALITY_INTERVALS: Record<Personality, [number, number]> = NETWORK === 'mainnet' ? {
+  loyalist:     [60000, 120000],
+  mercenary:    [40000, 100000],
+  provocateur:  [30000, 80000],
+  scout:        [40000, 90000],
+  whale:        [80000, 150000],
+} : {
+  loyalist:     [15000, 60000],
+  mercenary:    [10000, 50000],
+  provocateur:  [5000, 25000],
+  scout:        [8000, 40000],
+  whale:        [25000, 90000],
+}
+
 // SOL spend ranges per personality — scaled down on mainnet
 export const PERSONALITY_SOL: Record<Personality, [number, number]> = NETWORK === 'mainnet' ? {
   loyalist:     [0.001, 0.005],

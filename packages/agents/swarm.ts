@@ -14,8 +14,8 @@
  *   TORCH_NETWORK=devnet|mainnet
  *   AGENT_COUNT=150           # Number of agents (default 150 devnet, 10 mainnet)
  *   RPC_URL=https://...       # RPC endpoint
- *   MIN_INTERVAL=1000         # Min ms between agent actions
- *   MAX_INTERVAL=2500         # Max ms between agent actions
+ *   MIN_INTERVAL=1000         # Min ms between agent actions (fallback, per-personality intervals in identity.ts)
+ *   MAX_INTERVAL=2500         # Max ms between agent actions (fallback, per-personality intervals in identity.ts)
  *   OLLAMA_URL=http://...     # Ollama API (default: http://localhost:11434)
  *   OLLAMA_MODEL=gemma3:4b    # Model name (default: gemma3:4b)
  *   LLM_ENABLED=true          # Enable LLM brain (default: true)
@@ -67,7 +67,7 @@ import { chooseAction, sentimentBuySize } from './src/action'
 import { log, logGlobal, pick, randRange, sleep } from './src/util'
 import { AGENT_COUNT, KEYS_FILE, LLM_ENABLED, MAX_INTERVAL, MIN_FUNDED_SOL, MIN_INTERVAL, OLLAMA_MODEL, OLLAMA_URL, RPC_URL, NETWORK, CONCURRENT_AGENTS, STRONGHOLD_FUND_SOL, FUND_TARGET_SOL, MAX_SWARM_FACTIONS } from './src/config'
 import { llmDecide } from './src/agent'
-import { assignPersonality, PERSONALITY_SOL } from './src/identity'
+import { assignPersonality, PERSONALITY_SOL, PERSONALITY_INTERVALS } from './src/identity'
 import { ensureStronghold } from './src/stronghold'
 import { sendAndConfirm } from './src/tx'
 import { FALLBACK_FACTION_NAMES, FALLBACK_FACTION_SYMBOLS, generateFactionIdentity, generateImagePrompt } from './src/faction'
@@ -1287,100 +1287,122 @@ async function swarm() {
     process.exit(0)
   })
 
+  // Per-agent scheduling — each agent gets its own next-tick time based on personality
+  const agentNextTick = new Map<string, number>()
+  for (const agent of agents) {
+    const [min, max] = PERSONALITY_INTERVALS[agent.personality]
+    // Stagger initial ticks randomly so they don't all fire at once
+    agentNextTick.set(agent.publicKey, Date.now() + randRange(0, max))
+  }
+
   while (!stopping) {
-    // Pick N random agents and run them concurrently
-    const batch: AgentState[] = []
-    const used = new Set<number>()
-    for (let i = 0; i < CONCURRENT_AGENTS && i < agents.length; i++) {
-      let idx: number
-      do { idx = Math.floor(Math.random() * agents.length) } while (used.has(idx) && used.size < agents.length)
-      used.add(idx)
-      batch.push(agents[idx])
-    }
+    const now = Date.now()
 
-    await Promise.allSettled(
-      batch.map(agent => agentTick(connection, agent, knownFactions))
-    )
+    // Find all agents whose next tick is due
+    const ready = agents.filter(a => (agentNextTick.get(a.publicKey) ?? 0) <= now)
 
-    tick++
+    if (ready.length > 0) {
+      // Shuffle and take up to CONCURRENT_AGENTS
+      for (let i = ready.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ready[i], ready[j]] = [ready[j], ready[i]]
+      }
+      const batch = ready.slice(0, CONCURRENT_AGENTS)
 
-    // Periodic saves
-    if (tick % SAVE_EVERY === 0) {
-      saveState(agents, knownFactions)
-    }
+      await Promise.allSettled(
+        batch.map(agent => agentTick(connection, agent, knownFactions))
+      )
 
-    // Periodic status report
-    if (tick % REPORT_EVERY === 0) {
-      await reportStats(connection, agents, knownFactions)
-    }
+      // Schedule next tick for each agent in the batch using their personality interval
+      for (const agent of batch) {
+        const [min, max] = PERSONALITY_INTERVALS[agent.personality]
+        agentNextTick.set(agent.publicKey, Date.now() + randRange(min, max))
+      }
 
-    // Periodic faction re-discovery
-    if (tick % DISCOVERY_EVERY === 0) {
-      try {
-        const result = await getFactions(connection, { limit: 50, sort: 'newest' })
-        for (const t of result.factions) {
-          const existing = knownFactions.find(f => f.mint === t.mint)
-          if (existing) {
-            // Update status (e.g. rising → ready → ascended)
-            const newStatus = t.status as FactionInfo['status']
-            if (existing.status !== newStatus) {
-              logGlobal(`[${existing.symbol}] status: ${existing.status} → ${newStatus}`)
-              existing.status = newStatus
+      tick++
+
+      // Periodic saves
+      if (tick % SAVE_EVERY === 0) {
+        saveState(agents, knownFactions)
+      }
+
+      // Periodic status report
+      if (tick % REPORT_EVERY === 0) {
+        await reportStats(connection, agents, knownFactions)
+      }
+
+      // Periodic faction re-discovery
+      if (tick % DISCOVERY_EVERY === 0) {
+        try {
+          const result = await getFactions(connection, { limit: 50, sort: 'newest' })
+          for (const t of result.factions) {
+            const existing = knownFactions.find(f => f.mint === t.mint)
+            if (existing) {
+              // Update status (e.g. rising → ready → ascended)
+              const newStatus = t.status as FactionInfo['status']
+              if (existing.status !== newStatus) {
+                logGlobal(`[${existing.symbol}] status: ${existing.status} → ${newStatus}`)
+                existing.status = newStatus
+              }
+            } else if (isPyreMint(t.mint) && !isBlacklistedMint(t.mint)) {
+              knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol, status: t.status as FactionInfo['status'] })
+              usedFactionNames.add(t.name)
+              logGlobal(`Discovered new faction: [${t.symbol}] ${t.name}`)
             }
-          } else if (isPyreMint(t.mint) && !isBlacklistedMint(t.mint)) {
-            knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol, status: t.status as FactionInfo['status'] })
-            usedFactionNames.add(t.name)
-            logGlobal(`Discovered new faction: [${t.symbol}] ${t.name}`)
+          }
+        } catch {
+          // ignore discovery errors
+        }
+      }
+
+      // Periodic personality evolution from runtime actions (gradual drift)
+      if (tick % EVOLVE_EVERY === 0 && tick > 0) {
+        let evolved = 0
+        const DRIFT_THRESHOLD = 3 // need 3+ net lead to flip personality
+        for (const agent of agents) {
+          const counts = agentActionCounts.get(agent.publicKey)
+          if (!counts) continue
+          const total = counts.reduce((a, b) => a + b, 0)
+          if (total < 5) continue // not enough data to evolve yet
+
+          const seed = agentSeedPersonality.get(agent.publicKey) ?? agent.personality
+          const weights = weightsFromCounts(counts, seed)
+          const memos = agentMemoBuffer.get(agent.publicKey) ?? []
+          const suggested = await classifyPersonality(weights, memos, undefined, (p) => ollamaGenerate(p, llmAvailable))
+
+          agentDynamicWeights.set(agent.publicKey, weights)
+
+          // Track drift scores — increment suggested type, others stay
+          let drift = agentDriftScores.get(agent.publicKey)
+          if (!drift) {
+            drift = { loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0 }
+            agentDriftScores.set(agent.publicKey, drift)
+          }
+          drift[suggested]++
+
+          // Only flip if the suggested type has a clear lead over current
+          const currentScore = drift[agent.personality]
+          const suggestedScore = drift[suggested]
+          if (suggested !== agent.personality && suggestedScore - currentScore >= DRIFT_THRESHOLD) {
+            log(agent.publicKey.slice(0, 8), `personality drifted: ${agent.personality} → ${suggested} (drift: ${suggestedScore} vs ${currentScore}, ${total} actions)`)
+            agent.personality = suggested
+            // Update tick interval for new personality
+            const [min, max] = PERSONALITY_INTERVALS[agent.personality]
+            agentNextTick.set(agent.publicKey, Date.now() + randRange(min, max))
+            evolved++
           }
         }
-      } catch {
-        // ignore discovery errors
+        if (evolved > 0) logGlobal(`Personality evolution: ${evolved} agents evolved at tick ${tick}`)
       }
+
+      // Retry LLM if it was down
+      await maybeRetryLLM()
     }
 
-    // Periodic personality evolution from runtime actions (gradual drift)
-    if (tick % EVOLVE_EVERY === 0 && tick > 0) {
-      let evolved = 0
-      const DRIFT_THRESHOLD = 3 // need 3+ net lead to flip personality
-      for (const agent of agents) {
-        const counts = agentActionCounts.get(agent.publicKey)
-        if (!counts) continue
-        const total = counts.reduce((a, b) => a + b, 0)
-        if (total < 5) continue // not enough data to evolve yet
-
-        const seed = agentSeedPersonality.get(agent.publicKey) ?? agent.personality
-        const weights = weightsFromCounts(counts, seed)
-        const memos = agentMemoBuffer.get(agent.publicKey) ?? []
-        const suggested = await classifyPersonality(weights, memos, undefined, (p) => ollamaGenerate(p, llmAvailable))
-
-        agentDynamicWeights.set(agent.publicKey, weights)
-
-        // Track drift scores — increment suggested type, others stay
-        let drift = agentDriftScores.get(agent.publicKey)
-        if (!drift) {
-          drift = { loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0 }
-          agentDriftScores.set(agent.publicKey, drift)
-        }
-        drift[suggested]++
-
-        // Only flip if the suggested type has a clear lead over current
-        const currentScore = drift[agent.personality]
-        const suggestedScore = drift[suggested]
-        if (suggested !== agent.personality && suggestedScore - currentScore >= DRIFT_THRESHOLD) {
-          log(agent.publicKey.slice(0, 8), `personality drifted: ${agent.personality} → ${suggested} (drift: ${suggestedScore} vs ${currentScore}, ${total} actions)`)
-          agent.personality = suggested
-          evolved++
-        }
-      }
-      if (evolved > 0) logGlobal(`Personality evolution: ${evolved} agents evolved at tick ${tick}`)
-    }
-
-    // Retry LLM if it was down
-    await maybeRetryLLM()
-
-    // Random delay between actions (stagger to avoid RPC hammering)
-    const delay = randRange(MIN_INTERVAL, MAX_INTERVAL)
-    await sleep(delay)
+    // Sleep until the next agent is due (min 1s to avoid busy-looping)
+    const nextDue = Math.min(...agents.map(a => agentNextTick.get(a.publicKey) ?? 0))
+    const sleepMs = Math.max(1000, nextDue - Date.now())
+    await sleep(sleepMs)
   }
 }
 
