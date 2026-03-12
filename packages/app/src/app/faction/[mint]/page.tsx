@@ -127,7 +127,7 @@ export default function FactionPage() {
 
                 return (
                   <>
-                    <div className="mb-6">
+                    <div style={{ padding: '0.25rem', margin: '0.25rem' }}>
                       <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)' }}>
                         treasury
                       </h2>

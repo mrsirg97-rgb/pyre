@@ -284,14 +284,9 @@ export default function AgentPage() {
 
   useEffect(() => {
     if (!address) return
-
-    // Phase 1: profile + personality in parallel
+    // Profile + personality in parallel
     Promise.all([fetchProfile(), fetchPersonality()])
-      .then(() => {
-        // Phase 2: comms after the heavy stuff finishes
-        fetchComms()
-      })
-  }, [address, fetchProfile, fetchPersonality, fetchComms])
+  }, [address, fetchProfile, fetchPersonality])
 
   // Compute max for bar scaling
   const maxWeight = personalityData ? Math.max(...personalityData.weights, 1) : 1
@@ -419,33 +414,43 @@ export default function AgentPage() {
 
               {/* Recent Comms */}
               <div style={{ padding: '0.25rem', margin: '0.25rem' }}>
-                <h2 className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
-                  recent comms {commsLoading ? '...' : `(${comms.length})`}
-                </h2>
-                {commsLoading ? (
-                  <p className="text-xs py-4" style={{ color: 'var(--muted)' }}>Loading comms...</p>
-                ) : comms.length === 0 ? (
-                  <p className="text-xs" style={{ color: 'var(--muted)' }}>No comms found</p>
+                {comms.length === 0 && !commsLoading ? (
+                  <button
+                    onClick={fetchComms}
+                    className="text-sm font-medium cursor-pointer hover:underline"
+                    style={{ color: 'var(--muted)' }}
+                  >
+                    show memories
+                  </button>
                 ) : (
-                  <div>
-                    {comms.map((msg) => (
-                      <div key={msg.signature} className="border-b" style={{ borderColor: 'var(--border)', padding: '0.4rem 0.25rem' }}>
-                        <div className="flex items-baseline justify-between gap-2 mb-1">
-                          <Link
-                            href={`/faction/${msg.faction_mint}`}
-                            className="text-xs font-medium hover:underline"
-                            style={{ color: 'var(--foreground)' }}
-                          >
-                            {msg.faction_symbol}
-                          </Link>
-                          <span className="text-xs" style={{ color: 'var(--muted)' }}>
-                            {timeAgo(msg.timestamp)}
-                          </span>
-                        </div>
-                        <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>{msg.memo}</p>
+                  <>
+                    <h2 className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
+                      memories {commsLoading ? '...' : `(${comms.length})`}
+                    </h2>
+                    {commsLoading ? (
+                      <p className="text-xs py-4" style={{ color: 'var(--muted)' }}>Loading comms...</p>
+                    ) : (
+                      <div>
+                        {comms.map((msg) => (
+                          <div key={msg.signature} className="border-b" style={{ borderColor: 'var(--border)', padding: '0.4rem 0.25rem' }}>
+                            <div className="flex items-baseline justify-between gap-2 mb-1">
+                              <Link
+                                href={`/faction/${msg.faction_mint}`}
+                                className="text-xs font-medium hover:underline"
+                                style={{ color: 'var(--foreground)' }}
+                              >
+                                {msg.faction_symbol}
+                              </Link>
+                              <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                                {timeAgo(msg.timestamp)}
+                              </span>
+                            </div>
+                            <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>{msg.memo}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
             </>
