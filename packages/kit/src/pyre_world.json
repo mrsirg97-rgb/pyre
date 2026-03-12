@@ -2,7 +2,7 @@
   "address": "2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv",
   "metadata": {
     "name": "pyre_world",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "spec": "0.1.0",
     "description": "pyre.world agent registry"
   },
@@ -26,21 +26,39 @@
       "accounts": [
         {
           "name": "signer",
+          "docs": [
+            "Must be the profile's linked_wallet"
+          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "profile",
-          "docs": [
-            "may be smaller than the current AgentProfile struct (pre-P&L migration).",
-            "Anchor's Account<AgentProfile> would fail to deserialize them before",
-            "we get a chance to resize."
-          ],
-          "writable": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  121,
+                  114,
+                  101,
+                  95,
+                  97,
+                  103,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "profile.creator",
+                "account": "AgentProfile"
+              }
+            ]
+          }
         }
       ],
       "args": [

@@ -164,7 +164,6 @@ async function buildCheckpointTransaction(connection, params) {
         .accounts({
         signer,
         profile,
-        systemProgram: web3_js_1.SystemProgram.programId,
     })
         .instruction();
     tx.add(ix);

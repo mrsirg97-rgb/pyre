@@ -129,7 +129,7 @@ const filterAndSort = (tokens, params) => {
             break;
     }
     const offset = params.offset || 0;
-    const limit = Math.min(params.limit || 50, 100);
+    const limit = params.limit || 50;
     return filtered.slice(offset, offset + limit);
 };
 const buildTokenDetail = (mint, bc, treasury, metadata, holdersCount, solPriceUsd, saidVerification, warnings, poolPrice) => {

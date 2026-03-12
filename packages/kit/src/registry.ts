@@ -210,7 +210,6 @@ export async function buildCheckpointTransaction(
     .accounts({
       signer,
       profile,
-      systemProgram: SystemProgram.programId,
     })
     .instruction();
 

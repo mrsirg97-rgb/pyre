@@ -17,7 +17,7 @@
     "@irys/upload-solana": "^0.1.8",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
-    "pyre-world-kit": "2.0.4",
+    "pyre-world-kit": "2.0.6",
     "tsx": "^4.19.4"
   },
   "packageManager": "pnpm@9.10.0+sha512.73a29afa36a0d092ece5271de5177ecbf8318d454ecd701343131b8ebc0c1a91c487da46ab77c8e596d6acf1461e3594ced4becedf8921b074fbd8653ed7051c"

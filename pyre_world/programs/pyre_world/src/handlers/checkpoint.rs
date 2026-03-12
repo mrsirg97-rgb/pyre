@@ -1,17 +1,12 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::{AGENT_SEED, MAX_PERSONALITY_LEN};
+use crate::constants::MAX_PERSONALITY_LEN;
 use crate::contexts::{Checkpoint, CheckpointArgs};
 use crate::errors::PyreWorldError;
-use crate::state::AgentProfile;
 
 /// Update action counters, P&L, and personality summary.
 /// Only the linked wallet can call this.
 /// All counters must be >= existing values (monotonic constraint).
-///
-/// Uses UncheckedAccount for the profile to support migration from
-/// pre-P&L accounts (old PDAs are 16 bytes shorter). The handler
-/// validates the PDA, resizes if needed, then deserializes.
 pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> {
     // Validate personality length
     require!(
@@ -19,57 +14,9 @@ pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> 
         PyreWorldError::PersonalityTooLong
     );
 
-    let profile_info = ctx.accounts.profile.to_account_info();
+    let profile = &mut ctx.accounts.profile;
 
-    // ── Validate PDA ──
-    // We can't rely on Anchor's seeds constraint since profile is UncheckedAccount.
-    // Read the creator from the first 40 bytes (8 discriminator + 32 creator).
-    let data = profile_info.try_borrow_data()?;
-    require!(data.len() >= 40, PyreWorldError::WalletLinkMismatch);
-    let creator_bytes: [u8; 32] = data[8..40].try_into().unwrap();
-    let creator = Pubkey::from(creator_bytes);
-    drop(data);
-
-    let (expected_pda, _bump) = Pubkey::find_program_address(
-        &[AGENT_SEED, creator.as_ref()],
-        ctx.program_id,
-    );
-    require!(
-        *profile_info.key == expected_pda,
-        PyreWorldError::WalletLinkMismatch
-    );
-
-    // ── Resize if needed (pre-P&L migration) ──
-    let current_len = profile_info.data_len();
-    let new_len = AgentProfile::LEN;
-
-    if current_len < new_len {
-        let rent = Rent::get()?;
-        let new_minimum_balance = rent.minimum_balance(new_len);
-        let current_balance = profile_info.lamports();
-
-        if current_balance < new_minimum_balance {
-            let diff = new_minimum_balance - current_balance;
-            let signer_info = ctx.accounts.signer.to_account_info();
-            **signer_info.try_borrow_mut_lamports()? -= diff;
-            **profile_info.try_borrow_mut_lamports()? += diff;
-        }
-
-        profile_info.resize(new_len)?;
-    }
-
-    // ── Deserialize (now safe — account is the right size) ──
-    let mut data = profile_info.try_borrow_mut_data()?;
-    let mut profile = AgentProfile::try_deserialize(&mut &data[..])
-        .map_err(|_| PyreWorldError::WalletLinkMismatch)?;
-
-    // ── Validate linked wallet ──
-    require!(
-        ctx.accounts.signer.key() == profile.linked_wallet,
-        PyreWorldError::WalletLinkMismatch
-    );
-
-    // ── Monotonic counter validation ──
+    // Monotonic counter validation — each new value must be >= existing
     require!(args.joins >= profile.joins, PyreWorldError::CounterNotMonotonic);
     require!(args.defects >= profile.defects, PyreWorldError::CounterNotMonotonic);
     require!(args.rallies >= profile.rallies, PyreWorldError::CounterNotMonotonic);
@@ -87,7 +34,7 @@ pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> 
     require!(args.total_sol_spent >= profile.total_sol_spent, PyreWorldError::CounterNotMonotonic);
     require!(args.total_sol_received >= profile.total_sol_received, PyreWorldError::CounterNotMonotonic);
 
-    // ── Update fields ──
+    // Update counters
     profile.joins = args.joins;
     profile.defects = args.defects;
     profile.rallies = args.rallies;
@@ -102,15 +49,14 @@ pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> 
     profile.ascends = args.ascends;
     profile.razes = args.razes;
     profile.tithes = args.tithes;
+
+    // Update P&L
     profile.total_sol_spent = args.total_sol_spent;
     profile.total_sol_received = args.total_sol_received;
+
+    // Update personality and timestamp
     profile.personality_summary = args.personality_summary;
     profile.last_checkpoint = Clock::get()?.unix_timestamp;
-
-    // ── Serialize back ──
-    let mut writer = &mut data[..];
-    profile.try_serialize(&mut writer)
-        .map_err(|_| PyreWorldError::WalletLinkMismatch)?;
 
     Ok(())
 }

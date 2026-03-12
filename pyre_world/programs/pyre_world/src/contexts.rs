@@ -66,17 +66,19 @@ pub struct Register<'info> {
 
 #[derive(Accounts)]
 pub struct Checkpoint<'info> {
-    #[account(mut)]
+    /// Must be the profile's linked_wallet
+    #[account(
+        mut,
+        constraint = signer.key() == profile.linked_wallet @ PyreWorldError::WalletLinkMismatch,
+    )]
     pub signer: Signer<'info>,
 
-    /// CHECK: Manual PDA validation and deserialization — needed because old PDAs
-    /// may be smaller than the current AgentProfile struct (pre-P&L migration).
-    /// Anchor's Account<AgentProfile> would fail to deserialize them before
-    /// we get a chance to resize.
-    #[account(mut)]
-    pub profile: UncheckedAccount<'info>,
-
-    pub system_program: Program<'info, System>,
+    #[account(
+        mut,
+        seeds = [AGENT_SEED, profile.creator.as_ref()],
+        bump = profile.bump,
+    )]
+    pub profile: Account<'info, AgentProfile>,
 }
 
 // ============================================================================
