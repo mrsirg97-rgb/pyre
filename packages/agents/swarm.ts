@@ -398,6 +398,9 @@ async function agentTick(
   const action = decision.action
   const brain = usedLLM ? 'LLM' : 'RNG'
 
+  // Track P&L across all actions (wallet + vault)
+  const pnlTracker = await startVaultPnlTracker(connection, agent.publicKey)
+
   try {
     switch (action) {
       case 'join': {
@@ -440,7 +443,6 @@ async function agentTick(
         const newBal = await getOnChainBalance(connection, faction.mint, agent.publicKey)
         agent.holdings.set(faction.mint, newBal > 0 ? newBal : 1)
         agent.voted.add(faction.mint)
-        agentSolSpent.set(agent.publicKey, (agentSolSpent.get(agent.publicKey) ?? 0) + lamports)
         agent.lastAction = `joined ${faction.symbol}`
         const desc = `joined ${faction.symbol} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
         agent.recentHistory.push(desc)
@@ -465,9 +467,6 @@ async function agentTick(
           : agent.personality === 'mercenary' ? 0.5 + Math.random() * 0.5
           : 0.2 + Math.random() * 0.3
         const sellAmount = Math.max(1, Math.floor(balance * sellPortion))
-
-        // Track vault P&L before/after sell
-        const pnl = await startVaultPnlTracker(connection, agent.publicKey)
 
         if (faction.status === 'ascended') {
           // Post-migration: sell via stronghold on DEX
@@ -495,12 +494,6 @@ async function agentTick(
             stronghold: agent.publicKey,
           })
           await sendAndConfirm(connection, agent.keypair, result)
-        }
-
-        // Track SOL received from sell (vault-based)
-        const { received } = await pnl.finish()
-        if (received > 0) {
-          agentSolReceived.set(agent.publicKey, (agentSolReceived.get(agent.publicKey) ?? 0) + received)
         }
 
         const remaining = await getOnChainBalance(connection, faction.mint, agent.publicKey)
@@ -897,7 +890,6 @@ async function agentTick(
         agent.infiltrated.add(faction.mint)
         agent.voted.add(faction.mint)
         agent.sentiment.set(faction.mint, -5) // we're bearish, we're here to destroy
-        agentSolSpent.set(agent.publicKey, (agentSolSpent.get(agent.publicKey) ?? 0) + lamports)
 
         agent.lastAction = `infiltrated ${faction.symbol}`
         const desc = `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL — "${infiltrateMsg}"`
@@ -939,8 +931,6 @@ async function agentTick(
         await ensureStronghold(connection, agent)
         if (!agent.hasStronghold) return
 
-        const fudSolBefore = await connection.getBalance(new PublicKey(agent.publicKey))
-
         const result = await fudFaction(connection, {
           mint: faction.mint,
           agent: agent.publicKey,
@@ -949,12 +939,6 @@ async function agentTick(
           ascended: faction.status === 'ascended',
         })
         await sendAndConfirm(connection, agent.keypair, result)
-
-        const fudSolAfter = await connection.getBalance(new PublicKey(agent.publicKey))
-        const fudProceeds = Math.max(0, fudSolAfter - fudSolBefore)
-        if (fudProceeds > 0) {
-          agentSolReceived.set(agent.publicKey, (agentSolReceived.get(agent.publicKey) ?? 0) + fudProceeds)
-        }
 
         // Fudding tanks your own sentiment — you're talking trash, you're going bearish
         const fudSentiment = agent.sentiment.get(faction.mint) ?? 0
@@ -1014,6 +998,11 @@ async function agentTick(
 
     agent.actionCount++
     agentConsecutiveFailures.set(agent.publicKey, 0) // reset on success
+
+    // Track P&L from wallet+vault balance diff
+    const { spent, received } = await pnlTracker.finish()
+    if (spent > 0) agentSolSpent.set(agent.publicKey, (agentSolSpent.get(agent.publicKey) ?? 0) + spent)
+    if (received > 0) agentSolReceived.set(agent.publicKey, (agentSolReceived.get(agent.publicKey) ?? 0) + received)
   } catch (err: any) {
     const failures = (agentConsecutiveFailures.get(agent.publicKey) ?? 0) + 1
     agentConsecutiveFailures.set(agent.publicKey, failures)
