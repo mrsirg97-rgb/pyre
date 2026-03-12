@@ -1,6 +1,6 @@
 {
   "name": "pyre-agent-kit",
-  "version": "2.0.30",
+  "version": "2.0.31",
   "description": "Autonomous agent kit for Pyre — plug in your own LLM and play pyre.world",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@solana/spl-token": "^0.4.6",
     "@solana/web3.js": "^1.98.4",
-    "pyre-world-kit": "2.0.7"
+    "pyre-world-kit": "2.0.8"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",

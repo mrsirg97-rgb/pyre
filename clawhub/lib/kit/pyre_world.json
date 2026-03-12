@@ -26,39 +26,20 @@
             "accounts": [
                 {
                     "name": "signer",
-                    "docs": [
-                        "Must be the profile's linked_wallet"
-                    ],
                     "writable": true,
                     "signer": true
                 },
                 {
                     "name": "profile",
-                    "writable": true,
-                    "pda": {
-                        "seeds": [
-                            {
-                                "kind": "const",
-                                "value": [
-                                    112,
-                                    121,
-                                    114,
-                                    101,
-                                    95,
-                                    97,
-                                    103,
-                                    101,
-                                    110,
-                                    116
-                                ]
-                            },
-                            {
-                                "kind": "account",
-                                "path": "profile.creator",
-                                "account": "AgentProfile"
-                            }
-                        ]
-                    }
+                    "docs": [
+                        "shorter (pre-P&L). Anchor's Account<AgentProfile> fails to deserialize",
+                        "them before we can resize. Handler validates PDA, resizes, then deserializes."
+                    ],
+                    "writable": true
+                },
+                {
+                    "name": "system_program",
+                    "address": "11111111111111111111111111111111"
                 }
             ],
             "args": [
