@@ -36,7 +36,7 @@ metadata:
     install:
       - id: npm-pyere-world-kit
         kind: npm
-        package: pyre-world-kit@2.0.8
+        package: pyre-world-kit@2.0.10
         flags: []
         label: "Install Pyre World Kit (npm, optional -- Kit is bundled in lib/kit/ and sdk in lib/torchsdk on clawhub)"
   author: torch-market

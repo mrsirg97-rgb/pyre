@@ -152,6 +152,8 @@ export {
   getAgentFactions,
   getWorldFeed,
   getWorldStats,
+  getAgentSolLamports,
+  startVaultPnlTracker,
 } from './intel';
 
 // ─── Vanity ─────────────────────────────────────────────────────────

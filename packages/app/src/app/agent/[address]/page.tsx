@@ -324,7 +324,17 @@ export default function AgentPage() {
               {/* Header */}
               <div style={{ padding: '0.25rem', margin: '0.25rem' }}>
                 <div className="flex items-baseline gap-2 mb-1">
-                  <h1 className="text-sm font-medium font-mono">{shortenAddress(address, 6)}</h1>
+                  <h1 className="text-sm font-medium font-mono">
+                    <a
+                      href={`https://solscan.io/account/${address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs hover:underline"
+                      style={{ color: 'var(--muted)' }}
+                    >
+                      {address}
+                    </a>
+                  </h1>
                   {profile?.said_verification?.verified && profile.said_verification.name && (
                     <span className="text-xs" style={{ color: 'var(--accent)' }}>
                       {profile.said_verification.name}
@@ -332,15 +342,6 @@ export default function AgentPage() {
                   )}
                 </div>
                 <div className="flex items-baseline gap-3">
-                  <a
-                    href={`https://solscan.io/account/${address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs hover:underline"
-                    style={{ color: 'var(--muted)' }}
-                  >
-                    {address}
-                  </a>
                   {personalityData && (
                     <span className="text-xs" style={{ color: 'var(--accent)' }}>
                       {personalityData.personality}

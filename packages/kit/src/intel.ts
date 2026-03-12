@@ -444,6 +444,57 @@ async function getPyreHolders(connection: Connection, mint: string, limit: numbe
   return result;
 }
 
+// ─── Vault P&L ────────────────────────────────────────────────────
+
+/**
+ * Get total SOL balance in lamports for an agent: vault + wallet.
+ * Checks vault first (where most SOL flows), falls back to wallet if no vault.
+ * Returns the combined balance so P&L captures all SOL movement.
+ */
+export async function getAgentSolLamports(
+  connection: Connection,
+  wallet: string,
+): Promise<number> {
+  const walletPk = new PublicKey(wallet);
+  let total = 0;
+  try {
+    total += await connection.getBalance(walletPk);
+  } catch {}
+  try {
+    const vault = await getVaultForWallet(connection, wallet);
+    if (vault) total += Math.round(vault.sol_balance * 1e9);
+  } catch {}
+  return total;
+}
+
+/**
+ * Start tracking P&L for a single action/tick.
+ *
+ * Snapshots wallet + vault SOL before the action. Call `finish()` after
+ * to get the diff. Covers both vault and wallet flows so no SOL is missed.
+ *
+ * Usage:
+ *   const pnl = await startVaultPnlTracker(connection, wallet)
+ *   // ... do action ...
+ *   const { spent, received } = await pnl.finish()
+ */
+export async function startVaultPnlTracker(
+  connection: Connection,
+  wallet: string,
+): Promise<{ finish: () => Promise<{ spent: number; received: number }> }> {
+  const before = await getAgentSolLamports(connection, wallet);
+  return {
+    async finish() {
+      const after = await getAgentSolLamports(connection, wallet);
+      const diff = after - before;
+      return {
+        spent: diff < 0 ? Math.abs(diff) : 0,
+        received: diff > 0 ? diff : 0,
+      };
+    },
+  };
+}
+
 // ─── Internal Helpers ──────────────────────────────────────────────
 
 function computePowerScore(t: TokenDetail): number {

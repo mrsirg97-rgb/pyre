@@ -15,7 +15,7 @@ import * as path from 'path'
 import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js'
 
 import { createPyreAgent, sendAndConfirm } from './index'
-import { buildCheckpointTransaction, getRegistryProfile } from 'pyre-world-kit'
+import { buildCheckpointTransaction, getRegistryProfile, startVaultPnlTracker } from 'pyre-world-kit'
 import type { LLMAdapter, Personality, FactionInfo } from './types'
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -379,16 +379,16 @@ async function runAgent(config: AgentConfig) {
 
   while (running) {
     try {
-      const solBefore = await connection.getBalance(keypair.publicKey)
+      // Track vault P&L before/after tick
+      const pnl = await startVaultPnlTracker(connection, keypair.publicKey.toBase58())
+
       const result = await agent.tick()
       tickCount++
 
-      // Track P&L from SOL balance changes
       if (result.success) {
-        const solAfter = await connection.getBalance(keypair.publicKey)
-        const diff = solAfter - solBefore
-        if (diff < 0) totalSolSpent += Math.abs(diff)  // spent SOL (buy)
-        if (diff > 0) totalSolReceived += diff           // received SOL (sell)
+        const { spent, received } = await pnl.finish()
+        totalSolSpent += spent
+        totalSolReceived += received
       }
 
       const status = result.success ? 'OK' : `FAIL: ${result.error}`

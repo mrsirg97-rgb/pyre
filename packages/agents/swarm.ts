@@ -64,6 +64,7 @@ import {
   buildCheckpointTransaction,
   buildUnlinkAgentWalletTransaction,
   getAgentFactions,
+  startVaultPnlTracker,
 } from 'pyre-world-kit'
 import type { WarLoan } from 'pyre-world-kit'
 import * as fs from 'fs'
@@ -465,8 +466,8 @@ async function agentTick(
           : 0.2 + Math.random() * 0.3
         const sellAmount = Math.max(1, Math.floor(balance * sellPortion))
 
-        // Track SOL balance before sell to compute proceeds
-        const solBefore = await connection.getBalance(new PublicKey(agent.publicKey))
+        // Track vault P&L before/after sell
+        const pnl = await startVaultPnlTracker(connection, agent.publicKey)
 
         if (faction.status === 'ascended') {
           // Post-migration: sell via stronghold on DEX
@@ -496,11 +497,10 @@ async function agentTick(
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
-        // Track SOL received from sell
-        const solAfter = await connection.getBalance(new PublicKey(agent.publicKey))
-        const proceeds = Math.max(0, solAfter - solBefore)
-        if (proceeds > 0) {
-          agentSolReceived.set(agent.publicKey, (agentSolReceived.get(agent.publicKey) ?? 0) + proceeds)
+        // Track SOL received from sell (vault-based)
+        const { received } = await pnl.finish()
+        if (received > 0) {
+          agentSolReceived.set(agent.publicKey, (agentSolReceived.get(agent.publicKey) ?? 0) + received)
         }
 
         const remaining = await getOnChainBalance(connection, faction.mint, agent.publicKey)
