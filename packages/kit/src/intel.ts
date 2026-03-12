@@ -245,7 +245,8 @@ export async function getAgentProfile(
 /**
  * List all factions an agent holds tokens in.
  *
- * Scans the wallet's token accounts directly, then matches against known factions.
+ * Scans both the wallet's and vault's Token-2022 accounts, merging balances.
+ * Agents may hold tokens directly (no vault) or via stronghold (vault).
  */
 export async function getAgentFactions(
   connection: Connection,
@@ -255,20 +256,33 @@ export async function getAgentFactions(
   const { TOKEN_2022_PROGRAM_ID } = await import('@solana/spl-token');
   const walletPk = new PublicKey(wallet);
 
-  // Get all Token-2022 accounts for this wallet
-  const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPk, {
+  // Scan wallet token accounts
+  const walletAccounts = await connection.getParsedTokenAccountsByOwner(walletPk, {
     programId: TOKEN_2022_PROGRAM_ID,
   });
 
-  // Filter to pyre mints with non-zero balance
-  const heldMints = tokenAccounts.value
-    .map(a => ({
-      mint: a.account.data.parsed.info.mint as string,
-      balance: Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0),
-    }))
-    .filter(a => a.balance > 0 && isPyreMint(a.mint));
+  // Scan vault token accounts if a vault exists
+  let vaultAccounts: typeof walletAccounts = { context: walletAccounts.context, value: [] };
+  try {
+    const vault = await getVaultForWallet(connection, wallet);
+    if (!vault) throw new Error('no vault');
+    const vaultPk = new PublicKey(vault.address);
+    vaultAccounts = await connection.getParsedTokenAccountsByOwner(vaultPk, {
+      programId: TOKEN_2022_PROGRAM_ID,
+    });
+  } catch {}
 
-  if (heldMints.length === 0) return [];
+  // Merge balances from both sources (wallet + vault)
+  const balanceMap = new Map<string, number>();
+  for (const a of [...walletAccounts.value, ...vaultAccounts.value]) {
+    const mint = a.account.data.parsed.info.mint as string;
+    const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0);
+    if (balance > 0 && isPyreMint(mint)) {
+      balanceMap.set(mint, (balanceMap.get(mint) ?? 0) + balance);
+    }
+  }
+
+  if (balanceMap.size === 0) return [];
 
   // Fetch faction metadata for held mints
   const allFactions = await getTokens(connection, { limit: factionLimit });
@@ -277,7 +291,7 @@ export async function getAgentFactions(
   );
 
   const positions: AgentFactionPosition[] = [];
-  for (const { mint, balance } of heldMints) {
+  for (const [mint, balance] of balanceMap) {
     const faction = factionMap.get(mint);
     if (!faction) continue;
 
