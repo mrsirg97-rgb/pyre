@@ -63,6 +63,7 @@ import {
   buildRegisterAgentTransaction,
   buildCheckpointTransaction,
   buildUnlinkAgentWalletTransaction,
+  getAgentFactions,
 } from 'pyre-world-kit'
 import type { WarLoan } from 'pyre-world-kit'
 import * as fs from 'fs'
@@ -1332,6 +1333,24 @@ async function swarm() {
     await sleep(300)
   }
   logGlobal(`${registeredCount}/${agents.length} agents registered on-chain`)
+
+  // Bootstrap holdings from on-chain token accounts
+  logGlobal('Bootstrapping agent holdings from chain...')
+  let bootstrapCount = 0
+  for (const agent of agents) {
+    try {
+      const positions = await getAgentFactions(connection, agent.publicKey)
+      if (positions.length > 0) {
+        for (const pos of positions) {
+          agent.holdings.set(pos.mint, pos.balance)
+          agent.voted.add(pos.mint)
+        }
+        bootstrapCount++
+      }
+    } catch {}
+    await sleep(200)
+  }
+  logGlobal(`${bootstrapCount}/${agents.length} agents bootstrapped with on-chain holdings`)
 
   // Health check — flag agents with stale or missing checkpoints
   const STALE_HOURS = 6

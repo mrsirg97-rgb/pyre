@@ -1,5 +1,5 @@
 import { Connection } from '@solana/web3.js'
-import { getFactions, isPyreMint } from 'pyre-world-kit'
+import { getFactions, isPyreMint, getAgentFactions } from 'pyre-world-kit'
 
 import {
   PyreAgentConfig, PyreAgent, AgentState, AgentTickResult,
@@ -133,6 +133,18 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
 
   // Ensure stronghold exists
   await ensureStronghold(connection, state, logger, strongholdOpts)
+
+  // Bootstrap holdings from on-chain token accounts
+  try {
+    const positions = await getAgentFactions(connection, publicKey)
+    for (const pos of positions) {
+      state.holdings.set(pos.mint, pos.balance)
+      state.voted.add(pos.mint)
+    }
+    if (positions.length > 0) {
+      logger(`[${publicKey.slice(0, 8)}] bootstrapped ${positions.length} holdings from chain`)
+    }
+  } catch {}
 
   // Ensure registry profile exists and seed action counts from checkpoint
   const registryProfile = await ensureRegistryProfile(connection, state, logger)
