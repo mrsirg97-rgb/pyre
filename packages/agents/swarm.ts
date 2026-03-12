@@ -71,7 +71,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Action, AgentState, FactionInfo, LLMDecision, Personality } from './src/types'
 import { chooseAction, sentimentBuySize } from './src/action'
-import { log, logGlobal, pick, randRange, sleep } from './src/util'
+import { log, logGlobal, pick, randRange, sleep, truncateToBytes } from './src/util'
 import { AGENT_COUNT, KEYS_FILE, LLM_ENABLED, MAX_INTERVAL, MIN_FUNDED_SOL, MIN_INTERVAL, OLLAMA_MODEL, OLLAMA_URL, RPC_URL, NETWORK, CONCURRENT_AGENTS, STRONGHOLD_FUND_SOL, FUND_TARGET_SOL, MAX_SWARM_FACTIONS } from './src/config'
 import { llmDecide, executeScout, pendingScoutResults, ollamaGenerate } from './src/agent'
 import { assignPersonality, PERSONALITY_SOL, PERSONALITY_INTERVALS } from './src/identity'
@@ -185,7 +185,7 @@ ${memos.slice(-8).map(m => `- "${m}"`).join('\n')}
 Bio (max 200 chars, no quotes, third person, like a character description):`
       const bio = await ollamaGenerate(bioPrompt, llmAvailable)
       if (bio) {
-        personalitySummary = bio.replace(/^["']+|["']+$/g, '').slice(0, 200)
+        personalitySummary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
       }
     } catch {
       // fall back to label
@@ -398,10 +398,9 @@ async function agentTick(
   const action = decision.action
   const brain = usedLLM ? 'LLM' : 'RNG'
 
-  // Track P&L across all actions (wallet + vault)
-  const pnlTracker = await startVaultPnlTracker(connection, agent.publicKey)
-
   try {
+    // Track P&L across all actions (wallet + vault)
+    const pnlTracker = await startVaultPnlTracker(connection, agent.publicKey)
     switch (action) {
       case 'join': {
         const faction = knownFactions.find(f => f.symbol === decision!.faction)

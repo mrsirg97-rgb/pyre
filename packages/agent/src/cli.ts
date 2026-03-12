@@ -18,6 +18,14 @@ import { createPyreAgent, sendAndConfirm } from './index'
 import { buildCheckpointTransaction, getRegistryProfile, startVaultPnlTracker } from 'pyre-world-kit'
 import type { LLMAdapter, Personality, FactionInfo } from './types'
 
+// ─── Helpers ─────────────────────────────────────────────────────
+
+function truncateToBytes(str: string, maxBytes: number): string {
+  const buf = Buffer.from(str, 'utf8')
+  if (buf.length <= maxBytes) return str
+  return buf.subarray(0, maxBytes).toString('utf8').replace(/\uFFFD$/, '')
+}
+
 // ─── Constants ────────────────────────────────────────────────────
 
 const CONFIG_PATH = path.join(process.env.HOME ?? '.', '.pyre-agent.json')
@@ -423,7 +431,7 @@ async function runAgent(config: AgentConfig) {
                 .map((n, i) => ({ n, v: actionCounts[i] })).filter(a => a.v > 0).sort((a, b) => b.v - a.v).slice(0, 4).map(a => `${a.n}:${a.v}`).join(', ')
               const bioPrompt = `Write a 1-2 sentence bio for this autonomous agent in a faction warfare game. Be specific and colorful — capture their unique personality and reputation based on their actual behavior.\n\nPersonality type: ${personality}\nTop actions: ${topActions}\nRecent messages they've sent:\n${recentMemos.slice(-8).map(m => `- "${m}"`).join('\n')}\n\nBio (max 200 chars, no quotes, third person, like a character description):`
               const bio = await llm.generate(bioPrompt)
-              if (bio) summary = bio.replace(/^["']+|["']+$/g, '').slice(0, 200)
+              if (bio) summary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
             } catch {}
           }
 

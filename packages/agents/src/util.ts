@@ -10,3 +10,11 @@ export const log = (agent: string, msg: string) => {
 export const logGlobal = (msg: string) => {
   console.log(`[${ts()}] [SWARM] ${msg}`)
 }
+
+/** Truncate a string to fit within a byte limit (safe for multibyte UTF-8) */
+export function truncateToBytes(str: string, maxBytes: number): string {
+  const buf = Buffer.from(str, 'utf8')
+  if (buf.length <= maxBytes) return str
+  // Slice bytes and decode back — Buffer.toString handles partial multibyte chars
+  return buf.subarray(0, maxBytes).toString('utf8').replace(/\uFFFD$/, '')
+}

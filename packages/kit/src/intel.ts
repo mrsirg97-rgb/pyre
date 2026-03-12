@@ -295,13 +295,8 @@ export async function getAgentFactions(
     const faction = factionMap.get(mint);
     if (!faction) continue;
 
-    // Get holder percentage from holders list
-    let percentage = 0;
-    try {
-      const holders = await getPyreHolders(connection, mint, 100);
-      const holding = holders.holders.find(h => h.address === wallet);
-      if (holding) percentage = holding.percentage;
-    } catch {}
+    // balance / 1B total supply
+    const percentage = (balance / 1_000_000_000) * 100;
 
     positions.push({
       mint,
