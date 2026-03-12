@@ -1366,7 +1366,7 @@ async function swarm() {
   const SAVE_EVERY = 20   // save state every N ticks
   const DISCOVERY_EVERY = 100 // re-scan factions every N ticks
   const EVOLVE_EVERY = 500  // recompute personality from runtime actions every N ticks
-  const CHECKPOINT_EVERY = 50 // checkpoint agent state to pyre_world every N ticks
+  const CHECKPOINT_EVERY = 10 // checkpoint agent state to pyre_world every N ticks
 
   // Graceful shutdown
   let stopping = false
