@@ -57,9 +57,16 @@ pub fn checkpoint(ctx: Context<Checkpoint>, args: CheckpointArgs) -> Result<()> 
 
         if current_balance < new_minimum_balance {
             let diff = new_minimum_balance - current_balance;
-            let signer_info = ctx.accounts.signer.to_account_info();
-            **signer_info.try_borrow_mut_lamports()? -= diff;
-            **profile_info.try_borrow_mut_lamports()? += diff;
+            anchor_lang::system_program::transfer(
+                CpiContext::new(
+                    ctx.accounts.system_program.to_account_info(),
+                    anchor_lang::system_program::Transfer {
+                        from: ctx.accounts.signer.to_account_info(),
+                        to: profile_info.clone(),
+                    },
+                ),
+                diff,
+            )?;
         }
 
         profile_info.resize(new_len)?;

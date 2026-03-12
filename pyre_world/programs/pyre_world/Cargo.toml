@@ -1,6 +1,6 @@
 [package]
 name = "pyre_world"
-version = "1.0.2"
+version = "1.0.3"
 description = "pyre.world agent registry"
 edition = "2021"
 

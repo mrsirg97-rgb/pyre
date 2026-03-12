@@ -2,7 +2,7 @@
   "address": "2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv",
   "metadata": {
     "name": "pyre_world",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "spec": "0.1.0",
     "description": "pyre.world agent registry"
   },
