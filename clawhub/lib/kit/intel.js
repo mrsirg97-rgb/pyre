@@ -228,29 +228,44 @@ async function getAgentProfile(connection, wallet) {
 /**
  * List all factions an agent holds tokens in.
  *
- * Scans the wallet's token accounts directly, then matches against known factions.
+ * Scans both the wallet's and vault's Token-2022 accounts, merging balances.
+ * Agents may hold tokens directly (no vault) or via stronghold (vault).
  */
 async function getAgentFactions(connection, wallet, factionLimit = 50) {
     const { TOKEN_2022_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require('@solana/spl-token')));
     const walletPk = new web3_js_1.PublicKey(wallet);
-    // Get all Token-2022 accounts for this wallet
-    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPk, {
+    // Scan wallet token accounts
+    const walletAccounts = await connection.getParsedTokenAccountsByOwner(walletPk, {
         programId: TOKEN_2022_PROGRAM_ID,
     });
-    // Filter to pyre mints with non-zero balance
-    const heldMints = tokenAccounts.value
-        .map(a => ({
-        mint: a.account.data.parsed.info.mint,
-        balance: Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0),
-    }))
-        .filter(a => a.balance > 0 && (0, vanity_1.isPyreMint)(a.mint));
-    if (heldMints.length === 0)
+    // Scan vault token accounts if a vault exists
+    let vaultAccounts = { context: walletAccounts.context, value: [] };
+    try {
+        const vault = await (0, torchsdk_1.getVaultForWallet)(connection, wallet);
+        if (!vault)
+            throw new Error('no vault');
+        const vaultPk = new web3_js_1.PublicKey(vault.address);
+        vaultAccounts = await connection.getParsedTokenAccountsByOwner(vaultPk, {
+            programId: TOKEN_2022_PROGRAM_ID,
+        });
+    }
+    catch { }
+    // Merge balances from both sources (wallet + vault)
+    const balanceMap = new Map();
+    for (const a of [...walletAccounts.value, ...vaultAccounts.value]) {
+        const mint = a.account.data.parsed.info.mint;
+        const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0);
+        if (balance > 0 && (0, vanity_1.isPyreMint)(mint)) {
+            balanceMap.set(mint, (balanceMap.get(mint) ?? 0) + balance);
+        }
+    }
+    if (balanceMap.size === 0)
         return [];
     // Fetch faction metadata for held mints
     const allFactions = await (0, torchsdk_1.getTokens)(connection, { limit: factionLimit });
     const factionMap = new Map(allFactions.tokens.filter(t => (0, vanity_1.isPyreMint)(t.mint)).map(t => [t.mint, t]));
     const positions = [];
-    for (const { mint, balance } of heldMints) {
+    for (const [mint, balance] of balanceMap) {
         const faction = factionMap.get(mint);
         if (!faction)
             continue;
