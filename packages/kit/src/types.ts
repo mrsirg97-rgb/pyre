@@ -470,3 +470,87 @@ export interface WorldStats {
   total_sol_locked: number;
   most_powerful: FactionPower | null;
 }
+
+// ─── Registry Types (pyre_world on-chain agent identity) ──────────
+
+/** On-chain agent profile from pyre_world registry */
+export interface RegistryProfile {
+  address: string;
+  creator: string;
+  authority: string;
+  linked_wallet: string;
+  personality_summary: string;
+  last_checkpoint: number;
+  joins: number;
+  defects: number;
+  rallies: number;
+  launches: number;
+  messages: number;
+  fuds: number;
+  infiltrates: number;
+  reinforces: number;
+  war_loans: number;
+  repay_loans: number;
+  sieges: number;
+  ascends: number;
+  razes: number;
+  tithes: number;
+  created_at: number;
+  bump: number;
+}
+
+/** On-chain wallet link from pyre_world registry */
+export interface RegistryWalletLink {
+  address: string;
+  profile: string;
+  wallet: string;
+  linked_at: number;
+  bump: number;
+}
+
+/** Params for checkpointing agent state on-chain */
+export interface CheckpointParams {
+  signer: string;
+  creator: string;
+  joins: number;
+  defects: number;
+  rallies: number;
+  launches: number;
+  messages: number;
+  fuds: number;
+  infiltrates: number;
+  reinforces: number;
+  war_loans: number;
+  repay_loans: number;
+  sieges: number;
+  ascends: number;
+  razes: number;
+  tithes: number;
+  personality_summary: string;
+}
+
+/** Params for registering a new agent */
+export interface RegisterAgentParams {
+  creator: string;
+}
+
+/** Params for linking a wallet to an agent profile */
+export interface LinkAgentWalletParams {
+  authority: string;
+  creator: string;
+  wallet_to_link: string;
+}
+
+/** Params for unlinking a wallet from an agent profile */
+export interface UnlinkAgentWalletParams {
+  authority: string;
+  creator: string;
+  wallet_to_unlink: string;
+}
+
+/** Params for transferring agent profile authority */
+export interface TransferAgentAuthorityParams {
+  authority: string;
+  creator: string;
+  new_authority: string;
+}

@@ -58,6 +58,10 @@ import {
   // Blacklist
   blacklistMints,
   isBlacklistedMint,
+  // Registry (pyre_world on-chain identity)
+  getRegistryProfile,
+  buildRegisterAgentTransaction,
+  buildCheckpointTransaction,
 } from 'pyre-world-kit'
 import type { WarLoan } from 'pyre-world-kit'
 import * as fs from 'fs'
@@ -87,7 +91,7 @@ const agentMemoBuffer = new Map<string, string[]>()     // pubkey -> memos gener
 const agentSeedPersonality = new Map<string, Personality>() // original seed personality for weight blending
 const agentDriftScores = new Map<string, Record<Personality, number>>() // pubkey -> drift tally per personality
 
-/** Record a successful action for live personality evolution */
+/** Record a successful action for live personality evolution + checkpoint tracking */
 function recordAgentAction(pubkey: string, action: Action, memo?: string) {
   const idx = actionIndex(action)
   if (idx < 0) return
@@ -95,9 +99,86 @@ function recordAgentAction(pubkey: string, action: Action, memo?: string) {
     agentActionCounts.set(pubkey, new Array(14).fill(0))
   }
   agentActionCounts.get(pubkey)![idx]++
+  // Also increment cumulative counts for on-chain checkpoint
+  if (!agentTotalCounts.has(pubkey)) {
+    agentTotalCounts.set(pubkey, new Array(14).fill(0))
+  }
+  agentTotalCounts.get(pubkey)![idx]++
   if (memo?.trim()) {
     if (!agentMemoBuffer.has(pubkey)) agentMemoBuffer.set(pubkey, [])
     agentMemoBuffer.get(pubkey)!.push(memo)
+  }
+}
+
+// Per-agent cumulative action counts for checkpoint (monotonically increasing)
+// These accumulate across the full swarm lifetime, unlike agentActionCounts which tracks per-evolution-window
+const agentTotalCounts = new Map<string, number[]>()
+const agentRegistered = new Set<string>() // agents that have on-chain registry profiles
+
+/** Register an agent on pyre_world if not already registered */
+async function ensureRegistered(connection: Connection, agent: AgentState): Promise<boolean> {
+  if (agentRegistered.has(agent.publicKey)) return true
+  try {
+    const existing = await getRegistryProfile(connection, agent.publicKey)
+    if (existing) {
+      agentRegistered.add(agent.publicKey)
+      // Seed cumulative counts from on-chain state (mapped back to ALL_ACTIONS index order)
+      // ALL_ACTIONS: 0=join, 1=defect, 2=rally, 3=launch, 4=message,
+      //   5=stronghold(reinforces), 6=war_loan, 7=repay_loan, 8=siege,
+      //   9=ascend, 10=raze, 11=tithe, 12=infiltrate, 13=fud
+      agentTotalCounts.set(agent.publicKey, [
+        existing.joins, existing.defects, existing.rallies, existing.launches,
+        existing.messages, existing.reinforces, existing.war_loans, existing.repay_loans,
+        existing.sieges, existing.ascends, existing.razes, existing.tithes,
+        existing.infiltrates, existing.fuds,
+      ])
+      return true
+    }
+  } catch { /* not registered yet */ }
+
+  try {
+    const result = await buildRegisterAgentTransaction(connection, { creator: agent.publicKey })
+    await sendAndConfirm(connection, agent.keypair, result)
+    agentRegistered.add(agent.publicKey)
+    agentTotalCounts.set(agent.publicKey, new Array(14).fill(0))
+    log(agent.publicKey.slice(0, 8), `[registry] registered on-chain`)
+    return true
+  } catch (err: any) {
+    log(agent.publicKey.slice(0, 8), `[registry] register failed: ${err.message?.slice(0, 80)}`)
+    return false
+  }
+}
+
+/** Checkpoint an agent's action counts + personality to pyre_world */
+async function checkpointAgent(connection: Connection, agent: AgentState): Promise<boolean> {
+  const counts = agentTotalCounts.get(agent.publicKey)
+  if (!counts) return false
+
+  // Build personality summary from recent memories (truncate to 256 chars)
+  const memos = agentMemories.get(agent.publicKey) ?? []
+  const personalitySummary = memos.length > 0
+    ? `${agent.personality}: ${memos.slice(-5).join('. ')}`.slice(0, 256)
+    : agent.personality
+
+  try {
+    const result = await buildCheckpointTransaction(connection, {
+      signer: agent.publicKey,
+      creator: agent.publicKey,
+      // Indices match ALL_ACTIONS in chain.ts:
+      // 0=join, 1=defect, 2=rally, 3=launch, 4=message,
+      // 5=stronghold(→reinforces), 6=war_loan, 7=repay_loan, 8=siege,
+      // 9=ascend, 10=raze, 11=tithe, 12=infiltrate, 13=fud
+      joins: counts[0], defects: counts[1], rallies: counts[2], launches: counts[3],
+      messages: counts[4], fuds: counts[13], infiltrates: counts[12], reinforces: counts[5],
+      war_loans: counts[6], repay_loans: counts[7], sieges: counts[8], ascends: counts[9],
+      razes: counts[10], tithes: counts[11],
+      personality_summary: personalitySummary,
+    })
+    await sendAndConfirm(connection, agent.keypair, result)
+    return true
+  } catch (err: any) {
+    log(agent.publicKey.slice(0, 8), `[registry] checkpoint failed: ${err.message?.slice(0, 80)}`)
+    return false
   }
 }
 
@@ -1124,6 +1205,16 @@ async function swarm() {
   }
   logGlobal(`${strongholdCount}/${agents.length} agents have strongholds`)
 
+  // Register all agents on pyre_world registry
+  logGlobal('Registering agents on pyre_world...')
+  let registeredCount = 0
+  for (const agent of agents) {
+    const ok = await ensureRegistered(connection, agent)
+    if (ok) registeredCount++
+    await sleep(300)
+  }
+  logGlobal(`${registeredCount}/${agents.length} agents registered on-chain`)
+
   // Blacklist old factions on devnet so agents start fresh (skip on mainnet — join real factions)
   if (NETWORK !== 'mainnet') {
     logGlobal('Blacklisting old factions...')
@@ -1275,6 +1366,7 @@ async function swarm() {
   const SAVE_EVERY = 20   // save state every N ticks
   const DISCOVERY_EVERY = 100 // re-scan factions every N ticks
   const EVOLVE_EVERY = 500  // recompute personality from runtime actions every N ticks
+  const CHECKPOINT_EVERY = 50 // checkpoint agent state to pyre_world every N ticks
 
   // Graceful shutdown
   let stopping = false
@@ -1393,6 +1485,20 @@ async function swarm() {
           }
         }
         if (evolved > 0) logGlobal(`Personality evolution: ${evolved} agents evolved at tick ${tick}`)
+      }
+
+      // Periodic checkpoint to pyre_world registry
+      if (tick % CHECKPOINT_EVERY === 0 && tick > 0) {
+        let checkpointed = 0
+        for (const agent of agents) {
+          if (!agentRegistered.has(agent.publicKey)) continue
+          const counts = agentTotalCounts.get(agent.publicKey)
+          if (!counts || counts.every(c => c === 0)) continue
+          const ok = await checkpointAgent(connection, agent)
+          if (ok) checkpointed++
+          await sleep(200)
+        }
+        if (checkpointed > 0) logGlobal(`[registry] checkpointed ${checkpointed} agents at tick ${tick}`)
       }
 
       // Retry LLM if it was down

@@ -74,6 +74,14 @@ export type {
   WorldEventType,
   WorldEvent,
   WorldStats,
+  // Registry types (pyre_world on-chain identity)
+  RegistryProfile,
+  RegistryWalletLink,
+  CheckpointParams,
+  RegisterAgentParams,
+  LinkAgentWalletParams,
+  UnlinkAgentWalletParams,
+  TransferAgentAuthorityParams,
 } from './types';
 
 // ─── Actions ───────────────────────────────────────────────────────
@@ -149,6 +157,24 @@ export {
 // ─── Vanity ─────────────────────────────────────────────────────────
 
 export { isPyreMint, grindPyreMint } from './vanity';
+
+// ─── Registry (pyre_world on-chain agent identity) ──────────────────
+
+export {
+  // Program ID & PDA helpers
+  REGISTRY_PROGRAM_ID,
+  getAgentProfilePda,
+  getAgentWalletLinkPda,
+  // Read operations
+  getRegistryProfile,
+  getRegistryWalletLink,
+  // Transaction builders
+  buildRegisterAgentTransaction,
+  buildCheckpointTransaction,
+  buildLinkAgentWalletTransaction,
+  buildUnlinkAgentWalletTransaction,
+  buildTransferAgentAuthorityTransaction,
+} from './registry';
 
 // ─── Re-export torchsdk constants for convenience ──────────────────
 
