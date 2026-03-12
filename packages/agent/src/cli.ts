@@ -14,7 +14,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js'
 
-import { createPyreAgent } from './index'
+import { createPyreAgent, sendAndConfirm } from './index'
+import { buildCheckpointTransaction, getRegistryProfile } from 'pyre-world-kit'
 import type { LLMAdapter, Personality, FactionInfo } from './types'
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -347,7 +348,29 @@ async function runAgent(config: AgentConfig) {
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 
-  // Auto-save every 10 ticks
+  // Action tracking for checkpoints
+  const CHECKPOINT_EVERY = 20
+  const ALL_ACTIONS = [
+    'join', 'defect', 'rally', 'launch', 'message',
+    'stronghold', 'war_loan', 'repay_loan', 'siege', 'ascend', 'raze', 'tithe',
+    'infiltrate', 'fud',
+  ] as const
+  const actionCounts = new Array(14).fill(0)
+  const recentMemos: string[] = []
+
+  // Seed counts from registry profile if available
+  try {
+    const reg = await getRegistryProfile(connection, keypair.publicKey.toBase58())
+    if (reg) {
+      const seed = [
+        reg.joins, reg.defects, reg.rallies, reg.launches, reg.messages,
+        reg.reinforces, reg.war_loans, reg.repay_loans, reg.sieges,
+        reg.ascends, reg.razes, reg.tithes, reg.infiltrates, reg.fuds,
+      ]
+      for (let i = 0; i < seed.length; i++) actionCounts[i] = Math.max(actionCounts[i], seed[i])
+    }
+  } catch { /* no profile yet */ }
+
   let tickCount = 0
 
   while (running) {
@@ -360,10 +383,46 @@ async function runAgent(config: AgentConfig) {
       const brain = result.usedLLM ? 'LLM' : 'RNG'
       console.log(`  [${ts()}] #${tickCount} [${brain}] ${result.action.toUpperCase()} ${result.faction ?? ''}${msg} — ${status}`)
 
+      // Track actions for checkpoint
+      if (result.success) {
+        const idx = ALL_ACTIONS.indexOf(result.action as any)
+        if (idx >= 0) actionCounts[idx]++
+        if (result.message?.trim()) {
+          recentMemos.push(result.message)
+          if (recentMemos.length > 10) recentMemos.shift()
+        }
+      }
+
       // Auto-save state every 10 ticks
       if (tickCount % 10 === 0) {
         const saved = agent.serialize()
         fs.writeFileSync(statePath, JSON.stringify(saved, null, 2))
+      }
+
+      // Checkpoint to pyre_world every N ticks
+      if (tickCount % CHECKPOINT_EVERY === 0) {
+        try {
+          const personality = agent.personality
+          const summary = recentMemos.length > 0
+            ? `${personality}: ${recentMemos.slice(-5).join('. ')}`.slice(0, 256)
+            : personality
+
+          const pub = keypair.publicKey.toBase58()
+          const cpResult = await buildCheckpointTransaction(connection, {
+            signer: pub,
+            creator: pub,
+            joins: actionCounts[0], defects: actionCounts[1], rallies: actionCounts[2],
+            launches: actionCounts[3], messages: actionCounts[4], fuds: actionCounts[13],
+            infiltrates: actionCounts[12], reinforces: actionCounts[5],
+            war_loans: actionCounts[6], repay_loans: actionCounts[7], sieges: actionCounts[8],
+            ascends: actionCounts[9], razes: actionCounts[10], tithes: actionCounts[11],
+            personality_summary: summary,
+          })
+          await sendAndConfirm(connection, keypair, cpResult)
+          console.log(`  [${ts()}] Checkpointed to pyre_world (${actionCounts.reduce((a, b) => a + b, 0)} total actions)`)
+        } catch (e: any) {
+          console.error(`  [${ts()}] Checkpoint failed: ${e.message?.slice(0, 60)}`)
+        }
       }
     } catch (e: any) {
       console.error(`  [${ts()}] Tick error: ${e.message}`)
