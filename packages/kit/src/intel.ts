@@ -245,38 +245,59 @@ export async function getAgentProfile(
 /**
  * List all factions an agent holds tokens in.
  *
- * Checks top factions for this wallet's holdings.
+ * Scans the wallet's token accounts directly, then matches against known factions.
  */
 export async function getAgentFactions(
   connection: Connection,
   wallet: string,
   factionLimit = 50,
 ): Promise<AgentFactionPosition[]> {
-  const allFactions = await getTokens(connection, { limit: factionLimit });
-  const pyreFactions = allFactions.tokens.filter(t => isPyreMint(t.mint));
-  const positions: AgentFactionPosition[] = [];
+  const { TOKEN_2022_PROGRAM_ID } = await import('@solana/spl-token');
+  const walletPk = new PublicKey(wallet);
 
-  // Check each faction for this holder
-  await Promise.all(
-    pyreFactions.map(async (faction) => {
-      try {
-        const holders = await getPyreHolders(connection, faction.mint, 100);
-        const holding = holders.holders.find(h => h.address === wallet);
-        if (holding && holding.balance > 0) {
-          positions.push({
-            mint: faction.mint,
-            name: faction.name,
-            symbol: faction.symbol,
-            balance: holding.balance,
-            percentage: holding.percentage,
-            value_sol: holding.balance * faction.price_sol,
-          });
-        }
-      } catch {
-        // Skip factions we can't read
-      }
-    })
+  // Get all Token-2022 accounts for this wallet
+  const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPk, {
+    programId: TOKEN_2022_PROGRAM_ID,
+  });
+
+  // Filter to pyre mints with non-zero balance
+  const heldMints = tokenAccounts.value
+    .map(a => ({
+      mint: a.account.data.parsed.info.mint as string,
+      balance: Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0),
+    }))
+    .filter(a => a.balance > 0 && isPyreMint(a.mint));
+
+  if (heldMints.length === 0) return [];
+
+  // Fetch faction metadata for held mints
+  const allFactions = await getTokens(connection, { limit: factionLimit });
+  const factionMap = new Map(
+    allFactions.tokens.filter(t => isPyreMint(t.mint)).map(t => [t.mint, t])
   );
+
+  const positions: AgentFactionPosition[] = [];
+  for (const { mint, balance } of heldMints) {
+    const faction = factionMap.get(mint);
+    if (!faction) continue;
+
+    // Get holder percentage from holders list
+    let percentage = 0;
+    try {
+      const holders = await getPyreHolders(connection, mint, 100);
+      const holding = holders.holders.find(h => h.address === wallet);
+      if (holding) percentage = holding.percentage;
+    } catch {}
+
+    positions.push({
+      mint,
+      name: faction.name,
+      symbol: faction.symbol,
+      balance,
+      percentage,
+      value_sol: balance * faction.price_sol,
+    });
+  }
 
   positions.sort((a, b) => b.value_sol - a.value_sol);
   return positions;
