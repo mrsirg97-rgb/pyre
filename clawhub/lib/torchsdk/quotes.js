@@ -5,7 +5,7 @@
  * Get expected output for buy/sell operations.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getSellQuote = exports.getBuyQuote = void 0;
+exports.getBorrowQuote = exports.getSellQuote = exports.getBuyQuote = void 0;
 const web3_js_1 = require("@solana/web3.js");
 const program_1 = require("./program");
 const constants_1 = require("./constants");
@@ -76,4 +76,41 @@ const getSellQuote = async (connection, mintStr, amountTokens) => {
     };
 };
 exports.getSellQuote = getSellQuote;
+/**
+ * Get a borrow quote: maximum borrowable SOL for a given collateral amount on a migrated token.
+ *
+ * @param collateralAmount - Collateral in token base units (with 6 decimals)
+ */
+const getBorrowQuote = async (connection, mintStr, collateralAmount) => {
+    const TRANSFER_FEE_BPS = 4;
+    const [lending, detail] = await Promise.all([
+        (0, tokens_1.getLendingInfo)(connection, mintStr),
+        (0, tokens_1.getToken)(connection, mintStr),
+    ]);
+    const pricePerToken = detail.price_sol;
+    const collateralDisplayTokens = collateralAmount / constants_1.TOKEN_MULTIPLIER;
+    const collateralValueSol = collateralDisplayTokens * pricePerToken * constants_1.LAMPORTS_PER_SOL;
+    // 1. LTV cap
+    const ltvMaxSol = collateralValueSol * (lending.max_ltv_bps / 10000);
+    // 2. Pool available
+    const treasurySol = detail.treasury_sol_balance * constants_1.LAMPORTS_PER_SOL;
+    const maxLendableSol = treasurySol * lending.utilization_cap_bps / 10000;
+    const totalLent = lending.total_sol_lent ?? 0;
+    const poolAvailableSol = Math.max(0, maxLendableSol - totalLent);
+    // 3. Per-user cap (accounts for transfer fee reducing net collateral)
+    const netCollateral = collateralAmount * (1 - TRANSFER_FEE_BPS / 10000);
+    const borrowMultiplier = lending.borrow_share_multiplier || 3;
+    const perUserCapSol = maxLendableSol * netCollateral * borrowMultiplier / Number(constants_1.TOTAL_SUPPLY);
+    const maxBorrowSol = Math.max(0, Math.min(ltvMaxSol, poolAvailableSol, perUserCapSol));
+    return {
+        max_borrow_sol: Math.floor(maxBorrowSol),
+        collateral_value_sol: Math.floor(collateralValueSol),
+        ltv_max_sol: Math.floor(ltvMaxSol),
+        pool_available_sol: Math.floor(poolAvailableSol),
+        per_user_cap_sol: Math.floor(perUserCapSol),
+        interest_rate_bps: lending.interest_rate_bps,
+        liquidation_threshold_bps: lending.liquidation_threshold_bps,
+    };
+};
+exports.getBorrowQuote = getBorrowQuote;
 //# sourceMappingURL=quotes.js.map

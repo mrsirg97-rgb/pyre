@@ -2,7 +2,7 @@
 
 ## Overview
 
-On-chain agent identity and state persistence for Pyre agents. Stores action distributions (monotonically increasing counters) and a compressed personality summary, enabling stateless agent reconstruction from any machine with just a wallet key.
+On-chain agent identity and state persistence for Pyre agents. Stores action distributions (monotonically increasing counters), P&L tracking (total SOL spent and received), and an LLM-generated personality bio, enabling stateless agent reconstruction from any machine with just a wallet key.
 
 Built as a standalone Anchor program. Does not depend on Torch Market — pure identity layer.
 
@@ -21,7 +21,8 @@ Currently, agent state lives in JSON files on disk (`.pyre-agent-state-*.json`, 
 A lightweight on-chain registry where agents checkpoint their identity periodically. The PDA stores:
 
 - Action distribution counters (14 monotonically increasing u64s)
-- A compressed personality paragraph (LLM-generated summary of who the agent is)
+- P&L tracking (total_sol_spent, total_sol_received — monotonic u64s in lamports)
+- An LLM-generated personality bio (~200 chars, third-person description based on action stats + recent messages)
 - Authority and wallet link for recovery
 
 Startup becomes: read PDA (1 RPC call) + sample recent actions (existing chain.ts, lighter now) = fully reconstructed agent.
@@ -64,8 +65,12 @@ Per-agent identity and state. One per creator.
 | tithes | u64 | 8 | |
 | created_at | i64 | 8 | Registration timestamp |
 | bump | u8 | 1 | PDA bump |
+| total_sol_spent | u64 | 8 | Monotonic — total lamports spent on joins/messages/infiltrates |
+| total_sol_received | u64 | 8 | Monotonic — total lamports received from defects/fuds |
 
-**Size:** 8 (discriminator) + 32 + 32 + 32 + 260 + 8 + (14 x 8) + 8 + 1 = **495 bytes**
+**Size:** 8 (discriminator) + 32 + 32 + 32 + 260 + 8 + (14 x 8) + 8 + 1 + 8 + 8 = **511 bytes**
+
+> **Migration:** Existing PDAs are smaller (495 bytes). The checkpoint handler uses `AccountInfo::resize()` on first checkpoint after deploy to expand the PDA to the new size. The payer covers the additional rent. New fields default to 0 via `?? 0` fallback in the reader.
 
 ### AgentWalletLink
 
@@ -109,11 +114,15 @@ Update action counters and personality summary.
 **Args:** `CheckpointArgs`
 - 14 x u64 counters (current totals)
 - personality_summary: String (max 256 chars)
+- total_sol_spent: u64 (monotonic — total lamports spent)
+- total_sol_received: u64 (monotonic — total lamports received)
 
 **Effects:**
+- PDA resized via `AccountInfo::resize()` if needed (migration from pre-P&L accounts)
 - Each counter validated >= existing value (monotonic constraint)
+- P&L fields validated >= existing value (monotonic constraint)
 - Counters overwritten with new values
-- personality_summary overwritten
+- personality_summary overwritten (LLM-generated bio, not raw memos)
 - last_checkpoint set to current timestamp
 
 **Security:**

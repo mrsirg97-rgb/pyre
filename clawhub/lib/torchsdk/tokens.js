@@ -143,7 +143,8 @@ const buildTokenDetail = (mint, bc, treasury, metadata, holdersCount, solPriceUs
     let marketCapSol;
     if (bc.migrated && poolPrice && poolPrice.tokenReserves > 0) {
         // Use live Raydium pool price for migrated tokens
-        priceInSol = poolPrice.solReserves / poolPrice.tokenReserves;
+        // solReserves is in lamports, tokenReserves is in base units (10^6)
+        priceInSol = (poolPrice.solReserves * constants_1.TOKEN_MULTIPLIER) / (poolPrice.tokenReserves * constants_1.LAMPORTS_PER_SOL);
     }
     else {
         // Use bonding curve virtual reserves for pre-migration tokens
@@ -378,70 +379,135 @@ exports.getHolders = getHolders;
 /**
  * Get messages (memos) for a token.
  */
-const getMessages = async (connection, mintStr, limit = 50) => {
+const getMessages = async (connection, mintStr, limit = 50, opts) => {
     const mint = new web3_js_1.PublicKey(mintStr);
     const safeLimit = Math.min(limit, 100);
-    const [bondingCurvePda] = (0, program_1.getBondingCurvePda)(mint);
-    // Fetch only as many signatures as needed (keep small to avoid 429s)
     const sigLimit = Math.min(safeLimit, 50);
-    const signatures = await connection.getSignaturesForAddress(bondingCurvePda, { limit: sigLimit }, 'confirmed');
-    if (signatures.length === 0)
-        return { messages: [], total: 0 };
-    const messages = [];
-    // Batch fetch transactions (1 RPC call per batch instead of 1 per tx)
-    const BATCH_SIZE = 100;
-    for (let i = 0; i < signatures.length && messages.length < safeLimit; i += BATCH_SIZE) {
-        const batch = signatures.slice(i, i + BATCH_SIZE);
-        const sigStrings = batch.map((s) => s.signature);
-        let txs;
+    const source = opts?.source ?? 'all';
+    // Helper: extract memo from a parsed transaction
+    const extractMemo = async (tx, signature, blockTime) => {
+        const allInstructions = [
+            ...tx.transaction.message.instructions,
+            ...(tx.meta?.innerInstructions || []).flatMap(inner => inner.instructions),
+        ];
+        for (const ix of allInstructions) {
+            const programId = 'programId' in ix ? ix.programId.toString() : '';
+            const programName = 'program' in ix ? ix.program : '';
+            const isMemo = programId === constants_1.MEMO_PROGRAM_ID.toString() ||
+                programId === 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr' ||
+                programName === 'spl-memo';
+            if (isMemo) {
+                let memoText = '';
+                if ('parsed' in ix) {
+                    memoText = typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed);
+                }
+                else if ('data' in ix && typeof ix.data === 'string') {
+                    try {
+                        const bs58 = await Promise.resolve().then(() => __importStar(require('bs58')));
+                        const decoded = bs58.default.decode(ix.data);
+                        memoText = new TextDecoder().decode(decoded);
+                    }
+                    catch {
+                        memoText = ix.data;
+                    }
+                }
+                if (memoText && memoText.trim()) {
+                    const sender = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || 'Unknown';
+                    return {
+                        signature,
+                        memo: memoText.trim(),
+                        sender,
+                        timestamp: blockTime,
+                    };
+                }
+            }
+        }
+        return null;
+    };
+    // Helper: fetch messages from a given account's signatures
+    const fetchMessagesFromAccount = async (account) => {
+        const signatures = await connection.getSignaturesForAddress(account, { limit: sigLimit }, 'confirmed');
+        if (signatures.length === 0)
+            return [];
+        const result = [];
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < signatures.length && result.length < safeLimit; i += BATCH_SIZE) {
+            const batch = signatures.slice(i, i + BATCH_SIZE);
+            const sigStrings = batch.map((s) => s.signature);
+            let txs;
+            try {
+                txs = await connection.getParsedTransactions(sigStrings, {
+                    maxSupportedTransactionVersion: 0,
+                });
+            }
+            catch {
+                continue;
+            }
+            for (let j = 0; j < txs.length && result.length < safeLimit; j++) {
+                const tx = txs[j];
+                if (!tx?.meta || tx.meta.err)
+                    continue;
+                const msg = await extractMemo(tx, batch[j].signature, batch[j].blockTime || 0);
+                if (msg)
+                    result.push(msg);
+            }
+        }
+        return result;
+    };
+    // Fetch from requested source(s)
+    let bondingMessages = [];
+    let poolMessages = [];
+    if (source === 'bonding' || source === 'all') {
+        const [bondingCurvePda] = (0, program_1.getBondingCurvePda)(mint);
+        bondingMessages = await fetchMessagesFromAccount(bondingCurvePda).catch(() => []);
+    }
+    if (source === 'pool' || source === 'all') {
         try {
-            txs = await connection.getParsedTransactions(sigStrings, {
-                maxSupportedTransactionVersion: 0,
-            });
+            const { poolState } = (0, program_1.getRaydiumMigrationAccounts)(mint);
+            poolMessages = await fetchMessagesFromAccount(poolState);
         }
         catch {
-            continue;
+            // no pool
         }
-        for (let j = 0; j < txs.length && messages.length < safeLimit; j++) {
-            const tx = txs[j];
-            if (!tx?.meta || tx.meta.err)
-                continue;
-            for (const ix of tx.transaction.message.instructions) {
-                const programId = 'programId' in ix ? ix.programId.toString() : '';
-                const programName = 'program' in ix ? ix.program : '';
-                const isMemo = programId === constants_1.MEMO_PROGRAM_ID.toString() ||
-                    programId === 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr' ||
-                    programName === 'spl-memo';
-                if (isMemo) {
-                    let memoText = '';
-                    if ('parsed' in ix) {
-                        memoText = typeof ix.parsed === 'string' ? ix.parsed : JSON.stringify(ix.parsed);
-                    }
-                    else if ('data' in ix && typeof ix.data === 'string') {
-                        try {
-                            const bs58 = await Promise.resolve().then(() => __importStar(require('bs58')));
-                            const decoded = bs58.default.decode(ix.data);
-                            memoText = new TextDecoder().decode(decoded);
-                        }
-                        catch {
-                            memoText = ix.data;
-                        }
-                    }
-                    if (memoText && memoText.trim()) {
-                        const sender = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || 'Unknown';
-                        messages.push({
-                            signature: batch[j].signature,
-                            memo: memoText.trim(),
-                            sender,
-                            timestamp: batch[j].blockTime || 0,
-                        });
-                        break;
-                    }
+    }
+    // Merge, dedupe by signature, sort newest first, trim to limit
+    const seen = new Set();
+    const messages = [];
+    for (const m of [...bondingMessages, ...poolMessages]) {
+        if (!seen.has(m.signature)) {
+            seen.add(m.signature);
+            messages.push(m);
+        }
+    }
+    messages.sort((a, b) => b.timestamp - a.timestamp);
+    const trimmed = messages.slice(0, safeLimit);
+    // Enrich with SAID verification when opted in
+    if (opts?.enrich) {
+        const { verifySaid } = await Promise.resolve().then(() => __importStar(require('./said')));
+        const uniqueSenders = [...new Set(trimmed.map(m => m.sender))];
+        const verifications = await Promise.all(uniqueSenders.map(async (sender) => {
+            try {
+                const v = await verifySaid(sender);
+                return [sender, v];
+            }
+            catch {
+                return [sender, null];
+            }
+        }));
+        const verifyMap = new Map(verifications);
+        for (const msg of trimmed) {
+            const v = verifyMap.get(msg.sender);
+            if (v) {
+                msg.sender_verified = v.verified;
+                msg.sender_trust_tier = v.trustTier;
+                msg.sender_said_name = v.name;
+                if (v.verified) {
+                    msg.sender_badge_url = `https://api.saidprotocol.com/api/badge/${msg.sender}.svg`;
                 }
             }
         }
     }
-    return { messages, total: messages.length };
+    return { messages: trimmed, total: trimmed.length };
 };
 exports.getMessages = getMessages;
 // ============================================================================

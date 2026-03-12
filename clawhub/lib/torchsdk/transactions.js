@@ -1096,7 +1096,7 @@ exports.buildMigrateTransaction = buildMigrateTransaction;
  * @returns Unsigned transaction and descriptive message
  */
 const buildVaultSwapTransaction = async (connection, params) => {
-    const { mint: mintStr, signer: signerStr, vault_creator: vaultCreatorStr, amount_in, minimum_amount_out, is_buy } = params;
+    const { mint: mintStr, signer: signerStr, vault_creator: vaultCreatorStr, amount_in, minimum_amount_out, is_buy, message } = params;
     const mint = new web3_js_1.PublicKey(mintStr);
     const signer = new web3_js_1.PublicKey(signerStr);
     const vaultCreator = new web3_js_1.PublicKey(vaultCreatorStr);
@@ -1156,6 +1156,19 @@ const buildVaultSwapTransaction = async (connection, params) => {
     })
         .instruction();
     tx.add(swapIx);
+    // Bundle optional message as SPL Memo instruction
+    // Vault swap txs are large (~868 bytes base), so truncate message to fit
+    // within the 1232-byte legacy transaction limit
+    if (message && message.trim().length > 0) {
+        const MAX_VAULT_SWAP_MESSAGE = 280;
+        const trimmed = message.trim().slice(0, MAX_VAULT_SWAP_MESSAGE);
+        const memoIx = new web3_js_1.TransactionInstruction({
+            programId: constants_1.MEMO_PROGRAM_ID,
+            keys: [{ pubkey: signer, isSigner: true, isWritable: false }],
+            data: Buffer.from(trimmed, 'utf-8'),
+        });
+        tx.add(memoIx);
+    }
     await finalizeTransaction(connection, tx, signer);
     const direction = is_buy ? 'Buy' : 'Sell';
     const amountLabel = is_buy

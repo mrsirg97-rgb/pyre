@@ -5,6 +5,39 @@
  * Game-specific utility functions that compose torchsdk reads into
  * strategic intelligence. Agents use these to reason about the world.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getFactionPower = getFactionPower;
 exports.getFactionLeaderboard = getFactionLeaderboard;
@@ -14,8 +47,10 @@ exports.getAgentProfile = getAgentProfile;
 exports.getAgentFactions = getAgentFactions;
 exports.getWorldFeed = getWorldFeed;
 exports.getWorldStats = getWorldStats;
+const web3_js_1 = require("@solana/web3.js");
 const torchsdk_1 = require("torchsdk");
 const mappers_1 = require("./mappers");
+const vanity_1 = require("./vanity");
 // ─── Faction Power & Rankings ──────────────────────────────────────
 /**
  * Calculate a faction's power score.
@@ -53,8 +88,11 @@ async function getFactionLeaderboard(connection, opts) {
         razed: 'reclaimed',
     };
     const sdkStatus = opts?.status ? statusMap[opts.status] : 'all';
-    const result = await (0, torchsdk_1.getTokens)(connection, { limit: opts?.limit ?? 100, status: sdkStatus });
-    const powers = result.tokens.map((t) => ({
+    // Fetch more than requested to account for non-pyre tokens being filtered out
+    const fetchLimit = Math.min((opts?.limit ?? 20) * 3, 100);
+    const result = await (0, torchsdk_1.getTokens)(connection, { limit: fetchLimit, status: sdkStatus });
+    const pyreFactions = result.tokens.filter(t => (0, vanity_1.isPyreMint)(t.mint));
+    const powers = pyreFactions.map((t) => ({
         mint: t.mint,
         name: t.name,
         symbol: t.symbol,
@@ -79,7 +117,7 @@ async function getFactionLeaderboard(connection, opts) {
 async function detectAlliances(connection, mints, holderLimit = 50) {
     // Fetch holders for each faction in parallel
     const holdersPerFaction = await Promise.all(mints.map(async (mint) => {
-        const result = await (0, torchsdk_1.getHolders)(connection, mint, holderLimit);
+        const result = await getPyreHolders(connection, mint, holderLimit);
         return { mint, holders: new Set(result.holders.map(h => h.address)) };
     }));
     // Find overlapping holders between faction pairs
@@ -118,10 +156,10 @@ async function getFactionRivals(connection, mint, limit = 50) {
     const rivalCounts = new Map();
     // Get all factions to cross-reference
     const allFactions = await (0, torchsdk_1.getTokens)(connection, { limit: 20, sort: 'volume' });
-    for (const faction of allFactions.tokens) {
+    for (const faction of allFactions.tokens.filter(t => (0, vanity_1.isPyreMint)(t.mint))) {
         if (faction.mint === mint)
             continue;
-        const holders = await (0, torchsdk_1.getHolders)(connection, faction.mint, 50);
+        const holders = await getPyreHolders(connection, faction.mint, 50);
         const holderAddrs = new Set(holders.holders.map(h => h.address));
         const overlap = [...defectors].filter(d => holderAddrs.has(d)).length;
         if (overlap > 0) {
@@ -163,7 +201,7 @@ async function getAgentProfile(connection, wallet) {
     const factions = await getAgentFactions(connection, wallet);
     // Find factions this wallet created
     const allFactions = await (0, torchsdk_1.getTokens)(connection, { limit: 100 });
-    const founded = allFactions.tokens
+    const founded = allFactions.tokens.filter(t => (0, vanity_1.isPyreMint)(t.mint))
         .filter(t => t.mint) // TokenSummary doesn't have creator, so we skip for now
         .map(t => t.mint);
     const totalValue = factions.reduce((sum, f) => sum + f.value_sol, 0);
@@ -190,31 +228,50 @@ async function getAgentProfile(connection, wallet) {
 /**
  * List all factions an agent holds tokens in.
  *
- * Checks top factions for this wallet's holdings.
+ * Scans the wallet's token accounts directly, then matches against known factions.
  */
 async function getAgentFactions(connection, wallet, factionLimit = 50) {
+    const { TOKEN_2022_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require('@solana/spl-token')));
+    const walletPk = new web3_js_1.PublicKey(wallet);
+    // Get all Token-2022 accounts for this wallet
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPk, {
+        programId: TOKEN_2022_PROGRAM_ID,
+    });
+    // Filter to pyre mints with non-zero balance
+    const heldMints = tokenAccounts.value
+        .map(a => ({
+        mint: a.account.data.parsed.info.mint,
+        balance: Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0),
+    }))
+        .filter(a => a.balance > 0 && (0, vanity_1.isPyreMint)(a.mint));
+    if (heldMints.length === 0)
+        return [];
+    // Fetch faction metadata for held mints
     const allFactions = await (0, torchsdk_1.getTokens)(connection, { limit: factionLimit });
+    const factionMap = new Map(allFactions.tokens.filter(t => (0, vanity_1.isPyreMint)(t.mint)).map(t => [t.mint, t]));
     const positions = [];
-    // Check each faction for this holder
-    await Promise.all(allFactions.tokens.map(async (faction) => {
+    for (const { mint, balance } of heldMints) {
+        const faction = factionMap.get(mint);
+        if (!faction)
+            continue;
+        // Get holder percentage from holders list
+        let percentage = 0;
         try {
-            const holders = await (0, torchsdk_1.getHolders)(connection, faction.mint, 100);
+            const holders = await getPyreHolders(connection, mint, 100);
             const holding = holders.holders.find(h => h.address === wallet);
-            if (holding && holding.balance > 0) {
-                positions.push({
-                    mint: faction.mint,
-                    name: faction.name,
-                    symbol: faction.symbol,
-                    balance: holding.balance,
-                    percentage: holding.percentage,
-                    value_sol: holding.balance * faction.price_sol,
-                });
-            }
+            if (holding)
+                percentage = holding.percentage;
         }
-        catch {
-            // Skip factions we can't read
-        }
-    }));
+        catch { }
+        positions.push({
+            mint,
+            name: faction.name,
+            symbol: faction.symbol,
+            balance,
+            percentage,
+            value_sol: balance * faction.price_sol,
+        });
+    }
     positions.sort((a, b) => b.value_sol - a.value_sol);
     return positions;
 }
@@ -230,7 +287,7 @@ async function getWorldFeed(connection, opts) {
     const allFactions = await (0, torchsdk_1.getTokens)(connection, { limit: factionLimit, sort: 'newest' });
     const events = [];
     // Add launch events for each faction
-    for (const faction of allFactions.tokens) {
+    for (const faction of allFactions.tokens.filter(t => (0, vanity_1.isPyreMint)(t.mint))) {
         events.push({
             type: 'launch',
             faction_mint: faction.mint,
@@ -283,12 +340,11 @@ async function getWorldFeed(connection, opts) {
  * Global stats: total factions, total agents, total SOL locked.
  */
 async function getWorldStats(connection) {
-    const [all, rising, ascended] = await Promise.all([
-        (0, torchsdk_1.getTokens)(connection, { limit: 1, status: 'all' }),
-        (0, torchsdk_1.getTokens)(connection, { limit: 100, status: 'bonding' }),
-        (0, torchsdk_1.getTokens)(connection, { limit: 100, status: 'migrated' }),
-    ]);
-    const allFactions = [...rising.tokens, ...ascended.tokens];
+    const all = await (0, torchsdk_1.getTokens)(connection, { limit: 200, status: 'all' });
+    const pyreAll = all.tokens.filter(t => (0, vanity_1.isPyreMint)(t.mint));
+    const pyreRising = pyreAll.filter(t => t.status === 'bonding');
+    const pyreAscended = pyreAll.filter(t => t.status === 'migrated');
+    const allFactions = [...pyreRising, ...pyreAscended];
     const totalSolLocked = allFactions.reduce((sum, t) => sum + t.market_cap_sol, 0);
     // Find most powerful
     let mostPowerful = null;
@@ -312,12 +368,23 @@ async function getWorldStats(connection) {
         }
     }
     return {
-        total_factions: all.total,
-        rising_factions: rising.total,
-        ascended_factions: ascended.total,
+        total_factions: pyreAll.length,
+        rising_factions: pyreRising.length,
+        ascended_factions: pyreAscended.length,
         total_sol_locked: totalSolLocked,
         most_powerful: mostPowerful,
     };
+}
+/** Fetch holders excluding program-owned accounts (bonding curve, treasury, treasury lock) */
+async function getPyreHolders(connection, mint, limit) {
+    const mintPk = new web3_js_1.PublicKey(mint);
+    const [bondingCurve] = (0, vanity_1.getBondingCurvePda)(mintPk);
+    const [treasury] = (0, vanity_1.getTokenTreasuryPda)(mintPk);
+    const [treasuryLock] = (0, vanity_1.getTreasuryLockPda)(mintPk);
+    const excluded = new Set([bondingCurve.toString(), treasury.toString(), treasuryLock.toString()]);
+    const result = await (0, torchsdk_1.getHolders)(connection, mint, limit + 5);
+    result.holders = result.holders.filter(h => !excluded.has(h.address)).slice(0, limit);
+    return result;
 }
 // ─── Internal Helpers ──────────────────────────────────────────────
 function computePowerScore(t) {

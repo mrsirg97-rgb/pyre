@@ -10,6 +10,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getTreasuryLockPda = exports.getTokenTreasuryPda = exports.getBondingCurvePda = void 0;
 exports.grindPyreMint = grindPyreMint;
 exports.isPyreMint = isPyreMint;
 exports.buildCreateFactionTransaction = buildCreateFactionTransaction;
@@ -29,9 +30,12 @@ const torch_market_json_1 = __importDefault(require("torchsdk/dist/torch_market.
 // ── PDA helpers (copied from torchsdk internals) ──
 const getGlobalConfigPda = () => web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(GLOBAL_CONFIG_SEED)], torchsdk_1.PROGRAM_ID);
 const getBondingCurvePda = (mint) => web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(BONDING_CURVE_SEED), mint.toBuffer()], torchsdk_1.PROGRAM_ID);
+exports.getBondingCurvePda = getBondingCurvePda;
 const getTokenTreasuryPda = (mint) => web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(TREASURY_SEED), mint.toBuffer()], torchsdk_1.PROGRAM_ID);
+exports.getTokenTreasuryPda = getTokenTreasuryPda;
 const getTreasuryTokenAccount = (mint, treasury) => (0, spl_token_1.getAssociatedTokenAddressSync)(mint, treasury, true, TOKEN_2022_PROGRAM_ID);
 const getTreasuryLockPda = (mint) => web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(TREASURY_LOCK_SEED), mint.toBuffer()], torchsdk_1.PROGRAM_ID);
+exports.getTreasuryLockPda = getTreasuryLockPda;
 const getTreasuryLockTokenAccount = (mint, treasuryLock) => (0, spl_token_1.getAssociatedTokenAddressSync)(mint, treasuryLock, true, TOKEN_2022_PROGRAM_ID);
 const makeDummyProvider = (connection, payer) => {
     const dummyWallet = {
@@ -75,11 +79,11 @@ async function buildCreateFactionTransaction(connection, params) {
     const mint = grindPyreMint();
     // Derive PDAs
     const [globalConfig] = getGlobalConfigPda();
-    const [bondingCurve] = getBondingCurvePda(mint.publicKey);
-    const [treasury] = getTokenTreasuryPda(mint.publicKey);
+    const [bondingCurve] = (0, exports.getBondingCurvePda)(mint.publicKey);
+    const [treasury] = (0, exports.getTokenTreasuryPda)(mint.publicKey);
     const bondingCurveTokenAccount = (0, spl_token_1.getAssociatedTokenAddressSync)(mint.publicKey, bondingCurve, true, TOKEN_2022_PROGRAM_ID);
     const treasuryTokenAccount = getTreasuryTokenAccount(mint.publicKey, treasury);
-    const [treasuryLock] = getTreasuryLockPda(mint.publicKey);
+    const [treasuryLock] = (0, exports.getTreasuryLockPda)(mint.publicKey);
     const treasuryLockTokenAccount = getTreasuryLockTokenAccount(mint.publicKey, treasuryLock);
     const tx = new web3_js_1.Transaction();
     const provider = makeDummyProvider(connection, creator);
