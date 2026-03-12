@@ -8,6 +8,9 @@ skip-lint = false
 [programs.devnet]
 pyre_world = "2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv"
 
+[programs.mainnet]
+pyre_world = "2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv"
+
 [programs.localnet]
 pyre_world = "2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv"
 
