@@ -5,7 +5,7 @@ import * as path from 'path'
 export const NETWORK = (process.env.TORCH_NETWORK ?? 'devnet') as 'devnet' | 'mainnet'
 const isMainnet = NETWORK === 'mainnet'
 
-export const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? (isMainnet ? '15' : '150'))
+export const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? (isMainnet ? '7' : '150'))
 export const RPC_URL = process.env.RPC_URL ?? (isMainnet
   ? 'https://torch-market-rpc.mrsirg97.workers.dev'
   : 'https://torch-market-rpc.mrsirg97.workers.dev/devnet')
@@ -18,7 +18,7 @@ export const MIN_FUNDED_SOL = isMainnet ? 0.05 : 0.05
 export const CONCURRENT_AGENTS = isMainnet ? 2 : 3
 
 // SOL amounts — conservative on mainnet
-export const STRONGHOLD_FUND_SOL = isMainnet ? 0.225 : 35
+export const STRONGHOLD_FUND_SOL = isMainnet ? 0.25 : 35
 export const STRONGHOLD_TOPUP_THRESHOLD_SOL = isMainnet ? 0.02 : 5
 export const STRONGHOLD_TOPUP_RESERVE_SOL = isMainnet ? 0.05 : 5
 export const FUND_TARGET_SOL = isMainnet ? 0.27 : 0.5
