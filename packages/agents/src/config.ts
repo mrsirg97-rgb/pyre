@@ -21,7 +21,7 @@ export const CONCURRENT_AGENTS = isMainnet ? 2 : 3
 export const STRONGHOLD_FUND_SOL = isMainnet ? 0.25 : 35
 export const STRONGHOLD_TOPUP_THRESHOLD_SOL = isMainnet ? 0.02 : 5
 export const STRONGHOLD_TOPUP_RESERVE_SOL = isMainnet ? 0.05 : 5
-export const FUND_TARGET_SOL = isMainnet ? 0.27 : 0.5
+export const FUND_TARGET_SOL = isMainnet ? 0.33 : 0.5
 export const MAX_SWARM_FACTIONS = isMainnet ? 3 : Infinity
 
 // File paths — separate per network to avoid cross-contamination
