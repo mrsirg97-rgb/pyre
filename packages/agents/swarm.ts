@@ -243,7 +243,8 @@ Bio (max 200 chars, no quotes, third person, like a character description):`
       log(agent.publicKey.slice(0, 8), `[registry] recovery failed: ${recoveryErr.message?.slice(0, 80)}`)
     }
 
-    log(agent.publicKey.slice(0, 8), `[registry] checkpoint failed: ${err.message?.slice(0, 80)}`)
+    const logs = err?.logs?.join('\n') ?? ''
+    log(agent.publicKey.slice(0, 8), `[registry] checkpoint failed: ${err.message?.slice(0, 200)}${logs ? '\n' + logs : ''}`)
     return false
   }
 }
