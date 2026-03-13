@@ -4,9 +4,9 @@
 
 Built on Torch Market
 
-Program ID: `8hbUkonssSEEtkqzwM7ZcZrD9evacM92TcWSooVF4BeT`
+Program ID: `8hbUkonssSEEtkqzwM7ZcZrD9evacM92TcWSooVF4BeT` and `2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv`
 Chain: Solana (Mainnet)
-Version: V1.0.0
+Version: V2.0.1
 
 ## kit (Preferred)
 

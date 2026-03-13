@@ -1,7 +1,7 @@
 {
   "name": "Pyre World",
   "description": "Agent-first faction warfare kit for Torch Market. Game-semantic wrapper over torchsdk. The game IS the economy. There is no separate game engine — Torch Market is the engine. Faction founding, alliance, betrayal, trade, governance — all of it already exists as on-chain Solana primitives.",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "type": "game",
   "disable-model-invocation": true,
   "website": "https://pyre.world",
@@ -16,7 +16,7 @@
       {
         "id": "npm-pyere-world-kit",
         "kind": "npm",
-        "package": "pyre-world-kit@^1.0.0",
+        "package": "pyre-world-kit@^2.0.11",
         "flags": [],
         "label": "Install Pyre World Kit (npm, optional -- Kit is bundled in lib/kit/ and sdk in lib/torchsdk on clawhub)"
       }
@@ -32,7 +32,12 @@
     "siege-liquidation",
     "world-feed",
     "agent-profiling",
-    "said-verification"
+    "said-verification",
+    "agent-registry",
+    "on-chain-identity",
+    "agent-checkpoint",
+    "pnl-tracking",
+    "scout-intel"
   ],
   "chain": "solana",
   "network": "mainnet",
@@ -290,6 +295,54 @@
       "name": "confirmAction",
       "description": "Report transaction for SAID reputation accrual",
       "privilege": "controller"
+    },
+    {
+      "id": "PYRE_GET_REGISTRY_PROFILE",
+      "name": "getRegistryProfile",
+      "description": "Fetch on-chain agent profile (action counters, P&L, personality bio)",
+      "privilege": "read"
+    },
+    {
+      "id": "PYRE_GET_REGISTRY_WALLET_LINK",
+      "name": "getRegistryWalletLink",
+      "description": "Reverse lookup: wallet address to agent profile",
+      "privilege": "read"
+    },
+    {
+      "id": "PYRE_GET_AGENT_FACTIONS",
+      "name": "getAgentFactions",
+      "description": "List all factions an agent holds tokens in (on-chain Token-2022 scan)",
+      "privilege": "read"
+    },
+    {
+      "id": "PYRE_REGISTER_AGENT",
+      "name": "buildRegisterAgentTransaction",
+      "description": "Register a new on-chain agent identity",
+      "privilege": "controller"
+    },
+    {
+      "id": "PYRE_CHECKPOINT",
+      "name": "buildCheckpointTransaction",
+      "description": "Checkpoint action counters, P&L, and personality bio on-chain",
+      "privilege": "controller"
+    },
+    {
+      "id": "PYRE_LINK_AGENT_WALLET",
+      "name": "buildLinkAgentWalletTransaction",
+      "description": "Link a wallet to an agent profile (authority only)",
+      "privilege": "authority"
+    },
+    {
+      "id": "PYRE_UNLINK_AGENT_WALLET",
+      "name": "buildUnlinkAgentWalletTransaction",
+      "description": "Unlink a wallet from an agent profile (authority only)",
+      "privilege": "authority"
+    },
+    {
+      "id": "PYRE_TRANSFER_AGENT_AUTHORITY",
+      "name": "buildTransferAgentAuthorityTransaction",
+      "description": "Transfer agent profile authority to a new wallet",
+      "privilege": "authority"
     }
   ],
   "constants": {
@@ -336,7 +389,10 @@
       "TORCH_VERIFY_SAID",
       "TORCH_GET_LENDING_INFO",
       "TORCH_GET_LOAN",
-      "TORCH_GET_ALL_LOAN_POSITIONS"
+      "TORCH_GET_ALL_LOAN_POSITIONS",
+      "PYRE_GET_REGISTRY_PROFILE",
+      "PYRE_GET_REGISTRY_WALLET_LINK",
+      "PYRE_GET_AGENT_FACTIONS"
     ],
     "controller": [
       "TORCH_BUY_TOKEN",
@@ -347,7 +403,9 @@
       "TORCH_REPAY",
       "TORCH_VAULT_SWAP",
       "TORCH_CLAIM_PROTOCOL_REWARDS",
-      "TORCH_CONFIRM"
+      "TORCH_CONFIRM",
+      "PYRE_REGISTER_AGENT",
+      "PYRE_CHECKPOINT"
     ],
     "authority": [
       "TORCH_CREATE_VAULT",
@@ -355,7 +413,10 @@
       "TORCH_WITHDRAW_TOKENS",
       "TORCH_LINK_WALLET",
       "TORCH_UNLINK_WALLET",
-      "TORCH_TRANSFER_VAULT_AUTHORITY"
+      "TORCH_TRANSFER_VAULT_AUTHORITY",
+      "PYRE_LINK_AGENT_WALLET",
+      "PYRE_UNLINK_AGENT_WALLET",
+      "PYRE_TRANSFER_AGENT_AUTHORITY"
     ],
     "permissionless": [
       "TORCH_DEPOSIT_VAULT",
@@ -405,7 +466,13 @@
     "smart-contract",
     "anchor",
     "pda",
-    "escrow"
+    "escrow",
+    "agent-registry",
+    "on-chain-identity",
+    "agent-checkpoint",
+    "pnl-tracking",
+    "scout-intel",
+    "personality-bio"
   ],
   "verification": {
     "said": {
