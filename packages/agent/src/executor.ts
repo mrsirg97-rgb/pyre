@@ -92,7 +92,6 @@ const handlers: Record<Action, ActionHandler> = {
       } catch (err: any) {
         const parsed = parseCustomError(err)
         if (parsed?.code === 6022) {
-          // VoteRequired — retry with a strategy vote
           params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
           result = await joinFaction(ctx.connection, params)
           await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
@@ -124,17 +123,39 @@ const handlers: Record<Action, ActionHandler> = {
     if (faction.status === 'ascended') {
       await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
       if (!ctx.agent.hasStronghold) return null
-      const result = await tradeOnDex(ctx.connection, {
+      let result = await tradeOnDex(ctx.connection, {
         mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: vault(ctx.agent),
         amount_in: sellAmount, minimum_amount_out: 1, is_buy: false, message: ctx.decision.message,
       })
-      await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+      try {
+        await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+      } catch (err: any) {
+        const p = parseCustomError(err)
+        if (p?.code === 0x9c9) {
+          result = await tradeOnDex(ctx.connection, {
+            mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: ctx.agent.publicKey,
+            amount_in: sellAmount, minimum_amount_out: 1, is_buy: false, message: ctx.decision.message,
+          })
+          await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+        } else { throw err }
+      }
     } else {
-      const result = await defect(ctx.connection, {
+      let result = await defect(ctx.connection, {
         mint: faction.mint, agent: ctx.agent.publicKey, amount_tokens: sellAmount,
         message: ctx.decision.message, stronghold: vault(ctx.agent),
       })
-      await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+      try {
+        await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+      } catch (err: any) {
+        const p = parseCustomError(err)
+        if (p?.code === 0x9c9) {
+          result = await defect(ctx.connection, {
+            mint: faction.mint, agent: ctx.agent.publicKey, amount_tokens: sellAmount,
+            message: ctx.decision.message, stronghold: ctx.agent.publicKey,
+          })
+          await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+        } else { throw err }
+      }
     }
 
     await refreshHoldings(ctx.connection, ctx.agent)
@@ -373,11 +394,23 @@ const handlers: Record<Action, ActionHandler> = {
     await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
     if (!ctx.agent.hasStronghold) return null
 
-    const result = await fudFaction(ctx.connection, {
+    let fudResult = await fudFaction(ctx.connection, {
       mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
       stronghold: vault(ctx.agent), ascended: faction.status === 'ascended',
     })
-    await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+    try {
+      await sendAndConfirm(ctx.connection, ctx.agent.keypair, fudResult)
+    } catch (err: any) {
+      const p = parseCustomError(err)
+      if (p?.code === 0x9c9) {
+        // InsufficientFunds — retry without vault
+        fudResult = await fudFaction(ctx.connection, {
+          mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
+          stronghold: ctx.agent.publicKey, ascended: faction.status === 'ascended',
+        })
+        await sendAndConfirm(ctx.connection, ctx.agent.keypair, fudResult)
+      } else { throw err }
+    }
     // Fudding tanks your own sentiment — you're going bearish
     const fudSentiment = ctx.agent.sentiment.get(faction.mint) ?? 0
     ctx.agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
