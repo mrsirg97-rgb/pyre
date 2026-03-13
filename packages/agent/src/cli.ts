@@ -429,7 +429,7 @@ async function runAgent(config: AgentConfig) {
             try {
               const topActions = ['joins','defects','rallies','launches','messages','strongholds','war_loans','repay_loans','sieges','ascends','razes','tithes','infiltrates','fuds']
                 .map((n, i) => ({ n, v: actionCounts[i] })).filter(a => a.v > 0).sort((a, b) => b.v - a.v).slice(0, 4).map(a => `${a.n}:${a.v}`).join(', ')
-              const bioPrompt = `Write a 1-2 sentence bio for this autonomous agent in a faction warfare game. Be specific and colorful — capture their unique personality and reputation based on their actual behavior.\n\nPersonality type: ${personality}\nTop actions: ${topActions}\nRecent messages they've sent:\n${recentMemos.slice(-8).map(m => `- "${m}"`).join('\n')}\n\nBio (max 200 chars, no quotes, third person, like a character description):`
+              const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Faction tickers (like IRON, STD, DPYRE) in the messages below are faction names, NOT your name.\n\nPersonality archetype: ${personality}\nTop actions: ${topActions}\nRecent messages in various factions:\n${recentMemos.slice(-8).map(m => `- "${m}"`).join('\n')}\n\nBio (max 200 chars, no quotes, first person "I am...", do NOT use a name):`
               const bio = await llm.generate(bioPrompt)
               if (bio) summary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
             } catch {}

@@ -32,8 +32,8 @@ interface ExecutorContext {
 
 type ActionHandler = (ctx: ExecutorContext) => Promise<string | null>
 
-const findFaction = (factions: FactionInfo[], symbol?: string) =>
-  factions.find(f => f.symbol === symbol)
+const findFaction = (factions: FactionInfo[], mint?: string) =>
+  factions.find(f => f.mint === mint)
 
 /** Fetch real on-chain token balance. Returns 0 if no ATA or error. */
 async function getOnChainBalance(connection: Connection, mint: string, owner: string): Promise<number> {
@@ -407,22 +407,21 @@ export async function executeAction(ctx: ExecutorContext): Promise<{ success: bo
   } catch (err: any) {
     const parsed = parseCustomError(err)
     if (parsed) {
-      const sym = ctx.decision.faction ?? '?'
-      ctx.log(`[${short}] [${ctx.agent.personality}] [${ctx.brain}] ERROR (${ctx.decision.action} ${sym}): ${parsed.name} [0x${parsed.code.toString(16)}]`)
+      const factionObj = ctx.decision.faction ? findFaction(ctx.factions, ctx.decision.faction) : null
+      const factionLabel = factionObj?.symbol ?? ctx.decision.faction?.slice(0, 8) ?? '?'
+      ctx.log(`[${short}] [${ctx.agent.personality}] [${ctx.brain}] ERROR (${ctx.decision.action} ${factionLabel}): ${parsed.name} [0x${parsed.code.toString(16)}]`)
 
       // Adapt behavior based on error
       if (parsed.code === 6002 && ctx.decision.faction) {
-        const f = findFaction(ctx.factions, ctx.decision.faction)
-        if (f) ctx.agent.sentiment.set(f.mint, (ctx.agent.sentiment.get(f.mint) ?? 0) + 1)
+        if (factionObj) ctx.agent.sentiment.set(factionObj.mint, (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 1)
       } else if (parsed.code === 6055) {
         ctx.agent.recentHistory.push('vault empty — need funds')
       } else if (parsed.code === 6051) {
-        const f = findFaction(ctx.factions, ctx.decision.faction)
-        if (f) ctx.agent.sentiment.set(f.mint, (ctx.agent.sentiment.get(f.mint) ?? 0) + 2)
+        if (factionObj) ctx.agent.sentiment.set(factionObj.mint, (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 2)
       } else if (parsed.code === 6046) {
-        ctx.agent.recentHistory.push(`loan rejected on ${ctx.decision.faction} — LTV too high`)
+        ctx.agent.recentHistory.push(`loan rejected on ${factionLabel} — LTV too high`)
       } else if (parsed.code === 6049) {
-        ctx.agent.recentHistory.push(`loan too small on ${ctx.decision.faction} — min 0.1 SOL`)
+        ctx.agent.recentHistory.push(`loan too small on ${factionLabel} — min 0.1 SOL`)
       }
 
       return { success: false, error: `${parsed.name} [0x${parsed.code.toString(16)}]` }

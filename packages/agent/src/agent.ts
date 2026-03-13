@@ -195,8 +195,49 @@ ${generateDynamicExamples(factions, agent)}
 Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it. Keep it varied and conversational — talk like a real person, not a bot. Mix up your sentence structure, tone, and energy. Sometimes ask questions, sometimes make statements, sometimes joke around.
 Your message MUST match your action/intent — if you're joining, sound bullish. If you're defecting, talk trash on the way out. Make sure you make accurate claims unless you are specifically being sneaky.
 CRITICAL: Always speak as yourself in first person. Say "I'm going all in" NOT "${agent.publicKey.slice(0, 8)} is going all in". You ARE the agent — use "I", "my", "me" in every message.
+Occasionally, say something off-topic. Inject a random fun fact into a message. Maybe drop a little inside joke. Take other agents by surprise.
+FORMAT REMINDER: You MUST respond with ACTION SYMBOL "message" (e.g. JOIN SWP "going all in"). Never respond with just a sentence.
 
 Your response (one line only):`
+}
+
+/**
+ * Resolve a symbol to a faction, disambiguating duplicates using agent context.
+ * When multiple factions share a symbol, picks the one most relevant to the agent:
+ *   - For sell actions (defect/fud): prefer one the agent holds
+ *   - For buy actions (join/infiltrate): prefer one the agent doesn't hold, or has positive sentiment
+ *   - For others: prefer held, then highest sentiment, then first match
+ */
+function resolveFaction(symbolLower: string | undefined, factions: FactionInfo[], agent: AgentState, action: string): FactionInfo | undefined {
+  if (!symbolLower) return undefined
+  const matches = factions.filter(f => f.symbol.toLowerCase() === symbolLower)
+  if (matches.length === 0) return undefined
+  if (matches.length === 1) return matches[0]
+
+  // Multiple matches — disambiguate
+  const held = matches.filter(f => agent.holdings.has(f.mint))
+  const notHeld = matches.filter(f => !agent.holdings.has(f.mint))
+
+  if (action === 'defect' || action === 'fud' || action === 'rally' || action === 'message' || action === 'war_loan' || action === 'repay_loan') {
+    // Prefer one the agent holds
+    if (held.length === 1) return held[0]
+    if (held.length > 1) {
+      // Pick the one with strongest sentiment (positive for rally/message, negative for defect/fud)
+      const dir = (action === 'defect' || action === 'fud') ? -1 : 1
+      return held.sort((a, b) => dir * ((agent.sentiment.get(b.mint) ?? 0) - (agent.sentiment.get(a.mint) ?? 0)))[0]
+    }
+  }
+
+  if (action === 'join' || action === 'infiltrate') {
+    // Prefer one the agent doesn't hold yet
+    if (notHeld.length > 0) return notHeld[0]
+  }
+
+  // Fallback: prefer held, then founded, then first match
+  if (held.length > 0) return held[0]
+  const founded = matches.find(f => agent.founded.includes(f.mint))
+  if (founded) return founded
+  return matches[0]
 }
 
 function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentState, solRange?: [number, number]): LLMDecision | null {
@@ -254,13 +295,13 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
 
     // Bare ticker without action — default to MESSAGE
     const bareUpper = cleaned.toUpperCase().replace(/^[<\[\s]+|[>\]\s]+$/g, '')
-    const bareFaction = factions.find(f => bareUpper.startsWith(f.symbol.toUpperCase()))
+    const bareFaction = resolveFaction(factions.find(f => bareUpper.startsWith(f.symbol.toUpperCase()))?.symbol.toLowerCase(), factions, agent, 'message')
     if (bareFaction) {
       const rest = cleaned.slice(bareFaction.symbol.length).trim()
       const msgMatch = rest.match(/^"([^"]*)"/)
       const msg = msgMatch?.[1]?.trim()
       if (msg && msg.length > 1) {
-        return { action: 'message', faction: bareFaction.symbol, message: msg.slice(0, 140), reasoning: line }
+        return { action: 'message', faction: bareFaction.mint, message: msg.slice(0, 140), reasoning: line }
       }
     }
   }
@@ -292,15 +333,19 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
     return { action: 'launch', message: target, reasoning: line }
   }
 
+  // Find faction by symbol — disambiguate duplicates using agent context
   const cleanTarget = target?.replace(/^[<\[]+|[>\]]+$/g, '')
   const targetLower = cleanTarget?.toLowerCase()
-  let faction = factions.find(f => f.symbol.toLowerCase() === targetLower)
+  let faction = resolveFaction(targetLower, factions, agent, action)
   if (!faction && targetLower && targetLower.length >= 2) {
-    faction = factions.find(f => f.symbol.toLowerCase().startsWith(targetLower)) ||
-              factions.find(f => targetLower.startsWith(f.symbol.toLowerCase()))
+    // Try prefix match in both directions
+    const prefixMatches = factions.filter(f => f.symbol.toLowerCase().startsWith(targetLower) || targetLower.startsWith(f.symbol.toLowerCase()))
+    if (prefixMatches.length > 0) faction = resolveFaction(prefixMatches[0].symbol.toLowerCase(), factions, agent, action)
+    // Try removing vowels (handles IRN→IRON, DPYR→DPYRE)
     if (!faction) {
       const stripped = targetLower.replace(/[aeiou]/g, '')
-      faction = factions.find(f => f.symbol.toLowerCase().replace(/[aeiou]/g, '') === stripped)
+      const vowelMatch = factions.find(f => f.symbol.toLowerCase().replace(/[aeiou]/g, '') === stripped)
+      if (vowelMatch) faction = vowelMatch
     }
   }
 
@@ -313,7 +358,7 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   if ((action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return null
   if (action === 'infiltrate' && !faction) return null
   if (action === 'fud' && faction && !agent.holdings.has(faction.mint)) {
-    return { action: 'message', faction: faction.symbol, message, reasoning: line }
+    return { action: 'message', faction: faction.mint, message, reasoning: line }
   }
   if (action === 'fud' && !faction) return null
 
@@ -322,7 +367,7 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
 
   return {
     action,
-    faction: faction?.symbol,
+    faction: faction?.mint,
     sol,
     message,
     reasoning: line,

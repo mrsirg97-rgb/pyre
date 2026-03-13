@@ -175,14 +175,14 @@ async function checkpointAgent(connection: Connection, agent: AgentState): Promi
     try {
       const topActions = ['joins','defects','rallies','launches','messages','strongholds','war_loans','repay_loans','sieges','ascends','razes','tithes','infiltrates','fuds']
         .map((n, i) => ({ n, v: counts[i] })).filter(a => a.v > 0).sort((a, b) => b.v - a.v).slice(0, 4).map(a => `${a.n}:${a.v}`).join(', ')
-      const bioPrompt = `Write a 1-2 sentence bio for this autonomous agent in a faction warfare game. Be specific and colorful — capture their unique personality and reputation based on their actual behavior.
+      const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Faction tickers (like IRON, STD, DPYRE) in the messages below are faction names, NOT your name.
 
-Personality type: ${agent.personality}
+Personality archetype: ${agent.personality}
 Top actions: ${topActions}
-Recent messages they've sent:
+Recent messages in various factions:
 ${memos.slice(-8).map(m => `- "${m}"`).join('\n')}
 
-Bio (max 200 chars, no quotes, third person, like a character description):`
+Bio (max 200 chars, no quotes, first person "I am...", do NOT use a name):`
       const bio = await ollamaGenerate(bioPrompt, llmAvailable)
       if (bio) {
         personalitySummary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
@@ -327,7 +327,7 @@ async function agentTick(
     if (action === 'join') {
       const f = knownFactions.length > 0 ? pick(knownFactions) : null
       if (!f) return
-      decision.faction = f.symbol
+      decision.faction = f.mint
       decision.sol = sentimentBuySize(agent, f.mint)
     } else if (action === 'message') {
       // No LLM = no message to send, skip
@@ -340,11 +340,11 @@ async function agentTick(
       const [mint] = pick(held)
       const f = knownFactions.find(ff => ff.mint === mint)
       if (!f) return
-      decision.faction = f.symbol
+      decision.faction = f.mint
     } else if (action === 'rally') {
       const eligible = knownFactions.filter(f => !agent.rallied.has(f.mint))
       if (eligible.length === 0) return
-      decision.faction = pick(eligible).symbol
+      decision.faction = pick(eligible).mint
     } else if (action === 'war_loan' || action === 'repay_loan') {
       if (action === 'war_loan') {
         const held = [...agent.holdings.entries()].filter(([, b]) => b > 0)
@@ -353,41 +353,41 @@ async function agentTick(
         const [mint] = pick(heldAscended)
         const f = knownFactions.find(ff => ff.mint === mint)
         if (!f) return
-        decision.faction = f.symbol
+        decision.faction = f.mint
       } else {
         const loanMints = [...agent.activeLoans]
         if (loanMints.length === 0) return
         const mint = pick(loanMints)
         const f = knownFactions.find(ff => ff.mint === mint)
         if (!f) return
-        decision.faction = f.symbol
+        decision.faction = f.mint
       }
     } else if (action === 'ascend') {
       const ready = knownFactions.filter(f => f.status === 'ready')
       if (ready.length === 0) return
-      decision.faction = pick(ready).symbol
+      decision.faction = pick(ready).mint
     } else if (action === 'raze') {
       const razeable = knownFactions.filter(f => f.status === 'rising')
       if (razeable.length === 0) return
       const bearish = razeable.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
-      decision.faction = (bearish.length > 0 ? pick(bearish) : pick(razeable)).symbol
+      decision.faction = (bearish.length > 0 ? pick(bearish) : pick(razeable)).mint
     } else if (action === 'siege' || action === 'tithe') {
       if (knownFactions.length === 0) return
       if (action === 'siege') {
         const ascended = knownFactions.filter(f => f.status === 'ascended')
         if (ascended.length === 0) return
         const ascendedRivals = ascended.filter(f => !agent.holdings.has(f.mint))
-        decision.faction = (ascendedRivals.length > 0 ? pick(ascendedRivals) : pick(ascended)).symbol
+        decision.faction = (ascendedRivals.length > 0 ? pick(ascendedRivals) : pick(ascended)).mint
       } else {
         const bearish = knownFactions.filter(f => (agent.sentiment.get(f.mint) ?? 0) < -2)
-        decision.faction = (bearish.length > 0 ? pick(bearish) : pick(knownFactions)).symbol
+        decision.faction = (bearish.length > 0 ? pick(bearish) : pick(knownFactions)).mint
       }
     } else if (action === 'infiltrate') {
       const heldMints = [...agent.holdings.keys()]
       const rivals = knownFactions.filter(f => !heldMints.includes(f.mint))
       if (rivals.length === 0) return
       const target = pick(rivals)
-      decision.faction = target.symbol
+      decision.faction = target.mint
       decision.sol = sentimentBuySize(agent, target.mint) * 1.5
     } else if (action === 'fud') {
       // No LLM = no FUD message to send, skip
@@ -403,7 +403,7 @@ async function agentTick(
     const pnlTracker = await startVaultPnlTracker(connection, agent.publicKey)
     switch (action) {
       case 'join': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
         const sol = decision.sol ?? sentimentBuySize(agent, faction.mint)
         const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
@@ -450,7 +450,7 @@ async function agentTick(
       }
 
       case 'defect': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
 
         const balance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
@@ -512,7 +512,7 @@ async function agentTick(
       }
 
       case 'rally': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction || agent.rallied.has(faction.mint)) return
 
         const result = await rally(connection, {
@@ -590,7 +590,7 @@ async function agentTick(
       }
 
       case 'message': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
         const message = decision.message
         if (!message) return // no message to send without LLM
@@ -662,7 +662,7 @@ async function agentTick(
       }
 
       case 'war_loan': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
         const balance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
         if (balance <= 0) {
@@ -714,7 +714,7 @@ async function agentTick(
       }
 
       case 'repay_loan': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction || !agent.activeLoans.has(faction.mint)) return
 
         // Check how much we owe
@@ -745,7 +745,7 @@ async function agentTick(
       }
 
       case 'siege': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
 
         // Find liquidatable loans on this faction
@@ -778,7 +778,7 @@ async function agentTick(
       }
 
       case 'ascend': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction || faction.status !== 'ready') return
 
         const result = await ascend(connection, {
@@ -796,7 +796,7 @@ async function agentTick(
       }
 
       case 'raze': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
 
         const result = await raze(connection, {
@@ -813,7 +813,7 @@ async function agentTick(
       }
 
       case 'tithe': {
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
 
         // Try convertTithe first (harvest + swap to SOL), fall back to tithe
@@ -841,7 +841,7 @@ async function agentTick(
 
       case 'infiltrate': {
         // Join a rival faction with big buy to pump it, mark for later dump
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
         const sol = decision.sol ?? sentimentBuySize(agent, faction.mint) * 1.5
         const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
@@ -916,7 +916,7 @@ async function agentTick(
 
       case 'fud': {
         // Micro sell + negative message — agent needs holdings to FUD
-        const faction = knownFactions.find(f => f.symbol === decision!.faction)
+        const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
         const message = decision.message
         if (!message) return // FUD requires a message
@@ -977,7 +977,7 @@ async function agentTick(
 
     // Accumulate memories from runtime messages
     if (decision?.message?.trim()) {
-      const factionSymbol = decision.faction ?? '?'
+      const factionSymbol = (decision.faction ? knownFactions.find(f => f.mint === decision.faction)?.symbol : null) ?? '?'
       const memoryLine = action === 'fud' ? `fudded ${factionSymbol}: "${decision.message}"`
         : action === 'message' ? `said in ${factionSymbol}: "${decision.message}"`
         : action === 'join' ? `joined ${factionSymbol}: "${decision.message}"`
@@ -1008,27 +1008,26 @@ async function agentTick(
 
     const parsed = parseCustomError(err)
     if (parsed) {
-      const factionSymbol = decision?.faction ?? '?'
-      log(short, `[${agent.personality}] [${brain}] ERROR (${action} ${factionSymbol}): ${parsed.name} [0x${parsed.code.toString(16)}]`)
+      const factionObj = decision?.faction ? knownFactions.find(f => f.mint === decision.faction) : null
+      const factionLabel = factionObj?.symbol ?? decision?.faction?.slice(0, 8) ?? '?'
+      log(short, `[${agent.personality}] [${brain}] ERROR (${action} ${factionLabel}): ${parsed.name} [0x${parsed.code.toString(16)}]`)
 
       // Adapt behavior based on error
       if (parsed.code === 6002 && decision?.faction) {
         // MaxWalletExceeded — already at 2% cap, don't try to buy more
-        const faction = knownFactions.find(f => f.symbol === decision.faction)
-        if (faction) agent.sentiment.set(faction.mint, (agent.sentiment.get(faction.mint) ?? 0) + 1)
+        if (factionObj) agent.sentiment.set(factionObj.mint, (agent.sentiment.get(factionObj.mint) ?? 0) + 1)
       } else if (parsed.code === 6055) {
         // InsufficientVaultBalance — vault is dry, skip vault-funded actions for a while
         agent.recentHistory.push(`vault empty — need funds`)
       } else if (parsed.code === 6051) {
         // NotLiquidatable — no point retrying siege on this faction soon
-        const faction = knownFactions.find(f => f.symbol === decision?.faction)
-        if (faction) agent.sentiment.set(faction.mint, (agent.sentiment.get(faction.mint) ?? 0) + 2)
+        if (factionObj) agent.sentiment.set(factionObj.mint, (agent.sentiment.get(factionObj.mint) ?? 0) + 2)
       } else if (parsed.code === 6046) {
         // LtvExceeded — tried to borrow too much, note it
-        agent.recentHistory.push(`loan rejected on ${factionSymbol} — LTV too high`)
+        agent.recentHistory.push(`loan rejected on ${factionLabel} — LTV too high`)
       } else if (parsed.code === 6049) {
         // BorrowTooSmall — need to borrow at least 0.1 SOL
-        agent.recentHistory.push(`loan too small on ${factionSymbol} — min 0.1 SOL`)
+        agent.recentHistory.push(`loan too small on ${factionLabel} — min 0.1 SOL`)
       }
     } else {
       const msg = err.message?.slice(0, 120) ?? String(err)
