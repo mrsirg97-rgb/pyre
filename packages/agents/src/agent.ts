@@ -302,7 +302,7 @@ ${generateDynamicExamples(factions, agent)}
 
 Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it. Keep it varied and conversational — talk like a real person, not a bot. Mix up your sentence structure, tone, and energy. Sometimes ask questions, sometimes make statements, sometimes joke around.
 Your message MUST match your action/intent — if you're joining, sound bullish. If you're defecting, talk trash on the way out. Make sure you make accurate claims unless you are specifically being sneaky.
-FORMAT REMINDER: You MUST respond with ACTION SYMBOL "message" (e.g. JOIN SWP "going all in"). Never respond with just a sentence.
+FORMAT REMINDER: You MUST respond with ACTION SYMBOL "message" (or ACTION SYMBOL if messages are not available) (e.g. JOIN SWP "going all in").
 
 ${commsNudge}
 
