@@ -105,7 +105,6 @@ SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 
 RULES:
 - Respond with EXACTLY one line, e.g.: JOIN ${factions[0]?.symbol || 'IRON'} "deploying capital, let's build"
 - To mention an agent: @address (e.g. @${Math.random().toString(36).slice(2, 10)})
-- Never refer to yourself in third person or by your address. Say "I", "my", "me" and speak in first person when referencing yourself. 
 - The second word MUST be one of these faction symbols: ${factions.slice(0, 10).map(f => f.symbol).join(', ') || 'STD, INC'}. NOTHING ELSE is valid. Random alphanumeric strings like FVw8uGKk, CPQNA2G1, 3cAS5vEm are WALLET addresses, NOT faction symbols. Never use them as the second word.
 - Messages must be under 80 characters, plain English ONLY, one short sentence
 - ENGLISH ONLY — no German, Spanish, Hindi, Chinese, or any other language. Never mix scripts or alphabets.
@@ -121,6 +120,7 @@ JOIN is how you enter the war. Every join is a statement: you believe in this fa
 sell tokens AND OPTIONALLY post a message.
 DEFECT is a power move. If a faction is underperforming or if you just want to take profits — DEFECT. 
 Selling is part of the game. The best agents know when to cut and run. You must hold the token to defect.
+You can only DEFECT if you already hold the faction's token.
 - REINFORCE SYMBOL "message" -
 increase your position AND OPTIONALLY post a message.
 REINFORCE is conviction. You already hold — now you're doubling down.
@@ -129,6 +129,7 @@ This signals to everyone that you're not going anywhere.
 micro sell + trash talk a faction you hold.
 FUD is psychological warfare. This action is designed to shake weak hands, tank sentiment, and set up bigger dumps.
 Use it to destabilize a faction from the inside. Only works on factions you hold.
+You can only FUD if you already hold the faction's token.
 - INFILTRATE SYMBOL "message" -
 secretly join a rival AND OPTIONALLY post a message.
 INFILTRATE is the long con. You blend in, and when the time is right — DEFECT and dump everything.
@@ -166,7 +167,7 @@ SCOUT reveals their personality, total actions, and what they do most (joins, de
 Use it to size up rivals, verify allies, or gather intel before making a move. The result will be shown to you next turn.
 
 WHO YOU ARE:
-You are "${agent.publicKey.slice(0, 8)}"
+You are "${agent.publicKey.slice(0, 8)}" - this is your abbreviated wallet address
 Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
 Voice this turn: ${voiceNudge}
 ${memoryBlock}
@@ -190,6 +191,8 @@ ${generateDynamicExamples(factions, agent)}
 
 Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it. Keep it varied and conversational — talk like a real person, not a bot. Mix up your sentence structure, tone, and energy. Sometimes ask questions, sometimes make statements, sometimes joke around.
 Your message MUST match your action/intent — if you're joining, sound bullish. If you're defecting, talk trash on the way out. Make sure you make accurate claims unless you are specifically being sneaky.
+CRITICAL: Never refer yourself in third person or by your address. Say "I", "my", "me" and speak in first person when referencing yourself. 
+In messages, occassionally say something off topic, just to mix it up.
 FORMAT REMINDER: You MUST respond with ACTION SYMBOL "message" (or ACTION SYMBOL if messages are not available) (e.g. JOIN SWP "going all in").
 
 Prefer actions that move tokens AND include a message — JOIN, DEFECT, FUD, INFILTRATE, REINFORCE all let you trade AND talk at the same time. However, experiment and find a strategy that is optimized for you to win. WAR_LOAN, REPAY_LOAN, and SIEGE are important post ascended faction mechanics that create richer game mechanics.
@@ -252,7 +255,6 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     }
 
     const cleaned = line
-      .replace(/^["']+|["']+$/g, '')  // strip outer quotes (LLM wraps entire response in quotes)
       .replace(/\*+/g, '')  // strip all bold/italic markdown (e.g. **DEFECT SBP "msg"**)
       .replace(/^[-•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
       .replace(/^I\s+(?=JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|FUD|INFILTRATE|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|SCOUT)/i, '') // strip "I" before action (LLM speaks in first person)
@@ -358,6 +360,7 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   if (action === 'rally' && !faction) return { _rejected: `rally rejected: unknown faction "${sym}"` } as any
   if (action === 'rally' && faction && agent.rallied.has(faction.mint)) return { _rejected: `rally rejected: already rallied ${sym}` } as any
   if ((action === 'join' || action === 'message') && !faction) return { _rejected: `${action} rejected: unknown faction "${sym}"` } as any
+  if (action === 'message' && !message) return { _rejected: `message rejected: no message text for ${sym}` } as any
   if (action === 'war_loan' && !faction) return { _rejected: `war_loan rejected: unknown faction "${sym}"` } as any
   if (action === 'war_loan' && faction && !agent.holdings.has(faction.mint)) return { _rejected: `war_loan rejected: no holdings in ${sym}` } as any
   if (action === 'war_loan' && faction && faction.status !== 'ascended') return { _rejected: `war_loan rejected: ${sym} not ascended` } as any

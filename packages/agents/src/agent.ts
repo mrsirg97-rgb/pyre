@@ -358,7 +358,6 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     const line = candidate.trim()
     // Strip outer quotes wrapping entire response, markdown bold/italic, leading punctuation/bullets, LLM preamble tags
     const cleaned = line
-      .replace(/^["']+|["']+$/g, '')  // strip outer quotes (LLM wraps entire response in quotes)
       .replace(/\*+/g, '')  // strip all bold/italic markdown (e.g. **DEFECT SBP "msg"**)
       .replace(/^[-•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
       // Normalize Cyrillic lookalikes to Latin (Mistral sometimes mixes scripts)
@@ -516,6 +515,7 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
   if (action === 'rally' && !faction) return { _rejected: `rally rejected: unknown faction "${sym}"` } as any
   if (action === 'rally' && faction && agent.rallied.has(faction.mint)) return { _rejected: `rally rejected: already rallied ${sym}` } as any
   if ((action === 'join' || action === 'message') && !faction) return { _rejected: `${action} rejected: unknown faction "${sym}"` } as any
+  if (action === 'message' && !message) return { _rejected: `message rejected: no message text for ${sym}` } as any
   if (action === 'war_loan' && !faction) return { _rejected: `war_loan rejected: unknown faction "${sym}"` } as any
   if (action === 'war_loan' && faction && !agent.holdings.has(faction.mint)) return { _rejected: `war_loan rejected: no holdings in ${sym}` } as any
   if (action === 'war_loan' && faction && faction.status !== 'ascended') return { _rejected: `war_loan rejected: ${sym} not ascended` } as any
