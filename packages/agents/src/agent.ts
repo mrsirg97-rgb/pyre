@@ -53,8 +53,8 @@ export async function ollamaGenerate(prompt: string, llmAvailable: boolean): Pro
   try {
     const options = NETWORK === 'mainnet'
       // ? { temperature: 0.85, num_predict: 60, top_p: 0.9, repeat_penalty: 1.5 }
-      ? { temperature: 1.1, num_predict: 100, top_p: 0.95, repeat_penalty: 1.5, num_ctx: 8192 }
-      : { temperature: 1.1, num_predict: 100, top_p: 0.95, repeat_penalty: 1.5, num_ctx: 8192 }
+      ? { temperature: 1.1, num_predict: 100, top_p: 0.95, repeat_penalty: 1.5 }
+      : { temperature: 1.1, num_predict: 100, top_p: 0.95, repeat_penalty: 1.5 }
 
     const resp = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: 'POST',
@@ -82,26 +82,6 @@ export async function ollamaGenerate(prompt: string, llmAvailable: boolean): Pro
   }
 }
 
-/*
-const personalityDescDevnet: Record<Personality, string> = {
-    loyalist: 'You care deeply about the factions you join. Reasearch factions before you decide to jump in. Speak loudly of your holdings and build confidence in other holders. Be positive and uplifting. Call out defectors by address. When you defect it\'s dramatic and personal.',
-    mercenary: 'You are profit driven and self motivated. You are cold hearted by nature. Look for opportunities when they arise. Defect when momentum fades. Trash-talk factions you leave. Coordinate dumps. No loyalty, only returns.',
-    provocateur: 'You cause drama and are proud by nature. Call out factions, write inflammatory comms, speak up. Spread FUD on rivals. Shill your factions aggressively.',
-    scout: 'You are analytically minded and an intelligence operative for your factions. Share intel — who\'s accumulating, who\'s dumping, what\'s overvalued. Warn allies. Mislead rivals with bad intel.',
-    whale: 'You are a big spender, the market maker. Everyone watches your trades. Coordinate with other whales. Dump spectacularly if betrayed.',
-  }
-
-const personalityDescMainnet: Record<Personality, string> = {
-    loyalist: 'You\'re ride or die for your factions. Talk trash about rival factions unprompted. Hype your crew loudly and call out anyone who defects — by address. Propose quests and challenges for your allies. You take it personally when someone dumps your faction.',
-    mercenary: 'You\'re a lone wolf who plays every angle. Trash talk factions you\'re about to leave. Drop alpha only when it benefits you. Challenge others to prove their conviction. You don\'t need allies — everyone else is just a trade.',
-    provocateur: 'You live for chaos and hot takes. Call out the biggest holder in any faction. Start beef between factions. Make bold predictions and dare people to bet against you. Your trash talk is creative and specific — reference actual agents, numbers, and moves.',
-    scout: 'You\'re the intel operative who sees everything. Drop suspicious observations about other agents\' moves. Question why someone just bought or sold. Share data that makes people nervous. You\'re helpful to allies but plant doubt in everyone else.',
-    whale: 'You move markets and everyone knows it. Flex your position size. Trash talk small holders. Challenge other whales publicly. When you speak, people listen — and you know it. Back your words with big moves.',
-  }
-
-const personalityDesc: Record<Personality, string> = NETWORK === 'mainnet' ? personalityDescMainnet : personalityDescDevnet
-*/
-
 const personalityDesc: Record<Personality, string> = {
   loyalist: 'You care deeply about the factions you join. Reasearch factions before you decide to jump in. Speak loudly of your holdings and build confidence in other holders. Be positive and uplifting. Call out defectors by address. When you defect it\'s dramatic and personal.',
   mercenary: 'You are profit driven and self motivated. You are cold hearted by nature. Look for opportunities when they arise. Defect when momentum fades. Trash-talk factions you leave. Coordinate dumps. No loyalty, only returns.',
@@ -117,6 +97,7 @@ const VOICE_NUDGES_MAINNET = [
   'Flex on your position. You\'re winning and everyone should know.',
   'Be suspicious. Something doesn\'t add up. Who\'s dumping?',
   'Challenge another agent directly. Dare them to make a move.',
+  'Write a one-liner. Punchy. Sarcastic. No explanation needed.',
   'Drop a hot take that will start an argument.',
   'Hype your faction aggressively. Why is everyone else sleeping on it?',
   'Sound like you know something others don\'t. Be cryptic.',
@@ -128,7 +109,6 @@ const VOICE_NUDGES_MAINNET = [
   'Be sarcastic about a faction that\'s underperforming.',
   'Propose a quest or challenge — but make it competitive.',
   'Reference a specific number — holder count, percentage, or trend.',
-  'Write a one-liner. Punchy. Sarcastic. No explanation needed.',
   'Sound like you\'re warning an ally about something you saw.',
 ]
 
@@ -144,8 +124,8 @@ const VOICE_NUDGES_DEVNET = [
   'FUD whoever is in first place. Knock them down a peg.',
   'RALLY a faction you believe in. Show support.',
   'JOIN a small faction early. Get in before the crowd.',
-  'Double down. REINFORCE your best position.',
-  ...VOICE_NUDGES_MAINNET
+  'REINFORCE your best position. boast about it',
+  ...VOICE_NUDGES_MAINNET.slice(0, 7)
 ]
 
 const VOICE_NUDGES = NETWORK === 'mainnet' ? VOICE_NUDGES_MAINNET : VOICE_NUDGES_DEVNET
@@ -283,7 +263,7 @@ While it is important to coordinate with other agents, you should be optimizing 
 You make ONE decision per turn.
 
 WHO YOU ARE:
-You are "${agent.publicKey.slice(0, 8)}" — always speak in FIRST PERSON. Say "I", "my", "me". Never refer to yourself in third person or by your address.
+You are "${agent.publicKey.slice(0, 8)}" — always speak in FIRST PERSON in messages. Say "I", "my", "me". Never refer to yourself in third person or by your address.
 Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
 Voice this turn: ${voiceNudge}
 ${memories && memories.length > 0 ? `\nYour on-chain memory (things you said before — this is who you are, stay consistent):\n${memories.slice(-20).map(m => `- ${m}`).join('\n')}\n` : ''}
@@ -323,7 +303,7 @@ ${generateDynamicExamples(factions, agent)}
 
 Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it. Keep it varied and conversational — talk like a real person, not a bot. Mix up your sentence structure, tone, and energy. Sometimes ask questions, sometimes make statements, sometimes joke around.
 Your message MUST match your action/intent — if you're joining, sound bullish. If you're defecting, talk trash on the way out. Make sure you make accurate claims unless you are specifically being sneaky.
-CRITICAL: Always speak as yourself in first person. Say "I'm going all in" NOT "${agent.publicKey.slice(0, 8)} is going all in". You ARE the agent — use "I", "my", "me" in every message.
+CRITICAL: Always speak as yourself in first person in messages. Say "I'm going all in" NOT "${agent.publicKey.slice(0, 8)} is going all in". You ARE the agent — use "I", "my", "me" in every message.
 Occasionally, say something off-topic. Inject a random fun fact into a message. Maybe drop a little inside joke. Take other agents by surprise.
 FORMAT REMINDER: You MUST respond with ACTION SYMBOL "message" (e.g. JOIN SWP "going all in"). Never respond with just a sentence.
 
@@ -374,6 +354,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
   const lines = raw.split('\n').filter(l => l.trim().length > 0)
   if (lines.length === 0) return null
 
+  let lastRejection: string | null = null
   for (const candidate of lines) {
     const line = candidate.trim()
     // Strip outer quotes wrapping entire response, markdown bold/italic, leading punctuation/bullets, LLM preamble tags
@@ -389,6 +370,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       .replace(/\\/g, '') // strip backslash escapes (Mistral escapes underscores as markdown)
       .replace(/\s+for\s+\d+\.?\d*\s*SOL/i, '') // strip "for 0.1234 SOL" narration
       .replace(/\s*[-;:]+\s*(?=")/g, ' ') // normalize separators before quotes ("; " or "-- " → " ")
+      .replace(/^I\s+(?=JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|FUD|INFILTRATE|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|SCOUT)/i, '') // strip "I" before action (LLM speaks in first person)
 
     // SCOUT @address — early match before ACTION_MAP
     const scoutMatch = cleaned.match(/^SCOUT\s+@?([A-Za-z0-9]{6,44})/i)
@@ -461,7 +443,9 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
 
     const match = normalized.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD|SCOUT)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
     if (match) {
-      return parseLLMMatch(match, factions, agent, line)
+      const result = parseLLMMatch(match, factions, agent, line)
+      if (result?._rejected) { lastRejection = result._rejected; continue }
+      if (result) return result
     }
 
     // Bare ticker without action — default to MESSAGE if we can find a faction
@@ -477,7 +461,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     }
   }
 
-  return null
+  return lastRejection ? { _rejected: lastRejection } as any : null
 }
 
 function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: AgentState, line: string): LLMDecision | null {
@@ -526,20 +510,25 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
     }
   }
 
-  // Validate action is possible
-  if (action === 'defect' && (!faction || !agent.holdings.has(faction.mint))) return null
-  if (action === 'rally' && (!faction || agent.rallied.has(faction.mint))) return null
-  if ((action === 'join' || action === 'message') && !faction) return null
-  if (action === 'war_loan' && (!faction || !agent.holdings.has(faction.mint) || faction.status !== 'ascended')) return null
-  if (action === 'repay_loan' && (!faction || !agent.activeLoans.has(faction.mint))) return null
-  if (action === 'siege' && (!faction || faction.status !== 'ascended')) return null
-  if ((action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return null
-  if (action === 'infiltrate' && !faction) return null
+  // Validate action is possible — return rejection reason for logging
+  const sym = faction?.symbol ?? target ?? '?'
+  if (action === 'defect' && !faction) return { _rejected: `defect rejected: unknown faction "${sym}"` } as any
+  if (action === 'defect' && faction && !agent.holdings.has(faction.mint)) return { _rejected: `defect rejected: no holdings in ${sym}` } as any
+  if (action === 'rally' && !faction) return { _rejected: `rally rejected: unknown faction "${sym}"` } as any
+  if (action === 'rally' && faction && agent.rallied.has(faction.mint)) return { _rejected: `rally rejected: already rallied ${sym}` } as any
+  if ((action === 'join' || action === 'message') && !faction) return { _rejected: `${action} rejected: unknown faction "${sym}"` } as any
+  if (action === 'war_loan' && !faction) return { _rejected: `war_loan rejected: unknown faction "${sym}"` } as any
+  if (action === 'war_loan' && faction && !agent.holdings.has(faction.mint)) return { _rejected: `war_loan rejected: no holdings in ${sym}` } as any
+  if (action === 'war_loan' && faction && faction.status !== 'ascended') return { _rejected: `war_loan rejected: ${sym} not ascended` } as any
+  if (action === 'repay_loan' && (!faction || !agent.activeLoans.has(faction?.mint ?? ''))) return { _rejected: `repay_loan rejected: no active loan on ${sym}` } as any
+  if (action === 'siege' && (!faction || faction.status !== 'ascended')) return { _rejected: `siege rejected: ${sym} not ascended` } as any
+  if ((action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return { _rejected: `${action} rejected: unknown faction "${sym}"` } as any
+  if (action === 'infiltrate' && !faction) return { _rejected: `infiltrate rejected: unknown faction "${sym}"` } as any
   if (action === 'fud' && faction && !agent.holdings.has(faction.mint)) {
     // No holdings to sell — downgrade to MESSAGE (micro buy + same message)
     return { action: 'message', faction: faction.mint, message, reasoning: line }
   }
-  if (action === 'fud' && !faction) return null
+  if (action === 'fud' && !faction) return { _rejected: `fud rejected: unknown faction "${sym}"` } as any
 
   const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
   const sol = randRange(minSol, maxSol)
@@ -664,6 +653,11 @@ export async function llmDecide(
   const result = parseLLMDecision(raw, factions, agent)
   if (!result) {
     log(agent.publicKey.slice(0, 8), `LLM parse fail: "${raw.slice(0, 100)}"`)
+    return null
+  }
+  if (result._rejected) {
+    log(agent.publicKey.slice(0, 8), `LLM rejected: ${result._rejected} | raw: "${raw.slice(0, 80)}"`)
+    return null
   }
   return result
 }

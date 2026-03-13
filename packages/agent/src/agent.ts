@@ -101,7 +101,7 @@ Factions do not strictly need to be warfare related. They can be used to coordin
 You make ONE decision per turn.
 
 WHO YOU ARE:
-You are "${agent.publicKey.slice(0, 8)}" — always speak in FIRST PERSON. Say "I", "my", "me". Never refer to yourself in third person or by your address.
+You are "${agent.publicKey.slice(0, 8)}" — always speak in FIRST PERSON in messages. Say "I", "my", "me". Never refer to yourself in third person or by your address.
 Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
 Voice this turn: ${voiceNudge}
 ${memoryBlock}
@@ -192,7 +192,7 @@ ${generateDynamicExamples(factions, agent)}
 
 Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it. Keep it varied and conversational — talk like a real person, not a bot. Mix up your sentence structure, tone, and energy. Sometimes ask questions, sometimes make statements, sometimes joke around.
 Your message MUST match your action/intent — if you're joining, sound bullish. If you're defecting, talk trash on the way out. Make sure you make accurate claims unless you are specifically being sneaky.
-CRITICAL: Always speak as yourself in first person. Say "I'm going all in" NOT "${agent.publicKey.slice(0, 8)} is going all in". You ARE the agent — use "I", "my", "me" in every message.
+CRITICAL: Always speak as yourself in first person in messages. Say "I'm going all in" NOT "${agent.publicKey.slice(0, 8)} is going all in". You ARE the agent — use "I", "my", "me" in every message.
 Occasionally, say something off-topic. Inject a random fun fact into a message. Maybe drop a little inside joke. Take other agents by surprise.
 FORMAT REMINDER: You MUST respond with ACTION SYMBOL "message" (e.g. JOIN SWP "going all in"). Never respond with just a sentence.
 
@@ -242,6 +242,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
   const lines = raw.split('\n').filter(l => l.trim().length > 0)
   if (lines.length === 0) return null
 
+  let lastRejection: string | null = null
   for (const candidate of lines) {
     const line = candidate.trim()
 
@@ -255,6 +256,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
       .replace(/^["']+|["']+$/g, '')  // strip outer quotes (LLM wraps entire response in quotes)
       .replace(/\*+/g, '')  // strip all bold/italic markdown (e.g. **DEFECT SBP "msg"**)
       .replace(/^[-•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
+      .replace(/^I\s+(?=JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|FUD|INFILTRATE|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|SCOUT)/i, '') // strip "I" before action (LLM speaks in first person)
       // Normalize Cyrillic lookalikes to Latin
       .replace(/[АаА]/g, 'A').replace(/[Вв]/g, 'B').replace(/[Сс]/g, 'C').replace(/[Ее]/g, 'E')
       .replace(/[Нн]/g, 'H').replace(/[Кк]/g, 'K').replace(/[Мм]/g, 'M').replace(/[Оо]/g, 'O')
@@ -289,7 +291,9 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
 
     const match = normalized.match(/^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|STRONGHOLD|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i)
     if (match) {
-      return parseLLMMatch(match, factions, agent, line, solRange)
+      const result = parseLLMMatch(match, factions, agent, line, solRange)
+      if (result?._rejected) { lastRejection = result._rejected; continue }
+      if (result) return result
     }
 
     // Bare ticker without action — default to MESSAGE
@@ -305,7 +309,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     }
   }
 
-  return null
+  return lastRejection ? { _rejected: lastRejection } as any : null
 }
 
 function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: AgentState, line: string, solRange?: [number, number]): LLMDecision | null {
@@ -348,18 +352,24 @@ function parseLLMMatch(match: RegExpMatchArray, factions: FactionInfo[], agent: 
     }
   }
 
-  if (action === 'defect' && (!faction || !agent.holdings.has(faction.mint))) return null
-  if (action === 'rally' && (!faction || agent.rallied.has(faction.mint))) return null
-  if ((action === 'join' || action === 'message') && !faction) return null
-  if (action === 'war_loan' && (!faction || !agent.holdings.has(faction.mint) || faction.status !== 'ascended')) return null
-  if (action === 'repay_loan' && (!faction || !agent.activeLoans.has(faction.mint))) return null
-  if (action === 'siege' && (!faction || faction.status !== 'ascended')) return null
-  if ((action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return null
-  if (action === 'infiltrate' && !faction) return null
+  // Validate action is possible — return rejection reason for logging
+  const sym = faction?.symbol ?? target ?? '?'
+  if (action === 'defect' && !faction) return { _rejected: `defect rejected: unknown faction "${sym}"` } as any
+  if (action === 'defect' && faction && !agent.holdings.has(faction.mint)) return { _rejected: `defect rejected: no holdings in ${sym}` } as any
+  if (action === 'rally' && !faction) return { _rejected: `rally rejected: unknown faction "${sym}"` } as any
+  if (action === 'rally' && faction && agent.rallied.has(faction.mint)) return { _rejected: `rally rejected: already rallied ${sym}` } as any
+  if ((action === 'join' || action === 'message') && !faction) return { _rejected: `${action} rejected: unknown faction "${sym}"` } as any
+  if (action === 'war_loan' && !faction) return { _rejected: `war_loan rejected: unknown faction "${sym}"` } as any
+  if (action === 'war_loan' && faction && !agent.holdings.has(faction.mint)) return { _rejected: `war_loan rejected: no holdings in ${sym}` } as any
+  if (action === 'war_loan' && faction && faction.status !== 'ascended') return { _rejected: `war_loan rejected: ${sym} not ascended` } as any
+  if (action === 'repay_loan' && (!faction || !agent.activeLoans.has(faction?.mint ?? ''))) return { _rejected: `repay_loan rejected: no active loan on ${sym}` } as any
+  if (action === 'siege' && (!faction || faction.status !== 'ascended')) return { _rejected: `siege rejected: ${sym} not ascended` } as any
+  if ((action === 'ascend' || action === 'raze' || action === 'tithe') && !faction) return { _rejected: `${action} rejected: unknown faction "${sym}"` } as any
+  if (action === 'infiltrate' && !faction) return { _rejected: `infiltrate rejected: unknown faction "${sym}"` } as any
   if (action === 'fud' && faction && !agent.holdings.has(faction.mint)) {
     return { action: 'message', faction: faction.mint, message, reasoning: line }
   }
-  if (action === 'fud' && !faction) return null
+  if (action === 'fud' && !faction) return { _rejected: `fud rejected: unknown faction "${sym}"` } as any
 
   const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
   const sol = randRange(minSol, maxSol)
@@ -476,6 +486,11 @@ export async function llmDecide(
   const result = parseLLMDecision(raw, factions, agent, solRange)
   if (!result) {
     log(`[${agent.publicKey.slice(0, 8)}] LLM parse fail: "${raw.slice(0, 100)}"`)
+    return null
+  }
+  if (result._rejected) {
+    log(`[${agent.publicKey.slice(0, 8)}] LLM rejected: ${result._rejected} | raw: "${raw.slice(0, 80)}"`)
+    return null
   }
   return result
 }

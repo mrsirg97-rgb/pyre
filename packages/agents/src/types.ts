@@ -12,6 +12,7 @@ export interface LLMDecision {
   sol?: number           // SOL amount for join
   message?: string       // comms message
   reasoning?: string     // why (for logging)
+  _rejected?: string     // rejection reason (set when action parsed but validation failed)
 }
 
 export interface AgentState {
