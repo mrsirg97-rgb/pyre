@@ -82,14 +82,22 @@ const handlers: Record<Action, ActionHandler> = {
       })
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     } else {
-      const alreadyVoted = ctx.agent.voted.has(faction.mint)
       const params: any = {
         mint: faction.mint, agent: ctx.agent.publicKey, amount_sol: lamports,
         message: ctx.decision.message, stronghold: vault(ctx.agent),
       }
-      if (!alreadyVoted) params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
-      const result = await joinFaction(ctx.connection, params)
-      await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+      let result = await joinFaction(ctx.connection, params)
+      try {
+        await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+      } catch (err: any) {
+        const parsed = parseCustomError(err)
+        if (parsed?.code === 6022) {
+          // VoteRequired — retry with a strategy vote
+          params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
+          result = await joinFaction(ctx.connection, params)
+          await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
+        } else { throw err }
+      }
     }
 
     const newBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
@@ -103,8 +111,9 @@ const handlers: Record<Action, ActionHandler> = {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
     if (!faction) return null
 
-    const balance = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
-    if (balance <= 0) { ctx.agent.holdings.delete(faction.mint); return null }
+    // Holdings already refreshed at top of executeAction (wallet + vault)
+    const balance = ctx.agent.holdings.get(faction.mint) ?? 0
+    if (balance <= 0) return null
 
     const isInfiltrated = ctx.agent.infiltrated.has(faction.mint)
     const sellPortion = isInfiltrated ? 1.0
@@ -128,9 +137,9 @@ const handlers: Record<Action, ActionHandler> = {
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     }
 
-    const remaining = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
-    if (remaining <= 0) { ctx.agent.holdings.delete(faction.mint); ctx.agent.infiltrated.delete(faction.mint) }
-    else { ctx.agent.holdings.set(faction.mint, remaining) }
+    await refreshHoldings(ctx.connection, ctx.agent)
+    const remaining = ctx.agent.holdings.get(faction.mint) ?? 0
+    if (remaining <= 0) { ctx.agent.infiltrated.delete(faction.mint) }
 
     const prefix = isInfiltrated ? 'dumped (infiltration complete)' : 'defected from'
     ctx.agent.lastAction = `defected ${faction.symbol}`
@@ -187,21 +196,19 @@ const handlers: Record<Action, ActionHandler> = {
     await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
     if (!ctx.agent.hasStronghold) return null
 
-    let result = await messageFaction(ctx.connection, {
+    const msgParams: any = {
       mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
       stronghold: vault(ctx.agent), ascended: faction.status === 'ascended',
-      first_buy: !ctx.agent.voted.has(faction.mint),
-    })
+    }
+    let result = await messageFaction(ctx.connection, msgParams)
     try {
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     } catch (retryErr: any) {
       const p = parseCustomError(retryErr)
-      if (p && p.code === 6008) {
-        ctx.agent.voted.add(faction.mint)
-        result = await messageFaction(ctx.connection, {
-          mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
-          stronghold: vault(ctx.agent), ascended: faction.status === 'ascended', first_buy: false,
-        })
+      if (p?.code === 6022) {
+        // VoteRequired — retry with a strategy vote
+        msgParams.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
+        result = await messageFaction(ctx.connection, msgParams)
         await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
       } else { throw retryErr }
     }
@@ -376,9 +383,9 @@ const handlers: Record<Action, ActionHandler> = {
     ctx.agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
 
     // Check if fud cleared the position
-    const postFudBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    await refreshHoldings(ctx.connection, ctx.agent)
+    const postFudBal = ctx.agent.holdings.get(faction.mint) ?? 0
     if (postFudBal <= 0) {
-      ctx.agent.holdings.delete(faction.mint)
       ctx.agent.infiltrated.delete(faction.mint)
       ctx.agent.lastAction = `defected ${faction.symbol}`
       return `fud cleared position in ${faction.symbol} → defected: "${ctx.decision.message}"`

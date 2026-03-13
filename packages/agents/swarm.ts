@@ -442,7 +442,6 @@ async function agentTick(
           await sendAndConfirm(connection, agent.keypair, result)
         } else {
 
-          const alreadyVoted = agent.voted.has(faction.mint)
           const params: any = {
             mint: faction.mint,
             agent: agent.publicKey,
@@ -450,11 +449,21 @@ async function agentTick(
             message: decision.message,
             stronghold: agent.publicKey,
           }
-          if (!alreadyVoted) {
+          if (!agent.voted.has(faction.mint)) {
             params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
           }
-          const result = await joinFaction(connection, params)
-          await sendAndConfirm(connection, agent.keypair, result)
+          let result = await joinFaction(connection, params)
+          try {
+            await sendAndConfirm(connection, agent.keypair, result)
+          } catch (err: any) {
+            const p = parseCustomError(err)
+            if (p?.code === 6022) {
+              // VoteRequired — retry with a strategy vote
+              params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
+              result = await joinFaction(connection, params)
+              await sendAndConfirm(connection, agent.keypair, result)
+            } else { throw err }
+          }
         }
 
         const newBal = await getOnChainBalance(connection, faction.mint, agent.publicKey)
@@ -471,9 +480,9 @@ async function agentTick(
         const faction = knownFactions.find(f => f.mint === decision!.faction)
         if (!faction) return
 
-        const balance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        // Holdings already refreshed at top of action execution (wallet + vault)
+        const balance = agent.holdings.get(faction.mint) ?? 0
         if (balance <= 0) {
-          agent.holdings.delete(faction.mint)
           log(short, `[${agent.personality}] defect skipped — 0 balance in ${faction.symbol}`)
           return
         }
@@ -513,12 +522,10 @@ async function agentTick(
           await sendAndConfirm(connection, agent.keypair, result)
         }
 
-        const remaining = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        await refreshHoldings(connection, agent)
+        const remaining = agent.holdings.get(faction.mint) ?? 0
         if (remaining <= 0) {
-          agent.holdings.delete(faction.mint)
           agent.infiltrated.delete(faction.mint)
-        } else {
-          agent.holdings.set(faction.mint, remaining)
         }
 
         const prefix = isInfiltrated ? 'dumped (infiltration complete)' : 'defected from'
@@ -616,29 +623,22 @@ async function agentTick(
         await ensureStronghold(connection, agent)
         if (!agent.hasStronghold) return
 
-        let result = await messageFaction(connection, {
+        const msgParams: any = {
           mint: faction.mint,
           agent: agent.publicKey,
           message,
           stronghold: agent.publicKey,
           ascended: faction.status === 'ascended',
-          first_buy: !agent.voted.has(faction.mint),
-        })
+        }
+        let result = await messageFaction(connection, msgParams)
         try {
           await sendAndConfirm(connection, agent.keypair, result)
         } catch (retryErr: any) {
           const p = parseCustomError(retryErr)
-          if (p && p.code === 6008) {
-            // AlreadyVoted — retry without vote
-            agent.voted.add(faction.mint)
-            result = await messageFaction(connection, {
-              mint: faction.mint,
-              agent: agent.publicKey,
-              message,
-              stronghold: agent.publicKey,
-              ascended: faction.status === 'ascended',
-              first_buy: false,
-            })
+          if (p?.code === 6022) {
+            // VoteRequired — retry with a strategy vote
+            msgParams.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
+            result = await messageFaction(connection, msgParams)
             await sendAndConfirm(connection, agent.keypair, result)
           } else {
             throw retryErr
@@ -959,11 +959,11 @@ async function agentTick(
         agent.sentiment.set(faction.mint, Math.max(-10, fudSentiment - 2))
 
         // Check if fud cleared the position — if so, treat as a defect
-        const postFudBalance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
+        await refreshHoldings(connection, agent)
+        const postFudBalance = agent.holdings.get(faction.mint) ?? 0
         const fudCleared = postFudBalance <= 0
 
         if (fudCleared) {
-          agent.holdings.delete(faction.mint)
           agent.infiltrated.delete(faction.mint)
           agent.lastAction = `defected ${faction.symbol}`
           const desc = `fud cleared position in ${faction.symbol} → defected: "${message}"`
