@@ -170,7 +170,7 @@ async function checkpointAgent(connection: Connection, agent: AgentState): Promi
 
   // Generate a succinct LLM bio from recent behavior
   const memos = agentMemories.get(agent.publicKey) ?? []
-  let personalitySummary = agent.personality
+  let personalitySummary = agent.personality as string;
   if (memos.length > 0 && llmAvailable) {
     try {
       const topActions = ['joins','defects','rallies','launches','messages','strongholds','war_loans','repay_loans','sieges','ascends','razes','tithes','infiltrates','fuds']
@@ -1422,7 +1422,7 @@ async function swarm() {
     for (let j = 0; j < results.length; j++) {
       const result = results[j]
       const agent = batch[j]
-      if (result.status === 'fulfilled' && result.value.actionCount > 0) {
+      if (result.status === 'fulfilled' && result.value.actionCount > 20) {
         const chain = result.value
         const seedPers = agent.personality
         agentSeedPersonality.set(agent.publicKey, seedPers) // preserve for live evolution
