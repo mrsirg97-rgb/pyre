@@ -4,7 +4,7 @@ import {
   launchFaction, joinFaction, defect, messageFaction, fudFaction, rally,
   tradeOnDex, fundStronghold,
   requestWarLoan, repayWarLoan, getWarLoan, getAllWarLoans, getMaxWarLoan,
-  siege, ascend, raze, tithe, convertTithe, isPyreMint,
+  siege, ascend, raze, tithe, convertTithe, isPyreMint, getAgentFactions,
 } from 'pyre-world-kit'
 import type { WarLoan } from 'pyre-world-kit'
 
@@ -35,7 +35,22 @@ type ActionHandler = (ctx: ExecutorContext) => Promise<string | null>
 const findFaction = (factions: FactionInfo[], mint?: string) =>
   factions.find(f => f.mint === mint)
 
-/** Fetch real on-chain token balance. Returns 0 if no ATA or error. */
+/** Refresh all holdings from chain (wallet + vault). Returns fresh map. */
+async function refreshHoldings(connection: Connection, agent: AgentState): Promise<void> {
+  try {
+    const positions = await getAgentFactions(connection, agent.publicKey)
+    const onChainMints = new Set<string>()
+    for (const pos of positions) {
+      agent.holdings.set(pos.mint, pos.balance)
+      onChainMints.add(pos.mint)
+    }
+    for (const [mint] of agent.holdings) {
+      if (!onChainMints.has(mint)) agent.holdings.delete(mint)
+    }
+  } catch {}
+}
+
+/** Fetch on-chain token balance for a single mint (wallet ATA only — use refreshHoldings for wallet+vault). */
 async function getOnChainBalance(connection: Connection, mint: string, owner: string): Promise<number> {
   try {
     const mintPk = new PublicKey(mint)
@@ -344,9 +359,9 @@ const handlers: Record<Action, ActionHandler> = {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
     if (!faction || !ctx.decision.message) return null
 
-    // Verify on-chain balance before FUD (micro sell)
-    const fudBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
-    if (fudBal <= 0) { ctx.agent.holdings.delete(faction.mint); return null }
+    // Holdings already refreshed at top of executeAction (wallet + vault)
+    const fudBal = ctx.agent.holdings.get(faction.mint) ?? 0
+    if (fudBal <= 0) return null
 
     await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
     if (!ctx.agent.hasStronghold) return null
@@ -393,6 +408,9 @@ const handlers: Record<Action, ActionHandler> = {
 export async function executeAction(ctx: ExecutorContext): Promise<{ success: boolean, description?: string, error?: string }> {
   const short = ctx.agent.publicKey.slice(0, 8)
   try {
+    // Fresh holdings from wallet + vault before every operation
+    await refreshHoldings(ctx.connection, ctx.agent)
+
     const handler = handlers[ctx.decision.action]
     if (!handler) return { success: false, error: `unknown action: ${ctx.decision.action}` }
 
@@ -414,11 +432,10 @@ export async function executeAction(ctx: ExecutorContext): Promise<{ success: bo
 
       // Adapt behavior based on error
       if (parsed.code === 6002 && ctx.decision.faction) {
-        // MaxWalletExceeded means we already hold tokens — sync holdings from chain
+        // MaxWalletExceeded means we already hold tokens — resync all holdings
         if (factionObj) {
           ctx.agent.sentiment.set(factionObj.mint, (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 1)
-          const bal = await getOnChainBalance(ctx.connection, factionObj.mint, ctx.agent.publicKey)
-          if (bal > 0) ctx.agent.holdings.set(factionObj.mint, bal)
+          await refreshHoldings(ctx.connection, ctx.agent)
         }
       } else if (parsed.code === 6055) {
         ctx.agent.recentHistory.push('vault empty — need funds')

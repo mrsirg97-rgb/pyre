@@ -175,14 +175,14 @@ async function checkpointAgent(connection: Connection, agent: AgentState): Promi
     try {
       const topActions = ['joins','defects','rallies','launches','messages','strongholds','war_loans','repay_loans','sieges','ascends','razes','tithes','infiltrates','fuds']
         .map((n, i) => ({ n, v: counts[i] })).filter(a => a.v > 0).sort((a, b) => b.v - a.v).slice(0, 4).map(a => `${a.n}:${a.v}`).join(', ')
-      const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Faction tickers (like IRON, STD, DPYRE) in the messages below are faction names, NOT your name.
+      const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Do NOT mention specific faction names or tickers — keep it general about who you are and how you play. Faction tickers (like IRON, STD, DPYRE) in the messages below are faction names for context only, do NOT include them in the bio.
 
 Personality archetype: ${agent.personality}
 Top actions: ${topActions}
 Recent messages in various factions:
 ${memos.slice(-8).map(m => `- "${m}"`).join('\n')}
 
-Bio (max 200 chars, no quotes, first person "I am...", do NOT use a name):`
+Bio (max 200 chars, no quotes, first person "I am...", do NOT use a name, do NOT reference specific factions):`
       const bio = await ollamaGenerate(bioPrompt, llmAvailable)
       if (bio) {
         personalitySummary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
@@ -262,7 +262,22 @@ function recordGlobalMessage(msg: string) {
   }
 }
 
-/** Fetch real on-chain token balance for an agent. Returns 0 if no ATA or error. */
+/** Refresh all holdings from chain (wallet + vault). */
+async function refreshHoldings(connection: Connection, agent: AgentState): Promise<void> {
+  try {
+    const positions = await getAgentFactions(connection, agent.publicKey)
+    const onChainMints = new Set<string>()
+    for (const pos of positions) {
+      agent.holdings.set(pos.mint, pos.balance)
+      onChainMints.add(pos.mint)
+    }
+    for (const [mint] of agent.holdings) {
+      if (!onChainMints.has(mint)) agent.holdings.delete(mint)
+    }
+  } catch {}
+}
+
+/** Fetch on-chain token balance for a single mint (wallet ATA only). */
 async function getOnChainBalance(connection: Connection, mint: string, owner: string): Promise<number> {
   try {
     const mintPk = new PublicKey(mint)
@@ -399,6 +414,9 @@ async function agentTick(
   const brain = usedLLM ? 'LLM' : 'RNG'
 
   try {
+    // Fresh holdings from wallet + vault before every operation
+    await refreshHoldings(connection, agent)
+
     // Track P&L across all actions (wallet + vault)
     const pnlTracker = await startVaultPnlTracker(connection, agent.publicKey)
     switch (action) {
@@ -920,12 +938,9 @@ async function agentTick(
         if (!faction) return
         const message = decision.message
         if (!message) return // FUD requires a message
-        // Verify on-chain balance before FUD (micro sell)
-        const fudBalance = await getOnChainBalance(connection, faction.mint, agent.publicKey)
-        if (fudBalance <= 0) {
-          agent.holdings.delete(faction.mint)
-          return
-        }
+        // Holdings already refreshed at top of action execution (wallet + vault)
+        const fudBalance = agent.holdings.get(faction.mint) ?? 0
+        if (fudBalance <= 0) return
 
         await ensureStronghold(connection, agent)
         if (!agent.hasStronghold) return

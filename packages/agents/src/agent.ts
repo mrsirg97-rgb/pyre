@@ -138,10 +138,18 @@ export const buildAgentPrompt = (
   recentMessages: string[],
   memories?: string[],
 ): string => {
-  const holdingsList = [...agent.holdings.entries()]
+  const holdingsEntries = [...agent.holdings.entries()]
+  const symbolCounts = new Map<string, number>()
+  for (const [mint] of holdingsEntries) {
+    const f = factions.find(ff => ff.mint === mint)
+    if (f) symbolCounts.set(f.symbol, (symbolCounts.get(f.symbol) ?? 0) + 1)
+  }
+  const holdingsList = holdingsEntries
     .map(([mint, bal]) => {
       const f = factions.find(ff => ff.mint === mint)
-      return f ? `${f.symbol}: ${bal} tokens` : `${mint.slice(0, 8)}: ${bal} tokens`
+      if (!f) return `${mint.slice(0, 8)}: ${bal} tokens`
+      const label = (symbolCounts.get(f.symbol) ?? 0) > 1 ? `${f.symbol}(${mint.slice(0, 6)})` : f.symbol
+      return `${label}: ${bal} tokens`
     })
     .join(', ') || 'none'
 
