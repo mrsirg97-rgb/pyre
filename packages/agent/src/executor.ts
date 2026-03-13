@@ -166,7 +166,8 @@ const handlers: Record<Action, ActionHandler> = {
 
   async message(ctx) {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
-    if (!faction || !ctx.decision.message) return null
+    if (!faction) { ctx.log(`[${ctx.agent.publicKey.slice(0, 8)}] message: faction not found for ${ctx.decision.faction?.slice(0, 8)}`); return null }
+    if (!ctx.decision.message) { ctx.log(`[${ctx.agent.publicKey.slice(0, 8)}] message: no message text`); return null }
 
     await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
     if (!ctx.agent.hasStronghold) return null
