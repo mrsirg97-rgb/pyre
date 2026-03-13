@@ -254,6 +254,7 @@ function parseLLMDecision(raw: string, factions: FactionInfo[], agent: AgentStat
     }
 
     const cleaned = line
+      .replace(/^["']+|["']+$/g, '')  // strip outer quotes (LLM wraps entire response in quotes)
       .replace(/\*+/g, '')  // strip all bold/italic markdown (e.g. **DEFECT SBP "msg"**)
       .replace(/^[-•>#\d.)\s]+/, '').replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '').replace(/^ACTION\s+/i, '')
       // Normalize Cyrillic lookalikes to Latin
