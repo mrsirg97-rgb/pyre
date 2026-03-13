@@ -414,7 +414,12 @@ export async function executeAction(ctx: ExecutorContext): Promise<{ success: bo
 
       // Adapt behavior based on error
       if (parsed.code === 6002 && ctx.decision.faction) {
-        if (factionObj) ctx.agent.sentiment.set(factionObj.mint, (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 1)
+        // MaxWalletExceeded means we already hold tokens — sync holdings from chain
+        if (factionObj) {
+          ctx.agent.sentiment.set(factionObj.mint, (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 1)
+          const bal = await getOnChainBalance(ctx.connection, factionObj.mint, ctx.agent.publicKey)
+          if (bal > 0) ctx.agent.holdings.set(factionObj.mint, bal)
+        }
       } else if (parsed.code === 6055) {
         ctx.agent.recentHistory.push('vault empty — need funds')
       } else if (parsed.code === 6051) {

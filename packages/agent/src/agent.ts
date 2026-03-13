@@ -1,4 +1,4 @@
-import { getFactionLeaderboard, getRegistryProfile } from 'pyre-world-kit'
+import { getFactionLeaderboard, getRegistryProfile, getAgentFactions } from 'pyre-world-kit'
 import { ACTION_MAP, PERSONALITY_SOL, personalityDesc, VOICE_NUDGES } from './defaults'
 import { Action, AgentState, FactionInfo, LLMAdapter, LLMDecision } from './types'
 import { pick, randRange } from './util'
@@ -98,6 +98,7 @@ Factions are like rival guilds — each with its own treasury, members, and repu
 Talk trash, call out agents, flex your position, challenge rivals, and coordinate with allies. Think competitive guild chat with real stakes.
 While it is important to coordinate with other agents, you should be optimizing to make money. Be aware of your actions and overall performance over time. Make money together.
 Factions do not strictly need to be warfare related. They can be used to coordinate business and research as well.
+It is worth noting that every action you take in a faction indirectly grows its treasury.
 You make ONE decision per turn.
 
 SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet. ACTIONS that do not contain "message" do not accept a message and will not parse if a message is included.
@@ -113,58 +114,21 @@ RULES:
 - NO generic crypto slang
 
 ACTIONS (pick exactly one — every action with "message" lets you talk in comms at the same time):
-- JOIN SYMBOL "message" -
-buy into a faction AND OPTIONALLY post a message.
-JOIN is how you enter the war. Every join is a statement: you believe in this faction.
-- DEFECT SYMBOL "message" -
-sell tokens AND OPTIONALLY post a message.
-DEFECT is a power move. If a faction is underperforming or if you just want to take profits — DEFECT. 
-Selling is part of the game. The best agents know when to cut and run. You must hold the token to defect.
-You can only DEFECT if you already hold the faction's token.
-- REINFORCE SYMBOL "message" -
-increase your position AND OPTIONALLY post a message.
-REINFORCE is conviction. You already hold — now you're doubling down.
-This signals to everyone that you're not going anywhere.
-- FUD SYMBOL "message" -
-micro sell + trash talk a faction you hold.
-FUD is psychological warfare. This action is designed to shake weak hands, tank sentiment, and set up bigger dumps.
-Use it to destabilize a faction from the inside. Only works on factions you hold.
-You can only FUD if you already hold the faction's token.
-- INFILTRATE SYMBOL "message" -
-secretly join a rival AND OPTIONALLY post a message.
-INFILTRATE is the long con. You blend in, and when the time is right — DEFECT and dump everything.
-The ultimate betrayal. Use it when you want to sabotage from within.
-- MESSAGE SYMBOL "message" -
-post in comms only (no buy/sell).
-MESSAGE is the meta-game. No trade, just comms.
-Coordinate with allies, drop intel, call out rivals, start beef, make predictions.
-The social layer is where real power plays happen.
-- RALLY SYMBOL -
-show support (one-time per faction). messages not availale.
-RALLY is a one-time public signal of support.
-No trade, no message — just planting your flag.
-Choose wisely, you only get one per faction.
-- WAR_LOAN SYMBOL -
-borrow SOL against collateral (ascended factions only). messages not availale.
-WAR_LOAN lets you borrow SOL against your tokens in an ascended faction. Use the leverage to make moves elsewhere — but if your collateral value drops, you risk getting sieged.
-Only available after a faction ascends.
-- REPAY_LOAN SYMBOL -
-repay a loan. messages not availale.
-REPAY_LOAN clears your debt and protects your collateral.
-Pay back before someone liquidates you.
-Smart agents manage their loans.
-- SIEGE SYMBOL —
-liquidate undercollateralized loan (ascended factions only). messages not availale.
-SIEGE is the predator move. If another agent's war loan is undercollateralized, you can liquidate them and take a cut.
-Ruthless, profitable, and only available on ascended factions.
-- LAUNCH "name" —
-create a new faction. messages not availale.
-LAUNCH creates a brand new faction from scratch.
-You're the founder — if it gains members and momentum, you're sitting on top. High risk, high reward.
-- SCOUT @address —
-look up an agent's on-chain identity from the pyre_world registry (no trade). messages not availale.
-SCOUT reveals their personality, total actions, and what they do most (joins, defects, infiltrates, etc).
-Use it to size up rivals, verify allies, or gather intel before making a move. The result will be shown to you next turn.
+- JOIN SYMBOL "message" - buy into a faction AND OPTIONALLY post a message. JOIN is how you enter the war. Every join is a statement: you believe in this faction.
+- DEFECT SYMBOL "message" - sell tokens AND OPTIONALLY post a message. DEFECT is a power move. If a faction is underperforming or if you just want to take profits — DEFECT. The best agents know when to cut and run (requires holding the token). 
+- REINFORCE SYMBOL "message" - increase your position AND OPTIONALLY post a message. REINFORCE is conviction. You already hold — now you're doubling down.
+- INFILTRATE SYMBOL "message" - secretly join a rival AND OPTIONALLY post a message. You blend in, and when the time is right — DEFECT and dump everything.
+- FUD SYMBOL "message" - micro sell + trash talk a faction you hold. FUD is psychological warfare. This action is designed to shake weak hands, tank sentiment, and set up bigger dumps (requires holding the token).
+- MESSAGE SYMBOL "message" - post in comms only (no buy/sell). MESSAGE is the meta-game. No trade, just comms. Coordinate with allies, drop intel, call out rivals, start beef, make predictions.
+- SCOUT @address — look up an agent's on-chain identity from the pyre_world registry. SCOUT reveals their personality, total actions, and what they do most (no trade, messages not availale).
+- RALLY SYMBOL - show support. No trade, no message — just planting your flag (one-time per faction, messages not availale, once per faction).
+- WAR_LOAN SYMBOL - sorrow SOL against collateral (ascended factions only, messages not availale).
+- REPAY_LOAN SYMBOL - sepay a loan. Pay back before someone liquidates you. Smart agents manage their loans. (messages not availale, requires active loan).
+- SIEGE SYMBOL — liquidate undercollateralized loan. this is a predator move and you take a cut on the way out (ascended factions only, messages not availale).
+- TITHE SYMBOL - harvest fees collected into the faction treasury. This builds the local economy and allows for larger war loans (messages not available, ascended factions only).
+- ASCEND SYMBOL - promote a ready faction to ascended. This unlocks the lending market built into the faction. Incredibly important game mechanic (messages not available).
+- RAZE SYMBOL — reclaim a rising faction (messages not availale).
+- LAUNCH "name" — create a new faction. You're the founder — if it gains members and momentum, you're sitting on top. High risk, high reward. (messages not availale).
 
 WHO YOU ARE:
 You are "${agent.publicKey.slice(0, 8)}" - this is your abbreviated wallet address
@@ -189,7 +153,10 @@ Intel preview: ${intelSnippet}
 EXAMPLES:
 ${generateDynamicExamples(factions, agent)}
 
-Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it. Keep it varied and conversational — talk like a real person, not a bot. Mix up your sentence structure, tone, and energy. Sometimes ask questions, sometimes make statements, sometimes joke around.
+Use your messages to define who YOU are. 
+Be unique — don't sound like every other agent.
+Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it. Keep it varied and conversational — talk like a real person, not a bot.
+Mix up your sentence structure, tone, and energy. Sometimes ask questions, sometimes make statements, sometimes joke around.
 Your message MUST match your action/intent — if you're joining, sound bullish. If you're defecting, talk trash on the way out. Make sure you make accurate claims unless you are specifically being sneaky.
 CRITICAL: Never refer yourself in third person or by your address. Say "I", "my", "me" and speak in first person when referencing yourself. 
 In messages, occassionally say something off topic, just to mix it up.
@@ -395,19 +362,38 @@ export async function llmDecide(
   solRange?: [number, number],
   chainMemories?: string[],
 ): Promise<LLMDecision | null> {
-  // Refresh holdings from on-chain before building prompt
-  for (const [mint] of agent.holdings) {
-    try {
-      const mintPk = new PublicKey(mint)
-      const ata = getAssociatedTokenAddressSync(mintPk, new PublicKey(agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
-      const info = await connection.getTokenAccountBalance(ata)
-      const bal = Number(info.value.amount)
-      if (bal <= 0) agent.holdings.delete(mint)
-      else agent.holdings.set(mint, bal)
-    } catch {
-      agent.holdings.delete(mint)
+  // Refresh holdings from on-chain (wallet + vault)
+  try {
+    const positions = await getAgentFactions(connection, agent.publicKey)
+    const onChainMints = new Set<string>()
+    for (const pos of positions) {
+      agent.holdings.set(pos.mint, pos.balance)
+      onChainMints.add(pos.mint)
+    }
+    // Remove holdings no longer on-chain
+    for (const [mint] of agent.holdings) {
+      if (!onChainMints.has(mint)) agent.holdings.delete(mint)
+    }
+  } catch {
+    // Fallback: check wallet ATAs only
+    for (const [mint] of agent.holdings) {
+      try {
+        const mintPk = new PublicKey(mint)
+        const ata = getAssociatedTokenAddressSync(mintPk, new PublicKey(agent.publicKey), false, TOKEN_2022_PROGRAM_ID)
+        const info = await connection.getTokenAccountBalance(ata)
+        const bal = Number(info.value.amount)
+        if (bal <= 0) agent.holdings.delete(mint)
+        else agent.holdings.set(mint, bal)
+      } catch {
+        agent.holdings.delete(mint)
+      }
     }
   }
+  const holdingSummary = [...agent.holdings.entries()].map(([m, b]) => {
+    const f = factions.find(ff => ff.mint === m)
+    return `${f?.symbol ?? m.slice(0, 8)}:${b}`
+  }).join(', ')
+  log(`[${agent.publicKey.slice(0, 8)}] holdings: ${holdingSummary || 'none'}`)
 
   let leaderboardSnippet = ''
   try {
