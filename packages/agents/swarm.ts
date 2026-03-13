@@ -891,7 +891,7 @@ async function agentTick(
         agent.sentiment.set(faction.mint, -5) // we're bearish, we're here to destroy
 
         agent.lastAction = `infiltrated ${faction.symbol}`
-        const desc = `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL — "${infiltrateMsg}"`
+        const desc = `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL${infiltrateMsg ? ` — "${infiltrateMsg}"` : ''}`
         agent.recentHistory.push(desc)
         log(short, `[${agent.personality}] [${brain}] 🗡️ ${desc}`)
         break

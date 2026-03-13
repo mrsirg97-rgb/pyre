@@ -336,7 +336,7 @@ const handlers: Record<Action, ActionHandler> = {
     ctx.agent.voted.add(faction.mint)
     ctx.agent.sentiment.set(faction.mint, -5)
     ctx.agent.lastAction = `infiltrated ${faction.symbol}`
-    return `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL — "${ctx.decision.message}"`
+    return `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL${ctx.decision.message ? ` — "${ctx.decision.message}"` : ''}`
   },
 
   async fud(ctx) {
