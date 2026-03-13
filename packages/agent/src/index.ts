@@ -207,7 +207,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
       if (action === 'join') {
         const f = activeFactions.length > 0 ? pick(activeFactions) : null
         if (!f) return { action, success: false, error: 'no factions', usedLLM: false }
-        decision.faction = f.symbol
+        decision.faction = f.mint
         decision.sol = sentimentBuySize(state, f.mint)
       } else if (action === 'message' || action === 'fud') {
         return { action, success: false, error: 'no LLM for message', usedLLM: false }
@@ -219,11 +219,11 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
         const [mint] = pick(held)
         const f = activeFactions.find(ff => ff.mint === mint)
         if (!f) return { action, success: false, error: 'faction not found', usedLLM: false }
-        decision.faction = f.symbol
+        decision.faction = f.mint
       } else if (action === 'rally') {
         const eligible = activeFactions.filter(f => !state.rallied.has(f.mint))
         if (eligible.length === 0) return { action, success: false, error: 'nothing to rally', usedLLM: false }
-        decision.faction = pick(eligible).symbol
+        decision.faction = pick(eligible).mint
       } else if (action === 'war_loan') {
         const held = [...state.holdings.entries()].filter(([, b]) => b > 0)
         const heldAscended = held.filter(([mint]) => activeFactions.find(f => f.mint === mint)?.status === 'ascended')
@@ -231,37 +231,37 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
         const [mint] = pick(heldAscended)
         const f = activeFactions.find(ff => ff.mint === mint)
         if (!f) return { action, success: false, error: 'faction not found', usedLLM: false }
-        decision.faction = f.symbol
+        decision.faction = f.mint
       } else if (action === 'repay_loan') {
         const loanMints = [...state.activeLoans]
         if (loanMints.length === 0) return { action, success: false, error: 'no loans', usedLLM: false }
         const mint = pick(loanMints)
         const f = activeFactions.find(ff => ff.mint === mint)
         if (!f) return { action, success: false, error: 'faction not found', usedLLM: false }
-        decision.faction = f.symbol
+        decision.faction = f.mint
       } else if (action === 'ascend') {
         const ready = activeFactions.filter(f => f.status === 'ready')
         if (ready.length === 0) return { action, success: false, error: 'no ready factions', usedLLM: false }
-        decision.faction = pick(ready).symbol
+        decision.faction = pick(ready).mint
       } else if (action === 'raze') {
         const razeable = activeFactions.filter(f => f.status === 'rising')
         if (razeable.length === 0) return { action, success: false, error: 'no rising factions', usedLLM: false }
         const bearish = razeable.filter(f => (state.sentiment.get(f.mint) ?? 0) < -2)
-        decision.faction = (bearish.length > 0 ? pick(bearish) : pick(razeable)).symbol
+        decision.faction = (bearish.length > 0 ? pick(bearish) : pick(razeable)).mint
       } else if (action === 'siege') {
         const ascended = activeFactions.filter(f => f.status === 'ascended')
         if (ascended.length === 0) return { action, success: false, error: 'no ascended factions', usedLLM: false }
-        decision.faction = pick(ascended).symbol
+        decision.faction = pick(ascended).mint
       } else if (action === 'tithe') {
         if (activeFactions.length === 0) return { action, success: false, error: 'no factions', usedLLM: false }
         const bearish = activeFactions.filter(f => (state.sentiment.get(f.mint) ?? 0) < -2)
-        decision.faction = (bearish.length > 0 ? pick(bearish) : pick(activeFactions)).symbol
+        decision.faction = (bearish.length > 0 ? pick(bearish) : pick(activeFactions)).mint
       } else if (action === 'infiltrate') {
         const heldMints = [...state.holdings.keys()]
         const rivals = activeFactions.filter(f => !heldMints.includes(f.mint))
         if (rivals.length === 0) return { action, success: false, error: 'no rival factions', usedLLM: false }
         const target = pick(rivals)
-        decision.faction = target.symbol
+        decision.faction = target.mint
         decision.sol = sentimentBuySize(state, target.mint) * 1.5
       }
     }
