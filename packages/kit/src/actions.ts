@@ -138,6 +138,22 @@ const DEFAULT_BLACKLIST = [
   'Fc1V6KcxSriJkUNeDLqz8w5Sm4mp1s8gxornZVLcHEpy','FEizyHEUoYenqfpF87kqiGnq3w1R2TReodEfsnTrrfpy',
   'DmwgcVHoJxKeRiij5LtedY9LWDpqoqa3hGfUyVgBkgpy','GUGz1Em5KZ57aKFqEBSd4Y4Vb6WxBd3H2b16fPCC6upy',
   '6ZWY3Bau5zw1j7vMQQ1czSw4rjBJrExHQ8Renor2vLpy',
+  // wave 3
+  '4LyPhwUCZNLEp45RsGWdwtkX5tb3wmwydBKEu1V7fxpy','FYw8FZKzG6vVweUMQgSXBrY9ViHgquWyN4x5QthaK3py',
+  'DhFhRRpRMkPi2Vz3kErZWHNmWqxgQm5YwXT5pFpgVKpy','6GLqPmACtuDi4LcMtVpFK43sYkG8yVouYiDfdfBSSVpy',
+  '8YYYewvvCTGPZ2UddgrD6oWUZD7CYXe3DBbA9GBkapy','FpQT2uDi3oxEpnayKHAUCcWXVhtDaZCb85e7nZzoCUpy',
+  '5EWX6grTtA46FQUHGC1kogCW3CsnVfXNvVgrYVtwvRpy','8HSvBFkr6gu9qtbMKcTAZSjzkj4Ag1d1wkdiaMDHHapy',
+  '2hgo2kdtNNQGNuvfEPSfydWDqfhSwfbFTzgeVb758wpy','DKvaEayFig3RHQ9rXHnCKBjvMnJCstzuBmSe77Ybf6py',
+  'Cws3YSPxWYxzrEEfguLi3p13ea2vPNi42mjJwwSMTTpy','GodcBg2dLzrypiYH5Aqo2bTJ7KiZa5G5XSDwNQ74iYpy',
+  '46tUp7tMEhpLeenPXQwvzP8H8V5M4F63vi4M9k4bbbpy','a5iH2Soh5c8X81vTVbKZq7A7yPckhFdN1amv1Q2tapy',
+  '2zTGWtQeJ5GtdHu888QikPzKkyHJPWVFYtoQjNeJJ7py','HNnpL7z1GKsXuxaEHs2a52zW7tTUjU4dZnrSEf8ZsMpy',
+  'EASit9Yrj1SBg6xchFxDSwVV9Rz11RKdDpB4tcNsekpy','F7VcdtqsXV6nkDL3yk6esUBu9qGvka4EY9XNTQ7PmZpy',
+  '3huHC9Co5dy5Z5U6H8Vf7aVTcuukpKeUr8rDQx8s5Zpy','97ymhwybP8Jh45VcYBJY1pwQ5xkPLX15u7Tg3P7TG7py',
+  '92fMEzcYdcoEXX8A5T8i8vfz2S96P39abzoXXuBghfpy','2ZeQsU13WjgX2152qV3wyzxURjLg7GwfXznAiA99Jjpy',
+  'FuUHck8jqaXxGiTuLym4gYXJQrueyEsgd8AMUQx2fMpy','trTuaGATQZwUeYkYTeyJfQnGGnKRvAriAZRgBWg7Epy',
+  'HEhemzeszztaFzFYR9DjpNwdhghVDD1y7cHxP93EPZpy','obuf6MkL1ev6WuUDDjH3bq2q6Ryr6MBNMRsA6dEW4py',
+  '76ruUbqBpqSKsysoPesDrpaLsDSahWWphQmXrswiLbpy','4ci4scCevt5tXCxkGr5xHoWyaeQY1dahp5nFsTnfYApy',
+  'shzuPKgqedBxJmxdrRyWAtajG3hSNyLr72SufvmEvpy',
 ];
 
 const BLACKLISTED_MINTS = new Set<string>(DEFAULT_BLACKLIST);

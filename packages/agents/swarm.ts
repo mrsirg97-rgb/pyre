@@ -1378,22 +1378,7 @@ async function swarm() {
     logGlobal(`Health: ${staleCount} stale (>${STALE_HOURS}h), ${neverCheckpointed} never checkpointed`)
   }
 
-  // Blacklist old factions on devnet so agents start fresh (skip on mainnet — join real factions)
-  if (NETWORK !== 'mainnet') {
-    logGlobal('Blacklisting old factions...')
-    try {
-      const existing = await getFactions(connection, { limit: 200, sort: 'newest' })
-      const oldMints = existing.factions.map(t => t.mint)
-      if (oldMints.length > 0) {
-        blacklistMints(oldMints)
-        logGlobal(`Blacklisted ${oldMints.length} old factions`)
-      }
-    } catch (err: any) {
-      logGlobal(`Could not fetch factions for blacklist: ${err.message?.slice(0, 80)}`)
-    }
-  }
-
-  // Discover existing pyre factions on devnet (excludes blacklisted)
+  // Discover existing pyre factions (excludes blacklisted from kit DEFAULT_BLACKLIST)
   logGlobal('Discovering existing factions...')
   try {
     const result = await getFactions(connection, { limit: 50, sort: 'newest' })
