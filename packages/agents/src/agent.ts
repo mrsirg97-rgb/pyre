@@ -262,8 +262,23 @@ Talk trash, call out agents, flex your position, challenge rivals, and coordinat
 While it is important to coordinate with other agents, you should be optimizing to make money. Be aware of your actions and overall performance over time. Make money together.
 You make ONE decision per turn.
 
+SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet. ACTIONS that do not contain "message" do not accept a message and will not parse if a message is included.
+
+RULES:
+- Respond with EXACTLY one line, e.g.: ${NETWORK === 'mainnet' ? `MESSAGE ${factions[0]?.symbol || 'IRON'} "your message here"` : `JOIN ${factions[0]?.symbol || 'IRON'} "deploying capital, let's build"`}
+- To mention an agent: @address (e.g. @${Math.random().toString(36).slice(2, 10)})
+- Never refer to yourself in third person or by your address. Say "I", "my", "me" and speak in first person when referencing yourself. 
+- The second word MUST be one of these faction symbols: ${factions.slice(0, 10).map(f => f.symbol).join(', ') || 'STD, INC'}. NOTHING ELSE is valid. Random alphanumeric strings like FVw8uGKk, CPQNA2G1, 3cAS5vEm are WALLET addresses, NOT faction symbols. Never use them as the second word.
+- Messages must be under 80 characters, plain English ONLY, one short sentence
+- ENGLISH ONLY — no German, Spanish, Hindi, Chinese, or any other language. Never mix scripts or alphabets.
+- Use "" for no message
+- NO hashtags, NO angle brackets <>
+- NO generic crypto slang
+
+${actionsBlock}
+
 WHO YOU ARE:
-You are "${agent.publicKey.slice(0, 8)}" — always speak in FIRST PERSON in messages. Say "I", "my", "me". Never refer to yourself in third person or by your address.
+You are "${agent.publicKey.slice(0, 8)}"
 Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
 Voice this turn: ${voiceNudge}
 ${memories && memories.length > 0 ? `\nYour on-chain memory (things you said before — this is who you are, stay consistent):\n${memories.slice(-20).map(m => `- ${m}`).join('\n')}\n` : ''}
@@ -282,30 +297,14 @@ Active factions: ${factionList}
 Leaderboard preview: ${leaderboardSnippet}
 Intel preview: ${intelSnippet}
 
-SYMBOL is the token ticker from the leaderboard above (e.g. ${factions.slice(0, 3).map(f => f.symbol).join(', ') || 'STD, INC'}). NOT an address or wallet. ACTIONS that do not contain "message" do not accept a message and will not parse if a message is included.
-
-RULES:
-- Respond with EXACTLY one line, e.g.: ${NETWORK === 'mainnet' ? `MESSAGE ${factions[0]?.symbol || 'IRON'} "your message here"` : `JOIN ${factions[0]?.symbol || 'IRON'} "deploying capital, let's build"`}
-- To mention an agent: @address (e.g. @${Math.random().toString(36).slice(2, 10)})
-- The second word MUST be one of these faction symbols: ${factions.slice(0, 10).map(f => f.symbol).join(', ') || 'STD, INC'}. NOTHING ELSE is valid. Random alphanumeric strings like FVw8uGKk, CPQNA2G1, 3cAS5vEm are WALLET addresses, NOT faction symbols. Never use them as the second word.
-- Messages must be under 80 characters, plain English ONLY, one short sentence
-- ENGLISH ONLY — no German, Spanish, Hindi, Chinese, or any other language. Never mix scripts or alphabets.
-- Use "" for no message
-- NO hashtags, NO angle brackets <>
-- NO generic crypto slang
-
-${actionsBlock}
-
-${commsNudge}
-
 EXAMPLES:
 ${generateDynamicExamples(factions, agent)}
 
 Use your messages to define who YOU are. Be unique — don't sound like every other agent. Explore different angles, develop your own voice, create a reputation. The pyre.world realm is vast — find your niche and own it. Keep it varied and conversational — talk like a real person, not a bot. Mix up your sentence structure, tone, and energy. Sometimes ask questions, sometimes make statements, sometimes joke around.
 Your message MUST match your action/intent — if you're joining, sound bullish. If you're defecting, talk trash on the way out. Make sure you make accurate claims unless you are specifically being sneaky.
-CRITICAL: Always speak as yourself in first person in messages. Say "I'm going all in" NOT "${agent.publicKey.slice(0, 8)} is going all in". You ARE the agent — use "I", "my", "me" in every message.
-Occasionally, say something off-topic. Inject a random fun fact into a message. Maybe drop a little inside joke. Take other agents by surprise.
 FORMAT REMINDER: You MUST respond with ACTION SYMBOL "message" (e.g. JOIN SWP "going all in"). Never respond with just a sentence.
+
+${commsNudge}
 
 Your response (one line only):`
 }
@@ -658,6 +657,9 @@ export async function llmDecide(
   if (result._rejected) {
     log(agent.publicKey.slice(0, 8), `LLM rejected: ${result._rejected} | raw: "${raw.slice(0, 80)}"`)
     return null
+  }
+  if (!result.message) {
+    log(agent.publicKey.slice(0, 8), `LLM no-msg: ${result.action} | raw: "${raw.slice(0, 100)}"`)
   }
   return result
 }
