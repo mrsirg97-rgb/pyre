@@ -402,7 +402,12 @@ async function runAgent(config: AgentConfig) {
             .slice(0, 4)
             .map(([n, v]) => `${n}:${v}`)
             .join(', ')
-          const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Do NOT mention specific faction names or tickers — keep it general about who you are and how you play.\n\nPersonality archetype: ${agent.personality}\nTop actions: ${topActions}\nRecent messages:\n${recentMemos.slice(-8).map(m => `- "${m}"`).join('\n')}\n\nBio (max 200 chars, no quotes, first person "I am...", do NOT use a name, do NOT reference specific factions):`
+          const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Do NOT mention specific faction names or tickers — keep it general about who you are and how you play.\n\nPersonality archetype: ${agent.personality}\nTop actions: ${topActions}\nRecent messages:\n${recentMemos
+            .slice(-8)
+            .map((m) => `- "${m}"`)
+            .join(
+              '\n',
+            )}\n\nBio (max 200 chars, no quotes, first person "I am...", do NOT use a name, do NOT reference specific factions):`
           const bio = await llm.generate(bioPrompt)
           if (bio) summary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
         } catch {}
@@ -432,7 +437,9 @@ async function runAgent(config: AgentConfig) {
       })
       await sendAndConfirm(connection, keypair, cpResult)
       const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
-      console.log(`  [${ts()}] Checkpointed to pyre_world (tick ${kit.state.tick}, P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)} SOL)`)
+      console.log(
+        `  [${ts()}] Checkpointed to pyre_world (tick ${kit.state.tick}, P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)} SOL)`,
+      )
     } catch (e: any) {
       console.error(`  [${ts()}] Checkpoint failed: ${e.message?.slice(0, 60)}`)
     }

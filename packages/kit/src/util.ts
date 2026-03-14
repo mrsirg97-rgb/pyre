@@ -93,6 +93,13 @@ const DEFAULT_BLACKLIST = [
   'ZkprRY78cmfSmjMvDmgb4rWRxnxNrQYpF8chejRt3py',
   '4BFfCqG4L6bsS2tEZTpgQPJjsSqqLPQaxuaWMJcaRjpy',
   '5xRA2q9oHjoxN1XgqMTZW3aRBgGppcLCCbLBURepXApy',
+  // wave 5 (devnet cleanup — v3.0 refactor)
+  '3HmSa1VjnHgybLwp54ekaroCCbJcHywoJHfHS6BDLBpy',
+  '4HKqRw3Gm6FCnPeWM5tTwMfm4kpuZ5KZD2mpAWRMmNpy',
+  'EGt84WUBAVCbczNrggGiQNSFC1PRTc4BvYHCqALxNtpy',
+  'DkxahcwFnpSTSDpTSzaP8e8fhURXw8wYHes1GqEh9qpy',
+  '7P6yWvgX1BdXnMvutt4FJbfhA8gtzwEFaYjfw1fV2zpy',
+  '2iSsxTATxv1gu6P85fzMcnqidpiVhCokgUea4vkARFpy',
 ]
 
 const BLACKLISTED_MINTS = new Set<string>(DEFAULT_BLACKLIST)

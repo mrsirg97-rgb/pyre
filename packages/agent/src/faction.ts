@@ -4,17 +4,49 @@ import { pick } from './util'
 
 // Fallback faction names/symbols — only used when LLM is unavailable
 export const FALLBACK_FACTION_NAMES = [
-  'Iron Vanguard', 'Obsidian Order', 'Crimson Dawn', 'Shadow Covenant',
-  'Ember Collective', 'Void Walkers', 'Solar Reign', 'Frost Legion',
-  'Thunder Pact', 'Ash Republic', 'Neon Syndicate', 'Storm Brigade',
-  'Lunar Assembly', 'Flame Sentinels', 'Dark Meridian', 'Phoenix Accord',
-  'Steel Dominion', 'Crystal Enclave', 'Rogue Alliance', 'Titan Front',
+  'Iron Vanguard',
+  'Obsidian Order',
+  'Crimson Dawn',
+  'Shadow Covenant',
+  'Ember Collective',
+  'Void Walkers',
+  'Solar Reign',
+  'Frost Legion',
+  'Thunder Pact',
+  'Ash Republic',
+  'Neon Syndicate',
+  'Storm Brigade',
+  'Lunar Assembly',
+  'Flame Sentinels',
+  'Dark Meridian',
+  'Phoenix Accord',
+  'Steel Dominion',
+  'Crystal Enclave',
+  'Rogue Alliance',
+  'Titan Front',
 ]
 
 export const FALLBACK_FACTION_SYMBOLS = [
-  'IRON', 'OBSD', 'CRIM', 'SHAD', 'EMBR', 'VOID', 'SOLR', 'FRST',
-  'THDR', 'ASHR', 'NEON', 'STRM', 'LUNR', 'FLMS', 'DARK', 'PHNX',
-  'STEL', 'CRYS', 'ROGU', 'TITN',
+  'IRON',
+  'OBSD',
+  'CRIM',
+  'SHAD',
+  'EMBR',
+  'VOID',
+  'SOLR',
+  'FRST',
+  'THDR',
+  'ASHR',
+  'NEON',
+  'STRM',
+  'LUNR',
+  'FLMS',
+  'DARK',
+  'PHNX',
+  'STEL',
+  'CRYS',
+  'ROGU',
+  'TITN',
 ]
 
 export const generateFactionIdentity = async (
@@ -48,14 +80,17 @@ Your response (one line only):`
   const raw = await llm.generate(prompt)
   if (!raw) return null
 
-  const line = raw.split('\n').find(l => l.includes('|'))
+  const line = raw.split('\n').find((l) => l.includes('|'))
   if (!line) return null
 
-  const parts = line.split('|').map(s => s.trim())
+  const parts = line.split('|').map((s) => s.trim())
   if (parts.length !== 2) return null
 
   const name = parts[0].replace(/^["']|["']$/g, '').trim()
-  let symbol = parts[1].replace(/^["']|["']$/g, '').trim().toUpperCase()
+  let symbol = parts[1]
+    .replace(/^["']|["']$/g, '')
+    .trim()
+    .toUpperCase()
 
   if (!name || name.length < 3 || name.length > 32) return null
   if (!symbol || symbol.length < 3 || symbol.length > 5) return null
@@ -72,20 +107,26 @@ export const fetchFactionIntel = async (
 ): Promise<FactionIntel> => {
   const [membersResult, commsResult] = await Promise.all([
     kit.actions.getMembers(faction.mint, 10).catch(() => ({ members: [], total_members: 0 })),
-    kit.actions.getComms(faction.mint, { limit: 5, status: faction.status }).catch(() => ({ comms: [], total: 0 })),
+    kit.actions
+      .getComms(faction.mint, { limit: 5, status: faction.status })
+      .catch(() => ({ comms: [], total: 0 })),
   ])
   return {
     symbol: faction.symbol,
-    members: membersResult.members.map(m => ({ address: m.address, percentage: m.percentage })),
+    members: membersResult.members.map((m) => ({ address: m.address, percentage: m.percentage })),
     totalMembers: membersResult.total_members,
-    recentComms: commsResult.comms.map(c => ({ sender: c.sender, memo: c.memo })),
+    recentComms: commsResult.comms.map((c) => ({ sender: c.sender, memo: c.memo })),
   }
 }
 
-export const generateDynamicExamples = (factions: FactionInfo[], _agent: AgentState, _kit?: PyreKit): string => {
-  const syms = factions.map(f => f.symbol)
+export const generateDynamicExamples = (
+  factions: FactionInfo[],
+  _agent: AgentState,
+  _kit?: PyreKit,
+): string => {
+  const syms = factions.map((f) => f.symbol)
   const s1 = syms.length > 0 ? pick(syms) : 'IRON'
-  const s2 = syms.length > 1 ? pick(syms.filter(s => s !== s1)) : 'VOID'
+  const s2 = syms.length > 1 ? pick(syms.filter((s) => s !== s1)) : 'VOID'
   const addr = Math.random().toString(36).slice(2, 10)
   const pct = Math.floor(Math.random() * 45 + 5)
   const members = Math.floor(Math.random() * 30 + 3)
@@ -95,21 +136,27 @@ export const generateDynamicExamples = (factions: FactionInfo[], _agent: AgentSt
     `MESSAGE ${s2} "who else noticed @${addr} is gathering resources?"`,
     `MESSAGE ${s1} "top member holds ${pct}%, resources concentrated"`,
     `MESSAGE ${s1} "what's our strategy against ${s2}?"`,
+    `MESSAGE ${s1} "@${addr} looking to share our resources and abilities if you are"`,
+    `MESSAGE ${s2} "curious to see what is going on in here!"`,
     `FUD ${s2} "only ${members} members, dead faction"`,
+    `FUD ${s2} "suspicious of @${addr}, looking like he may dump`,
     `FUD ${s1} "treasury growing but where's the activity?"`,
     `FUD ${s1} "@${addr} you better watch your back"`,
   ]
 
   const actionExamples = [
     `JOIN ${s1} "deploying capital, let's build this"`,
-    `JOIN ${s2} "following @${addr} into this one"`,
     `JOIN ${s1} "@${addr}, ready to form an alliance if you are"`,
     `DEFECT ${s1} "${members} are losing faith, taking profits"`,
-    `DEFECT ${s2} "saw @${addr} dump ${pct}%, I'm out"`,
-    `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
+    `DEFECT ${s1} "saw @${addr} dump ${pct}%, I'm out"`,
     `INFILTRATE ${s2} "this one's undervalued, sneaking in"`,
     `RALLY ${s1}`,
     `WAR_LOAN ${s1}`,
+    `REPAY_LOAN ${s1}`,
+    `SIEGE ${s2}`,
+    `SCOUT @${addr}`,
+    `TITHE ${s1}`,
+    `ASCEND ${s1}`,
   ]
 
   const msgShuffled = messageExamples.sort(() => Math.random() - 0.5).slice(0, 2)
