@@ -1,4 +1,4 @@
-import { Personality } from './types'
+import { Personality } from 'pyre-agent-kit'
 import { NETWORK } from './config'
 
 // ─── Personality Weights ─────────────────────────────────────────────

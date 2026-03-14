@@ -10,10 +10,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getTreasuryLockPda = exports.getTokenTreasuryPda = exports.getBondingCurvePda = void 0;
-exports.grindPyreMint = grindPyreMint;
-exports.isPyreMint = isPyreMint;
-exports.buildCreateFactionTransaction = buildCreateFactionTransaction;
+exports.buildCreateFactionTransaction = exports.isPyreMint = exports.grindPyreMint = exports.getTreasuryLockPda = exports.getTokenTreasuryPda = exports.getBondingCurvePda = void 0;
 const web3_js_1 = require("@solana/web3.js");
 const spl_token_1 = require("@solana/spl-token");
 const anchor_1 = require("@coral-xyz/anchor");
@@ -53,7 +50,7 @@ const finalizeTransaction = async (connection, tx, feePayer) => {
 // ── Vanity grinder ──
 const PYRE_SUFFIX = 'py';
 /** Grind for a keypair whose base58 address ends with "py" */
-function grindPyreMint(maxAttempts = 500_000) {
+const grindPyreMint = (maxAttempts = 500_000) => {
     for (let i = 0; i < maxAttempts; i++) {
         const kp = web3_js_1.Keypair.generate();
         if (kp.publicKey.toBase58().endsWith(PYRE_SUFFIX)) {
@@ -62,21 +59,21 @@ function grindPyreMint(maxAttempts = 500_000) {
     }
     // Fallback — return last generated keypair (should be extremely rare)
     return web3_js_1.Keypair.generate();
-}
+};
+exports.grindPyreMint = grindPyreMint;
 /** Check if a mint address is a pyre faction (ends with "py") */
-function isPyreMint(mint) {
-    return mint.endsWith(PYRE_SUFFIX);
-}
+const isPyreMint = (mint) => mint.endsWith(PYRE_SUFFIX);
+exports.isPyreMint = isPyreMint;
 // ── Build create transaction with pyre vanity address ──
-async function buildCreateFactionTransaction(connection, params) {
-    const { creator: creatorStr, name, symbol, metadata_uri, sol_target = 0, community_token = true } = params;
+const buildCreateFactionTransaction = async (connection, params) => {
+    const { creator: creatorStr, name, symbol, metadata_uri, sol_target = 0, community_token = true, } = params;
     const creator = new web3_js_1.PublicKey(creatorStr);
     if (name.length > 32)
         throw new Error('Name must be 32 characters or less');
     if (symbol.length > 10)
         throw new Error('Symbol must be 10 characters or less');
     // Grind for "pyre" suffix instead of "tm"
-    const mint = grindPyreMint();
+    const mint = (0, exports.grindPyreMint)();
     // Derive PDAs
     const [globalConfig] = getGlobalConfigPda();
     const [bondingCurve] = (0, exports.getBondingCurvePda)(mint.publicKey);
@@ -88,8 +85,13 @@ async function buildCreateFactionTransaction(connection, params) {
     const tx = new web3_js_1.Transaction();
     const provider = makeDummyProvider(connection, creator);
     const program = new anchor_1.Program(torch_market_json_1.default, provider);
-    const createIx = await program.methods
-        .createToken({ name, symbol, uri: metadata_uri, solTarget: new anchor_1.BN(sol_target), communityToken: community_token })
+    const createIx = await program.methods.createToken({
+        name,
+        symbol,
+        uri: metadata_uri,
+        solTarget: new anchor_1.BN(sol_target),
+        communityToken: community_token,
+    })
         .accounts({
         creator,
         globalConfig,
@@ -116,4 +118,5 @@ async function buildCreateFactionTransaction(connection, params) {
         mintKeypair: mint,
         message: `Create faction "${name}" ($${symbol}) [pyre:${mint.publicKey.toBase58()}]`,
     };
-}
+};
+exports.buildCreateFactionTransaction = buildCreateFactionTransaction;

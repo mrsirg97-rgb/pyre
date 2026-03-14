@@ -1,4 +1,4 @@
-import { PERSONALITY_WEIGHTS, PERSONALITY_SOL } from './defaults'
+import { PERSONALITY_WEIGHTS } from './defaults'
 import { Action, AgentState, FactionInfo, Personality } from './types'
 
 const ALL_ACTIONS: Action[] = [
@@ -7,7 +7,6 @@ const ALL_ACTIONS: Action[] = [
   'rally',
   'launch',
   'message',
-  'stronghold',
   'war_loan',
   'repay_loan',
   'siege',
@@ -20,13 +19,14 @@ const ALL_ACTIONS: Action[] = [
 
 /**
  * Choose an action using weighted random selection.
- *
  * Accepts optional dynamic weights (from on-chain history).
  * Falls back to static personality weights if not provided.
+ *
+ * Note: this takes a compat state object with kit fields mixed in.
  */
 export const chooseAction = (
   personality: Personality,
-  agent: AgentState,
+  agent: any, // compat: AgentState + kit state fields
   canRally: boolean,
   knownFactions: FactionInfo[],
   dynamicWeights?: number[],
@@ -44,65 +44,53 @@ export const chooseAction = (
     weights[0] += weights[2]
     weights[2] = 0
   }
-  if (agent.hasStronghold) {
-    weights[0] += weights[5]
-    weights[5] = 0
-  }
 
   const ascendedFactions = knownFactions.filter((f) => f.status === 'ascended')
   const holdsAscended = ascendedFactions.some((f) => agent.holdings.has(f.mint))
   if (!holdsAscended) {
+    weights[0] += weights[5]
+    weights[5] = 0
+  }
+  if ((agent.activeLoans?.size ?? 0) === 0) {
     weights[0] += weights[6]
     weights[6] = 0
   }
-  if (agent.activeLoans.size === 0) {
+  if (ascendedFactions.length === 0) {
     weights[0] += weights[7]
     weights[7] = 0
-  }
-  if (ascendedFactions.length === 0) {
-    weights[0] += weights[8]
-    weights[8] = 0
   }
 
   const readyFactions = knownFactions.filter((f) => f.status === 'ready')
   if (readyFactions.length === 0) {
-    weights[0] += weights[9]
-    weights[9] = 0
+    weights[0] += weights[8]
+    weights[8] = 0
   }
   const risingFactions = knownFactions.filter((f) => f.status === 'rising')
   if (risingFactions.length === 0) {
-    weights[0] += weights[10]
-    weights[10] = 0
+    weights[0] += weights[9]
+    weights[9] = 0
   }
-
   if (rivalFactions.length === 0) {
+    weights[0] += weights[11]
+    weights[11] = 0
+  }
+  if (!hasHoldings) {
     weights[0] += weights[12]
     weights[12] = 0
   }
-  if (!hasHoldings) {
-    weights[0] += weights[13]
-    weights[13] = 0
-  }
 
-  if (agent.infiltrated.size > 0) {
-    weights[1] += 0.1
-  }
+  if (agent.infiltrated?.size > 0) weights[1] += 0.1
+
   // Bearish sentiment on held factions → boost defect
-  if (hasHoldings) {
-    const bearishHeld = heldMints.filter((m) => (agent.sentiment.get(m) ?? 0) < -2)
-    if (bearishHeld.length > 0) {
-      weights[1] += 0.05 * bearishHeld.length
-    }
+  if (hasHoldings && agent.sentiment) {
+    const bearishHeld = heldMints.filter((m: string) => (agent.sentiment.get(m) ?? 0) < -2)
+    if (bearishHeld.length > 0) weights[1] += 0.05 * bearishHeld.length
   }
 
   if (ascendedFactions.length > 0) {
-    if (holdsAscended) {
-      weights[6] += 0.15
-    }
-    weights[8] += 0.12
-    if (agent.activeLoans.size > 0) {
-      weights[7] += 0.06
-    }
+    if (holdsAscended) weights[5] += 0.15
+    weights[7] += 0.12
+    if ((agent.activeLoans?.size ?? 0) > 0) weights[6] += 0.06
   }
 
   const total = weights.reduce((a, b) => a + b, 0)
@@ -115,9 +103,13 @@ export const chooseAction = (
   return 'join'
 }
 
-export const sentimentBuySize = (agent: AgentState, factionMint: string): number => {
-  const [minSol, maxSol] = PERSONALITY_SOL[agent.personality]
-  const sentiment = agent.sentiment.get(factionMint) ?? 0
+/** Calculate SOL buy size based on personality and sentiment */
+export const sentimentBuySize = (
+  personality: Personality,
+  sentiment: number,
+  solRange: [number, number],
+): number => {
+  const [minSol, maxSol] = solRange
   const sentimentFactor = (sentiment + 10) / 20
 
   const convictionScale: Record<Personality, number> = {
@@ -128,7 +120,7 @@ export const sentimentBuySize = (agent: AgentState, factionMint: string): number
     whale: 2.5,
   }
 
-  const scale = convictionScale[agent.personality]
+  const scale = convictionScale[personality]
   const base = minSol + (maxSol - minSol) * sentimentFactor
   const multiplier = 0.5 + sentimentFactor * scale
   return Math.max(minSol * 0.5, base * multiplier)

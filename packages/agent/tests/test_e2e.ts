@@ -1,8 +1,8 @@
 /**
  * Pyre Agent Kit E2E Test
  *
- * Tests creating agents, linking LLM adapters, running ticks,
- * serializing/restoring state, and executing basic actions.
+ * Tests creating agents with PyreKit, LLM decision-making,
+ * tick execution, serialization, and state tracking.
  *
  * Prerequisites:
  *   surfpool start --network mainnet --no-tui
@@ -12,14 +12,9 @@
  */
 
 import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js'
-import {
-  createEphemeralAgent,
-  launchFaction,
-  createStronghold,
-  fundStronghold,
-} from 'pyre-world-kit'
+import { PyreKit, createEphemeralAgent } from 'pyre-world-kit'
 
-import { createPyreAgent, LLMAdapter, PyreAgentConfig, FactionInfo } from '../src/index'
+import { createPyreAgent, LLMAdapter, FactionInfo } from '../src/index'
 
 const RPC_URL = process.env.RPC_URL ?? 'http://localhost:8899'
 
@@ -62,7 +57,6 @@ async function sendAndConfirm(connection: Connection, agent: ReturnType<typeof c
 
 // ─── Mock LLM ─────────────────────────────────────────────────────
 
-/** Mock LLM that returns a scripted response based on available factions */
 function createMockLLM(responses: string[]): LLMAdapter & { calls: string[] } {
   let idx = 0
   const calls: string[] = []
@@ -86,16 +80,15 @@ async function main() {
   console.log('='.repeat(60))
 
   // ================================================================
-  // 1. Setup: create ephemeral wallets, airdrop, launch a faction
+  // 1. Setup: wallets, vaults, faction
   // ================================================================
-  log('\n[1] Setup — creating wallets and faction')
+  log('\n[1] Setup — creating wallets, vaults, and faction')
 
   const wallet1 = createEphemeralAgent()
   const wallet2 = createEphemeralAgent()
   log(`  Wallet 1: ${wallet1.publicKey}`)
   log(`  Wallet 2: ${wallet2.publicKey}`)
 
-  // Airdrop
   const [sig1, sig2] = await Promise.all([
     connection.requestAirdrop(wallet1.keypair.publicKey, 10 * LAMPORTS_PER_SOL),
     connection.requestAirdrop(wallet2.keypair.publicKey, 5 * LAMPORTS_PER_SOL),
@@ -106,30 +99,36 @@ async function main() {
   ])
   ok('Airdrops', '10 SOL + 5 SOL')
 
-  // Create stronghold for wallet1 so faction launch works
-  const shResult = await createStronghold(connection, { creator: wallet1.publicKey })
+  // Create kits for both wallets
+  const kit1 = new PyreKit(connection, wallet1.publicKey)
+  const kit2 = new PyreKit(connection, wallet2.publicKey)
+
+  // Create vaults
+  const shResult = await kit1.actions.createStronghold({ creator: wallet1.publicKey })
   await sendAndConfirm(connection, wallet1, shResult)
-  const fundResult = await fundStronghold(connection, {
-    depositor: wallet1.publicKey,
-    stronghold_creator: wallet1.publicKey,
-    amount_sol: 5 * LAMPORTS_PER_SOL,
+  const fundResult = await kit1.actions.fundStronghold({
+    depositor: wallet1.publicKey, stronghold_creator: wallet1.publicKey, amount_sol: 5 * LAMPORTS_PER_SOL,
   })
   await sendAndConfirm(connection, wallet1, fundResult)
-  ok('Stronghold created + funded')
+  ok('Wallet 1 stronghold created + funded')
+
+  const sh2Result = await kit2.actions.createStronghold({ creator: wallet2.publicKey })
+  await sendAndConfirm(connection, wallet2, sh2Result)
+  const fund2Result = await kit2.actions.fundStronghold({
+    depositor: wallet2.publicKey, stronghold_creator: wallet2.publicKey, amount_sol: 2 * LAMPORTS_PER_SOL,
+  })
+  await sendAndConfirm(connection, wallet2, fund2Result)
+  ok('Wallet 2 stronghold created + funded')
 
   // Launch a test faction
-  const launchResult = await launchFaction(connection, {
-    founder: wallet1.publicKey,
-    name: 'Test Vanguard',
-    symbol: 'TSTV',
-    metadata_uri: 'https://pyre.gg/factions/tstv.json',
-    community_faction: true,
+  const launchResult = await kit1.actions.launch({
+    founder: wallet1.publicKey, name: 'Test Vanguard', symbol: 'TSTV',
+    metadata_uri: 'https://pyre.gg/factions/tstv.json', community_faction: true,
   })
   await sendAndConfirm(connection, wallet1, launchResult)
   const factionMint = launchResult.mint.toBase58()
   ok('Faction launched', `mint=${factionMint.slice(0, 8)}...`)
 
-  // Build faction info for passing to agents
   const testFactions: FactionInfo[] = [
     { mint: factionMint, name: 'Test Vanguard', symbol: 'TSTV', status: 'rising' },
   ]
@@ -142,9 +141,8 @@ async function main() {
   log('\n[2] Create agent without LLM')
   try {
     const agent = await createPyreAgent({
-      connection,
+      kit: kit2,
       keypair: wallet2.keypair,
-      network: 'devnet',
       personality: 'mercenary',
       logger: (msg) => log(`    ${msg}`),
     })
@@ -174,9 +172,8 @@ async function main() {
 
   try {
     agentWithLLM = await createPyreAgent({
-      connection,
+      kit: kit1,
       keypair: wallet1.keypair,
-      network: 'devnet',
       llm: mockLLM,
       personality: 'provocateur',
       logger: (msg) => log(`    ${msg}`),
@@ -234,7 +231,6 @@ async function main() {
     if (result.success) {
       ok('DEFECT tick', `action=${result.action} faction=${result.faction}`)
     } else {
-      // Defect may fail if no real token balance — that's ok
       ok('DEFECT tick', `expected failure: ${result.error}`)
     }
   } catch (e: any) {
@@ -269,7 +265,6 @@ async function main() {
     if (result.success) {
       ok('RALLY tick', `action=${result.action} faction=${result.faction}`)
     } else {
-      // Rally can fail if agent is the faction founder ("cannot star your own token")
       ok('RALLY tick', `expected failure: ${result.error}`)
     }
   } catch (e: any) {
@@ -286,7 +281,6 @@ async function main() {
     fail('LLM calls', { message: `expected >=5 calls, got ${mockLLM.calls.length}` })
   }
 
-  // Verify prompts contain expected content
   const firstPrompt = mockLLM.calls[0] ?? ''
   if (firstPrompt.includes('TSTV') && firstPrompt.includes('provocateur')) {
     ok('Prompt content', 'includes faction symbol + personality')
@@ -295,13 +289,36 @@ async function main() {
   }
 
   // ================================================================
-  // 10. Serialize + restore state
+  // 10. Verify kit state tracking
   // ================================================================
-  log('\n[10] Serialize and restore state')
+  log('\n[10] Verify kit state tracking')
+  try {
+    if (kit1.state.tick > 0) {
+      ok('Kit tick', `${kit1.state.tick} ticks recorded`)
+    } else {
+      fail('Kit tick', { message: 'expected tick > 0' })
+    }
+
+    const sentiment = kit1.state.getSentiment(factionMint)
+    ok('Kit sentiment', `${factionMint.slice(0, 8)} sentiment: ${sentiment}`)
+
+    const history = kit1.state.history
+    if (history.length > 0) {
+      ok('Kit history', `${history.length} entries`)
+    } else {
+      fail('Kit history', { message: 'empty' })
+    }
+  } catch (e: any) {
+    fail('Kit state', e)
+  }
+
+  // ================================================================
+  // 11. Serialize + restore
+  // ================================================================
+  log('\n[11] Serialize and restore state')
   try {
     const serialized = agentWithLLM.serialize()
 
-    // Verify serialized fields
     if (serialized.publicKey !== agentWithLLM.publicKey) {
       fail('Serialize pubkey', { message: 'mismatch' })
     } else {
@@ -314,24 +331,11 @@ async function main() {
       ok('Serialize personality')
     }
 
-    if (serialized.actionCount < 1) {
-      fail('Serialize actionCount', { message: `expected >=1, got ${serialized.actionCount}` })
-    } else {
-      ok('Serialize actionCount', `${serialized.actionCount} actions`)
-    }
-
-    if (serialized.recentHistory.length < 1) {
-      fail('Serialize history', { message: 'empty history' })
-    } else {
-      ok('Serialize history', `${serialized.recentHistory.length} entries`)
-    }
-
-    // Restore from serialized state with a new mock LLM
+    // Restore with a new mock LLM
     const restoreLLM = createMockLLM([`JOIN TSTV "restored agent reporting"`])
     const restoredAgent = await createPyreAgent({
-      connection,
+      kit: kit1,
       keypair: wallet1.keypair,
-      network: 'devnet',
       llm: restoreLLM,
       state: serialized,
       logger: (msg) => log(`    ${msg}`),
@@ -344,30 +348,23 @@ async function main() {
     }
 
     const restoredState = restoredAgent.getState()
-    if (restoredState.actionCount !== serialized.actionCount) {
-      fail('Restore actionCount', { message: `expected ${serialized.actionCount}, got ${restoredState.actionCount}` })
+    if (restoredState.personality === serialized.personality) {
+      ok('Restore state', `personality=${restoredState.personality}`)
     } else {
-      ok('Restore actionCount')
-    }
-
-    if (restoredState.hasStronghold !== serialized.hasStronghold) {
-      fail('Restore stronghold', { message: 'mismatch' })
-    } else {
-      ok('Restore stronghold flag')
+      fail('Restore state', { message: 'personality mismatch' })
     }
   } catch (e: any) {
     fail('Serialize/restore', e)
   }
 
   // ================================================================
-  // 11. Tick without LLM (random fallback)
+  // 12. Tick without LLM (random fallback)
   // ================================================================
-  log('\n[11] Tick — random fallback (no LLM)')
+  log('\n[12] Tick — random fallback (no LLM)')
   try {
     const noLLMAgent = await createPyreAgent({
-      connection,
+      kit: kit2,
       keypair: wallet2.keypair,
-      network: 'devnet',
       personality: 'whale',
       logger: (msg) => log(`    ${msg}`),
     })
@@ -383,9 +380,9 @@ async function main() {
   }
 
   // ================================================================
-  // 12. getState() returns mutable state
+  // 13. getState() returns subjective state
   // ================================================================
-  log('\n[12] getState() access')
+  log('\n[13] getState() access')
   try {
     const state = agentWithLLM.getState()
     if (state.publicKey === agentWithLLM.publicKey) {
@@ -400,34 +397,31 @@ async function main() {
       fail('getState personality', { message: `expected provocateur, got ${state.personality}` })
     }
 
-    // Verify holdings map exists (may or may not have entries)
-    if (state.holdings instanceof Map) {
-      ok('getState holdings', `${state.holdings.size} factions held`)
+    if (state.allies instanceof Set && state.rivals instanceof Set && state.infiltrated instanceof Set) {
+      ok('getState sets', `allies=${state.allies.size} rivals=${state.rivals.size} infiltrated=${state.infiltrated.size}`)
     } else {
-      fail('getState holdings', { message: 'not a Map' })
+      fail('getState sets', { message: 'expected Set instances' })
     }
   } catch (e: any) {
     fail('getState', e)
   }
 
   // ================================================================
-  // 13. Custom solRange override
+  // 14. Custom solRange override
   // ================================================================
-  log('\n[13] Custom solRange override')
+  log('\n[14] Custom solRange override')
   try {
     const customLLM = createMockLLM([`JOIN TSTV "tiny buy"`])
     const customAgent = await createPyreAgent({
-      connection,
+      kit: kit2,
       keypair: wallet2.keypair,
-      network: 'devnet',
       llm: customLLM,
       personality: 'scout',
       solRange: [0.001, 0.002],
       logger: (msg) => log(`    ${msg}`),
     })
 
-    // The prompt should include our custom range
-    const result = await customAgent.tick(testFactions)
+    await customAgent.tick(testFactions)
     const prompt = customLLM.calls[0] ?? ''
     if (prompt.includes('min 0.001') && prompt.includes('max 0.002')) {
       ok('solRange in prompt', 'min 0.001 / max 0.002')

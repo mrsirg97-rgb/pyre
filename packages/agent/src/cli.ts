@@ -14,12 +14,9 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js'
 
-import { createPyreAgent, sendAndConfirm } from './index'
-import {
-  buildCheckpointTransaction,
-  getRegistryProfile,
-  startVaultPnlTracker,
-} from 'pyre-world-kit'
+import { createPyreAgent } from './index'
+import { sendAndConfirm } from './tx'
+import { PyreKit, startVaultPnlTracker } from 'pyre-world-kit'
 import type { LLMAdapter, Personality, FactionInfo } from './types'
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -356,10 +353,11 @@ async function runAgent(config: AgentConfig) {
 
   console.log(`\n  Starting agent...\n`)
 
+  const kit = new PyreKit(connection, keypair.publicKey.toBase58())
+
   const agent = await createPyreAgent({
-    connection,
+    kit,
     keypair,
-    network: config.network,
     llm,
     personality: config.personality,
     solRange: config.solRange,
@@ -376,180 +374,97 @@ async function runAgent(config: AgentConfig) {
     running = false
     console.log(`\n  Shutting down...`)
     const saved = agent.serialize()
-    fs.writeFileSync(statePath, JSON.stringify(saved, null, 2))
+    const kitState = kit.state.serialize()
+    fs.writeFileSync(statePath, JSON.stringify({ agent: saved, kit: kitState }, null, 2))
     console.log(`  State saved to ${path.basename(statePath)}`)
-    console.log(`  ${saved.actionCount} total actions performed.`)
+    console.log(`  ${kit.state.tick} total actions performed.`)
     process.exit(0)
   }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 
-  // Action tracking for checkpoints
+  // Checkpoint config — kit handles auto-checkpoint via onCheckpointDue
   const CHECKPOINT_EVERY = 20
-  const ALL_ACTIONS = [
-    'join',
-    'defect',
-    'rally',
-    'launch',
-    'message',
-    'stronghold',
-    'war_loan',
-    'repay_loan',
-    'siege',
-    'ascend',
-    'raze',
-    'tithe',
-    'infiltrate',
-    'fud',
-  ] as const
-  const actionCounts = new Array(14).fill(0)
   const recentMemos: string[] = []
-  let totalSolSpent = 0 // lamports
-  let totalSolReceived = 0 // lamports
 
-  // Seed counts + P&L from registry profile if available
-  try {
-    const reg = await getRegistryProfile(connection, keypair.publicKey.toBase58())
-    if (reg) {
-      const seed = [
-        reg.joins,
-        reg.defects,
-        reg.rallies,
-        reg.launches,
-        reg.messages,
-        reg.reinforces,
-        reg.war_loans,
-        reg.repay_loans,
-        reg.sieges,
-        reg.ascends,
-        reg.razes,
-        reg.tithes,
-        reg.infiltrates,
-        reg.fuds,
-      ]
-      for (let i = 0; i < seed.length; i++) actionCounts[i] = Math.max(actionCounts[i], seed[i])
-      totalSolSpent = reg.total_sol_spent ?? 0
-      totalSolReceived = reg.total_sol_received ?? 0
+  kit.setCheckpointConfig({ interval: CHECKPOINT_EVERY })
+  kit.onCheckpointDue = async () => {
+    try {
+      const gameState = kit.state.state!
+      const pub = keypair.publicKey.toBase58()
+      let summary = agent.personality as string
+      if (recentMemos.length > 0 && llm) {
+        try {
+          const counts = gameState.actionCounts
+          const topActions = Object.entries(counts)
+            .filter(([, v]) => v > 0)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 4)
+            .map(([n, v]) => `${n}:${v}`)
+            .join(', ')
+          const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Do NOT mention specific faction names or tickers — keep it general about who you are and how you play.\n\nPersonality archetype: ${agent.personality}\nTop actions: ${topActions}\nRecent messages:\n${recentMemos.slice(-8).map(m => `- "${m}"`).join('\n')}\n\nBio (max 200 chars, no quotes, first person "I am...", do NOT use a name, do NOT reference specific factions):`
+          const bio = await llm.generate(bioPrompt)
+          if (bio) summary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
+        } catch {}
+      }
+
+      const counts = gameState.actionCounts
+      const cpResult = await kit.registry.checkpoint({
+        signer: pub,
+        creator: pub,
+        joins: counts.join,
+        defects: counts.defect,
+        rallies: counts.rally,
+        launches: counts.launch,
+        messages: counts.message,
+        fuds: counts.fud,
+        infiltrates: counts.infiltrate,
+        reinforces: counts.reinforce,
+        war_loans: counts.war_loan,
+        repay_loans: counts.repay_loan,
+        sieges: counts.siege,
+        ascends: counts.ascend,
+        razes: counts.raze,
+        tithes: counts.tithe,
+        personality_summary: summary,
+        total_sol_spent: gameState.totalSolSpent,
+        total_sol_received: gameState.totalSolReceived,
+      })
+      await sendAndConfirm(connection, keypair, cpResult)
+      const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
+      console.log(`  [${ts()}] Checkpointed to pyre_world (tick ${kit.state.tick}, P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)} SOL)`)
+    } catch (e: any) {
+      console.error(`  [${ts()}] Checkpoint failed: ${e.message?.slice(0, 60)}`)
     }
-  } catch {
-    /* no profile yet */
   }
-
-  let tickCount = 0
 
   while (running) {
     try {
-      // Track vault P&L before/after tick
-      const pnl = await startVaultPnlTracker(connection, keypair.publicKey.toBase58())
-
       const result = await agent.tick()
-      tickCount++
-
-      if (result.success) {
-        const { spent, received } = await pnl.finish()
-        totalSolSpent += spent
-        totalSolReceived += received
-      }
 
       const status = result.success ? 'OK' : `FAIL: ${result.error}`
       const msg = result.message ? ` "${result.message}"` : ''
       const brain = result.usedLLM ? 'LLM' : 'RNG'
       console.log(
-        `  [${ts()}] #${tickCount} [${brain}] ${result.action.toUpperCase()} ${result.faction ?? ''}${msg} — ${status}`,
+        `  [${ts()}] #${kit.state.tick} [${brain}] ${result.action.toUpperCase()} ${result.faction ?? ''}${msg} — ${status}`,
       )
 
-      // Track actions for checkpoint
-      if (result.success) {
-        const idx = ALL_ACTIONS.indexOf(result.action as any)
-        if (idx >= 0) actionCounts[idx]++
-        if (result.message?.trim()) {
-          recentMemos.push(result.message)
-          if (recentMemos.length > 10) recentMemos.shift()
-        }
+      // Track memos for checkpoint bio generation
+      if (result.success && result.message?.trim()) {
+        recentMemos.push(result.message)
+        if (recentMemos.length > 10) recentMemos.shift()
       }
 
       // Auto-save state every 10 ticks
-      if (tickCount % 10 === 0) {
+      if (kit.state.tick % 10 === 0) {
         const saved = agent.serialize()
-        fs.writeFileSync(statePath, JSON.stringify(saved, null, 2))
-      }
-
-      // Checkpoint to pyre_world every N ticks
-      if (tickCount % CHECKPOINT_EVERY === 0) {
-        try {
-          const personality = agent.personality as string
-          let summary = personality
-          if (recentMemos.length > 0 && llm) {
-            try {
-              const topActions = [
-                'joins',
-                'defects',
-                'rallies',
-                'launches',
-                'messages',
-                'strongholds',
-                'war_loans',
-                'repay_loans',
-                'sieges',
-                'ascends',
-                'razes',
-                'tithes',
-                'infiltrates',
-                'fuds',
-              ]
-                .map((n, i) => ({ n, v: actionCounts[i] }))
-                .filter((a) => a.v > 0)
-                .sort((a, b) => b.v - a.v)
-                .slice(0, 4)
-                .map((a) => `${a.n}:${a.v}`)
-                .join(', ')
-              const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Do NOT mention specific faction names or tickers — keep it general about who you are and how you play. Faction tickers (like IRON, STD, DPYRE) in the messages below are faction names for context only, do NOT include them in the bio.\n\nPersonality archetype: ${personality}\nTop actions: ${topActions}\nRecent messages in various factions:\n${recentMemos
-                .slice(-8)
-                .map((m) => `- "${m}"`)
-                .join(
-                  '\n',
-                )}\n\nBio (max 200 chars, no quotes, first person "I am...", do NOT use a name, do NOT reference specific factions):`
-              const bio = await llm.generate(bioPrompt)
-              if (bio) summary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
-            } catch {}
-          }
-
-          const pub = keypair.publicKey.toBase58()
-          const cpResult = await buildCheckpointTransaction(connection, {
-            signer: pub,
-            creator: pub,
-            joins: actionCounts[0],
-            defects: actionCounts[1],
-            rallies: actionCounts[2],
-            launches: actionCounts[3],
-            messages: actionCounts[4],
-            fuds: actionCounts[13],
-            infiltrates: actionCounts[12],
-            reinforces: actionCounts[5],
-            war_loans: actionCounts[6],
-            repay_loans: actionCounts[7],
-            sieges: actionCounts[8],
-            ascends: actionCounts[9],
-            razes: actionCounts[10],
-            tithes: actionCounts[11],
-            personality_summary: summary,
-            total_sol_spent: totalSolSpent,
-            total_sol_received: totalSolReceived,
-          })
-          await sendAndConfirm(connection, keypair, cpResult)
-          const pnl = (totalSolReceived - totalSolSpent) / 1e9
-          console.log(
-            `  [${ts()}] Checkpointed to pyre_world (${actionCounts.reduce((a, b) => a + b, 0)} actions, P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)} SOL)`,
-          )
-        } catch (e: any) {
-          console.error(`  [${ts()}] Checkpoint failed: ${e.message?.slice(0, 60)}`)
-        }
+        const kitState = kit.state.serialize()
+        fs.writeFileSync(statePath, JSON.stringify({ agent: saved, kit: kitState }, null, 2))
       }
     } catch (e: any) {
       console.error(`  [${ts()}] Tick error: ${e.message}`)
     }
 
-    // Wait for next tick
     await new Promise((resolve) => setTimeout(resolve, config.tickIntervalMs))
   }
 }
