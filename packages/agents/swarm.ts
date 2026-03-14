@@ -32,6 +32,7 @@ import { logGlobal, log, sleep, randRange } from './src/util'
 import {
   AGENT_COUNT, KEYS_FILE, LLM_ENABLED, OLLAMA_MODEL, OLLAMA_URL,
   RPC_URL, NETWORK, CONCURRENT_AGENTS, FUND_TARGET_SOL, MIN_FUNDED_SOL,
+  STRONGHOLD_FUND_SOL,
 } from './src/config'
 import { assignPersonality, PERSONALITY_INTERVALS, PERSONALITY_SOL } from './src/identity'
 import { generateKeys, loadKeys, saveKeys } from './src/keys'
@@ -249,6 +250,52 @@ async function swarm() {
       logGlobal(`Restored state for ${Object.keys(savedAgentStates).length} agents`)
     }
   } catch {}
+
+  // Ensure all agents have strongholds (vault-routed operations require them)
+  logGlobal('Ensuring strongholds...')
+  let vaultCount = 0
+  for (const kp of fundedKeypairs) {
+    const pubkey = kp.publicKey.toBase58()
+    try {
+      // Check if vault already exists
+      const existing = await (async () => {
+        try {
+          const { getVaultForWallet } = await import('torchsdk')
+          return await getVaultForWallet(connection, pubkey)
+        } catch { return null }
+      })()
+
+      if (existing) {
+        vaultCount++
+        continue
+      }
+
+      // Create vault
+      const tempKit = new PyreKit(connection, pubkey)
+      const createResult = await tempKit.actions.createStronghold({ creator: pubkey })
+      const createTx = createResult.transaction
+      createTx.partialSign(kp)
+      const createSig = await connection.sendRawTransaction(createTx.serialize())
+      await connection.confirmTransaction(createSig, 'confirmed')
+
+      // Fund vault
+      const fundSol = Math.floor(STRONGHOLD_FUND_SOL * LAMPORTS_PER_SOL)
+      const fundResult = await tempKit.actions.fundStronghold({
+        depositor: pubkey, stronghold_creator: pubkey, amount_sol: fundSol,
+      })
+      const fundTx = fundResult.transaction
+      fundTx.partialSign(kp)
+      const fundSig = await connection.sendRawTransaction(fundTx.serialize())
+      await connection.confirmTransaction(fundSig, 'confirmed')
+
+      vaultCount++
+      log(pubkey.slice(0, 8), `vault created + funded ${STRONGHOLD_FUND_SOL} SOL`)
+    } catch (err: any) {
+      log(pubkey.slice(0, 8), `vault setup failed: ${err.message?.slice(0, 60)}`)
+    }
+    await sleep(300)
+  }
+  logGlobal(`${vaultCount}/${fundedKeypairs.length} agents have strongholds`)
 
   // Create a PyreKit + PyreAgent per funded keypair
   logGlobal('Initializing agents...')
