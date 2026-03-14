@@ -102,6 +102,46 @@ async function status() {
   console.log(`\n  ${funded}/${keys.length} funded, ${totalSol.toFixed(4)} SOL total`)
 }
 
+async function fund() {
+  const keys = loadKeys()
+  if (keys.length === 0) {
+    console.log('No keys. Run `pnpm run keygen` first.')
+    return
+  }
+
+  const connection = new Connection(RPC_URL, 'confirmed')
+  console.log(`Funding ${keys.length} agents on ${NETWORK}...`)
+  console.log(`Target: ${FUND_TARGET_SOL} SOL per agent\n`)
+
+  let funded = 0
+  const BATCH = 10
+  for (let i = 0; i < keys.length; i += BATCH) {
+    const batch = keys.slice(i, i + BATCH)
+    await Promise.allSettled(
+      batch.map(async (kp) => {
+        const balance = await connection.getBalance(kp.publicKey)
+        const sol = balance / LAMPORTS_PER_SOL
+        if (sol >= FUND_TARGET_SOL) {
+          console.log(`  ✓ ${kp.publicKey.toBase58().slice(0, 12)}... ${sol.toFixed(4)} SOL (already funded)`)
+          funded++
+          return
+        }
+        const needed = Math.ceil((FUND_TARGET_SOL - sol) * LAMPORTS_PER_SOL)
+        try {
+          const sig = await connection.requestAirdrop(kp.publicKey, needed)
+          await connection.confirmTransaction(sig, 'confirmed')
+          funded++
+          console.log(`  ✓ ${kp.publicKey.toBase58().slice(0, 12)}... airdropped ${(needed / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
+        } catch (err: any) {
+          console.log(`  ✗ ${kp.publicKey.toBase58().slice(0, 12)}... ${err.message?.slice(0, 60)}`)
+        }
+      })
+    )
+    if (i + BATCH < keys.length) await sleep(1000)
+  }
+  console.log(`\n  ${funded}/${keys.length} funded`)
+}
+
 async function swarm() {
   const keypairs = loadKeys()
   if (keypairs.length === 0) {
@@ -366,10 +406,12 @@ async function swarm() {
 
 const mode = process.argv.includes('--keygen') ? 'keygen'
   : process.argv.includes('--status') ? 'status'
+  : process.argv.includes('--fund') ? 'fund'
   : 'swarm'
 
 switch (mode) {
   case 'keygen': keygen().catch(console.error); break
   case 'status': status().catch(console.error); break
+  case 'fund': fund().catch(console.error); break
   default: swarm().catch(console.error); break
 }
