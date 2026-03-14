@@ -2,9 +2,20 @@ import { PERSONALITY_WEIGHTS, PERSONALITY_SOL } from './defaults'
 import { Action, AgentState, FactionInfo, Personality } from './types'
 
 const ALL_ACTIONS: Action[] = [
-  'join', 'defect', 'rally', 'launch', 'message',
-  'stronghold', 'war_loan', 'repay_loan', 'siege', 'ascend', 'raze', 'tithe',
-  'infiltrate', 'fud',
+  'join',
+  'defect',
+  'rally',
+  'launch',
+  'message',
+  'stronghold',
+  'war_loan',
+  'repay_loan',
+  'siege',
+  'ascend',
+  'raze',
+  'tithe',
+  'infiltrate',
+  'fud',
 ]
 
 /**
@@ -23,39 +34,75 @@ export const chooseAction = (
   const weights = dynamicWeights ? [...dynamicWeights] : [...PERSONALITY_WEIGHTS[personality]]
   const hasHoldings = agent.holdings.size > 0
   const heldMints = [...agent.holdings.keys()]
-  const rivalFactions = knownFactions.filter(f => !heldMints.includes(f.mint))
+  const rivalFactions = knownFactions.filter((f) => !heldMints.includes(f.mint))
 
-  if (!hasHoldings) { weights[0] += weights[1]; weights[1] = 0 }
-  if (!canRally) { weights[0] += weights[2]; weights[2] = 0 }
-  if (agent.hasStronghold) { weights[0] += weights[5]; weights[5] = 0 }
+  if (!hasHoldings) {
+    weights[0] += weights[1]
+    weights[1] = 0
+  }
+  if (!canRally) {
+    weights[0] += weights[2]
+    weights[2] = 0
+  }
+  if (agent.hasStronghold) {
+    weights[0] += weights[5]
+    weights[5] = 0
+  }
 
-  const ascendedFactions = knownFactions.filter(f => f.status === 'ascended')
-  const holdsAscended = ascendedFactions.some(f => agent.holdings.has(f.mint))
-  if (!holdsAscended) { weights[0] += weights[6]; weights[6] = 0 }
-  if (agent.activeLoans.size === 0) { weights[0] += weights[7]; weights[7] = 0 }
-  if (ascendedFactions.length === 0) { weights[0] += weights[8]; weights[8] = 0 }
+  const ascendedFactions = knownFactions.filter((f) => f.status === 'ascended')
+  const holdsAscended = ascendedFactions.some((f) => agent.holdings.has(f.mint))
+  if (!holdsAscended) {
+    weights[0] += weights[6]
+    weights[6] = 0
+  }
+  if (agent.activeLoans.size === 0) {
+    weights[0] += weights[7]
+    weights[7] = 0
+  }
+  if (ascendedFactions.length === 0) {
+    weights[0] += weights[8]
+    weights[8] = 0
+  }
 
-  const readyFactions = knownFactions.filter(f => f.status === 'ready')
-  if (readyFactions.length === 0) { weights[0] += weights[9]; weights[9] = 0 }
-  const risingFactions = knownFactions.filter(f => f.status === 'rising')
-  if (risingFactions.length === 0) { weights[0] += weights[10]; weights[10] = 0 }
+  const readyFactions = knownFactions.filter((f) => f.status === 'ready')
+  if (readyFactions.length === 0) {
+    weights[0] += weights[9]
+    weights[9] = 0
+  }
+  const risingFactions = knownFactions.filter((f) => f.status === 'rising')
+  if (risingFactions.length === 0) {
+    weights[0] += weights[10]
+    weights[10] = 0
+  }
 
-  if (rivalFactions.length === 0) { weights[0] += weights[12]; weights[12] = 0 }
-  if (!hasHoldings) { weights[0] += weights[13]; weights[13] = 0 }
+  if (rivalFactions.length === 0) {
+    weights[0] += weights[12]
+    weights[12] = 0
+  }
+  if (!hasHoldings) {
+    weights[0] += weights[13]
+    weights[13] = 0
+  }
 
-  if (agent.infiltrated.size > 0) { weights[1] += 0.10 }
+  if (agent.infiltrated.size > 0) {
+    weights[1] += 0.1
+  }
   // Bearish sentiment on held factions → boost defect
   if (hasHoldings) {
-    const bearishHeld = heldMints.filter(m => (agent.sentiment.get(m) ?? 0) < -2)
+    const bearishHeld = heldMints.filter((m) => (agent.sentiment.get(m) ?? 0) < -2)
     if (bearishHeld.length > 0) {
       weights[1] += 0.05 * bearishHeld.length
     }
   }
 
   if (ascendedFactions.length > 0) {
-    if (holdsAscended) { weights[6] += 0.15 }
+    if (holdsAscended) {
+      weights[6] += 0.15
+    }
     weights[8] += 0.12
-    if (agent.activeLoans.size > 0) { weights[7] += 0.06 }
+    if (agent.activeLoans.size > 0) {
+      weights[7] += 0.06
+    }
   }
 
   const total = weights.reduce((a, b) => a + b, 0)

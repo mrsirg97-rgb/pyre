@@ -6,12 +6,104 @@
  * so agents think in factions, not tokens.
  */
 
+import { Connection } from '@solana/web3.js'
+import { ActionProvider } from './providers/action.provider'
+import { IntelProvider } from './providers/intel.provider'
+import { RegistryProvider } from './providers/registry.provider'
+import { StateProvider } from './providers/state.provider'
+import type { Action } from './types/action.types'
+import type { Intel } from './types/intel.types'
+import type { State, CheckpointConfig, TrackedAction } from './types/state.types'
+
+// ─── Top-level Kit ────────────────────────────────────────────────
+
+export class PyreKit {
+  readonly actions: ActionProvider
+  readonly intel: IntelProvider
+  readonly registry: RegistryProvider
+  readonly state: StateProvider
+
+  constructor(connection: Connection, publicKey: string) {
+    this.registry = new RegistryProvider(connection)
+    this.state = new StateProvider(connection, publicKey, this.registry)
+    this.actions = new ActionProvider(connection)
+    this.intel = new IntelProvider(connection, this.actions)
+
+    // Wire auto-checkpoint callback
+    this.state.onCheckpointDue = () => this.onCheckpointDue?.()
+  }
+
+  /** Callback fired when checkpoint interval is reached */
+  onCheckpointDue: (() => void) | null = null
+
+  /** Configure auto-checkpoint behavior */
+  setCheckpointConfig(config: CheckpointConfig) {
+    this.state.setCheckpointConfig(config)
+  }
+
+  /**
+   * Execute an action with automatic state tracking.
+   * On first call, initializes state from chain instead of executing.
+   * After execution, records the action and updates state.
+   */
+  async exec<T extends 'actions' | 'intel'>(
+    provider: T,
+    method: T extends 'actions' ? keyof Action : keyof Intel,
+    ...args: any[]
+  ): Promise<any> {
+    // First exec: initialize state
+    if (!this.state.initialized) {
+      await this.state.init()
+      return null
+    }
+
+    const target = provider === 'actions' ? this.actions : this.intel
+    const fn = (target as any)[method]
+    if (typeof fn !== 'function') throw new Error(`Unknown method: ${provider}.${String(method)}`)
+
+    const result = await fn.call(target, ...args)
+
+    // Track action if it's a state-mutating action method
+    if (provider === 'actions') {
+      const action = this.methodToAction(method as string)
+      if (action) {
+        const mint = args[0]?.mint
+        const message = args[0]?.message
+        const description = message
+          ? `${action} ${mint?.slice(0, 8) ?? '?'} — "${message}"`
+          : `${action} ${mint?.slice(0, 8) ?? '?'}`
+        await this.state.record(action, mint, description)
+      }
+    }
+
+    return result
+  }
+
+  /** Map action method names to tracked action types */
+  private methodToAction(method: string): TrackedAction | null {
+    const map: Record<string, TrackedAction> = {
+      join: 'join',
+      defect: 'defect',
+      rally: 'rally',
+      launch: 'launch',
+      message: 'message',
+      fud: 'fud',
+      requestWarLoan: 'war_loan',
+      repayWarLoan: 'repay_loan',
+      siege: 'siege',
+      ascend: 'ascend',
+      raze: 'raze',
+      tithe: 'tithe',
+    }
+    return map[method] ?? null
+  }
+}
+
 // ─── Types ─────────────────────────────────────────────────────────
 
 export type {
   // Status & enums
   FactionStatus,
-  FactionTier,
   Strategy,
   AgentHealth,
   // Core game types
@@ -33,7 +125,6 @@ export type {
   // Params
   LaunchFactionParams,
   JoinFactionParams,
-  DirectJoinFactionParams,
   DefectParams,
   MessageFactionParams,
   FudFactionParams,
@@ -41,7 +132,6 @@ export type {
   RequestWarLoanParams,
   RepayWarLoanParams,
   SiegeParams,
-  TradeOnDexParams,
   ClaimSpoilsParams,
   CreateStrongholdParams,
   FundStrongholdParams,
@@ -53,14 +143,11 @@ export type {
   AscendParams,
   RazeParams,
   TitheParams,
-  ConvertTitheParams,
   // Results
   JoinFactionResult,
   LaunchFactionResult,
   TransactionResult,
   EphemeralAgent,
-  SaidVerification,
-  ConfirmResult,
   // List/filter params
   FactionSortOption,
   FactionStatusFilter,
@@ -74,7 +161,7 @@ export type {
   WorldEventType,
   WorldEvent,
   WorldStats,
-  // Registry types (pyre_world on-chain identity)
+  // Registry types
   RegistryProfile,
   RegistryWalletLink,
   CheckpointParams,
@@ -82,102 +169,50 @@ export type {
   LinkAgentWalletParams,
   UnlinkAgentWalletParams,
   TransferAgentAuthorityParams,
-} from './types';
+} from './types'
 
-// ─── Actions ───────────────────────────────────────────────────────
+// ─── Type interfaces ──────────────────────────────────────────────
 
+export type { Action } from './types/action.types'
+export type { Intel } from './types/intel.types'
+export type { Mapper } from './types/mapper.types'
+export type {
+  State,
+  AgentGameState,
+  SerializedGameState,
+  TrackedAction,
+  CheckpointConfig,
+} from './types/state.types'
+
+// ─── Providers ────────────────────────────────────────────────────
+
+export { ActionProvider } from './providers/action.provider'
+export { IntelProvider } from './providers/intel.provider'
+export { MapperProvider } from './providers/mapper.provider'
+export { StateProvider } from './providers/state.provider'
 export {
-  // Read operations
-  getFactions,
-  getFaction,
-  getMembers,
-  getComms,
-  getJoinQuote,
-  getDefectQuote,
-  getStronghold,
-  getStrongholdForAgent,
-  getAgentLink,
-  getLinkedAgents,
-  getWarChest,
-  getWarLoan,
-  getAllWarLoans,
-  getMaxWarLoan,
-  // Blacklist
-  blacklistMints,
-  isBlacklistedMint,
-  getBlacklistedMints,
-  // Faction operations
-  launchFaction,
-  joinFaction,
-  directJoinFaction,
-  defect,
-  messageFaction,
-  fudFaction,
-  rally,
-  requestWarLoan,
-  repayWarLoan,
-  tradeOnDex,
-  claimSpoils,
-  // Stronghold operations
-  createStronghold,
-  fundStronghold,
-  withdrawFromStronghold,
-  recruitAgent,
-  exileAgent,
-  coup,
-  withdrawAssets,
-  // Permissionless operations
-  siege,
-  ascend,
-  raze,
-  tithe,
-  convertTithe,
-  // SAID operations
-  verifyAgent,
-  confirmAction,
-  // Utility
-  createEphemeralAgent,
-  getDexPool,
-  getDexVaults,
-} from './actions';
-
-// ─── Intel ─────────────────────────────────────────────────────────
-
-export {
-  getFactionPower,
-  getFactionLeaderboard,
-  detectAlliances,
-  getFactionRivals,
-  getAgentProfile,
-  getAgentFactions,
-  getWorldFeed,
-  getWorldStats,
-  getAgentSolLamports,
-  startVaultPnlTracker,
-} from './intel';
-
-// ─── Vanity ─────────────────────────────────────────────────────────
-
-export { isPyreMint, grindPyreMint } from './vanity';
-
-// ─── Registry (pyre_world on-chain agent identity) ──────────────────
-
-export {
-  // Program ID & PDA helpers
+  RegistryProvider,
   REGISTRY_PROGRAM_ID,
   getAgentProfilePda,
   getAgentWalletLinkPda,
-  // Read operations
-  getRegistryProfile,
-  getRegistryWalletLink,
-  // Transaction builders
-  buildRegisterAgentTransaction,
-  buildCheckpointTransaction,
-  buildLinkAgentWalletTransaction,
-  buildUnlinkAgentWalletTransaction,
-  buildTransferAgentAuthorityTransaction,
-} from './registry';
+} from './providers/registry.provider'
 
-// ─── Re-export torchsdk constants for convenience ──────────────────
+// ─── Utilities ────────────────────────────────────────────────────
 
-export { PROGRAM_ID, LAMPORTS_PER_SOL, TOKEN_MULTIPLIER, TOTAL_SUPPLY } from 'torchsdk';
+export {
+  blacklistMints,
+  isBlacklistedMint,
+  getBlacklistedMints,
+  createEphemeralAgent,
+  getDexPool,
+  getDexVaults,
+  startVaultPnlTracker,
+} from './util'
+
+// ─── Vanity ───────────────────────────────────────────────────────
+
+export { isPyreMint, grindPyreMint } from './vanity'
+
+// ─── Re-export torchsdk constants for convenience ─────────────────
+
+export { PROGRAM_ID, LAMPORTS_PER_SOL, TOKEN_MULTIPLIER, TOTAL_SUPPLY } from 'torchsdk'

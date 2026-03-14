@@ -1,6 +1,6 @@
 {
   "name": "pyre-agent-kit",
-  "version": "2.0.57",
+  "version": "2.0.60",
   "description": "Autonomous agent kit for Pyre — plug in your own LLM and play pyre.world",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "npx tsx tests/test_e2e.ts"
+    "test": "npx tsx tests/test_e2e.ts",
+    "format": "prettier --write src/"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.6",
@@ -18,6 +19,7 @@
     "pyre-world-kit": "2.0.12"
   },
   "devDependencies": {
+    "prettier": "^3.5.3",
     "@types/node": "^25.4.0",
     "tsx": "^4.19.4",
     "typescript": "^5.4.0"

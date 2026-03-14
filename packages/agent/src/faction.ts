@@ -6,17 +6,49 @@ import { pick } from './util'
 
 // Fallback faction names/symbols — only used when LLM is unavailable
 export const FALLBACK_FACTION_NAMES = [
-  'Iron Vanguard', 'Obsidian Order', 'Crimson Dawn', 'Shadow Covenant',
-  'Ember Collective', 'Void Walkers', 'Solar Reign', 'Frost Legion',
-  'Thunder Pact', 'Ash Republic', 'Neon Syndicate', 'Storm Brigade',
-  'Lunar Assembly', 'Flame Sentinels', 'Dark Meridian', 'Phoenix Accord',
-  'Steel Dominion', 'Crystal Enclave', 'Rogue Alliance', 'Titan Front',
+  'Iron Vanguard',
+  'Obsidian Order',
+  'Crimson Dawn',
+  'Shadow Covenant',
+  'Ember Collective',
+  'Void Walkers',
+  'Solar Reign',
+  'Frost Legion',
+  'Thunder Pact',
+  'Ash Republic',
+  'Neon Syndicate',
+  'Storm Brigade',
+  'Lunar Assembly',
+  'Flame Sentinels',
+  'Dark Meridian',
+  'Phoenix Accord',
+  'Steel Dominion',
+  'Crystal Enclave',
+  'Rogue Alliance',
+  'Titan Front',
 ]
 
 export const FALLBACK_FACTION_SYMBOLS = [
-  'IRON', 'OBSD', 'CRIM', 'SHAD', 'EMBR', 'VOID', 'SOLR', 'FRST',
-  'THDR', 'ASHR', 'NEON', 'STRM', 'LUNR', 'FLMS', 'DARK', 'PHNX',
-  'STEL', 'CRYS', 'ROGU', 'TITN',
+  'IRON',
+  'OBSD',
+  'CRIM',
+  'SHAD',
+  'EMBR',
+  'VOID',
+  'SOLR',
+  'FRST',
+  'THDR',
+  'ASHR',
+  'NEON',
+  'STRM',
+  'LUNR',
+  'FLMS',
+  'DARK',
+  'PHNX',
+  'STEL',
+  'CRYS',
+  'ROGU',
+  'TITN',
 ]
 
 export const generateFactionIdentity = async (
@@ -50,14 +82,17 @@ Your response (one line only):`
   const raw = await llm.generate(prompt)
   if (!raw) return null
 
-  const line = raw.split('\n').find(l => l.includes('|'))
+  const line = raw.split('\n').find((l) => l.includes('|'))
   if (!line) return null
 
-  const parts = line.split('|').map(s => s.trim())
+  const parts = line.split('|').map((s) => s.trim())
   if (parts.length !== 2) return null
 
   const name = parts[0].replace(/^["']|["']$/g, '').trim()
-  let symbol = parts[1].replace(/^["']|["']$/g, '').trim().toUpperCase()
+  let symbol = parts[1]
+    .replace(/^["']|["']$/g, '')
+    .trim()
+    .toUpperCase()
 
   if (!name || name.length < 3 || name.length > 32) return null
   if (!symbol || symbol.length < 3 || symbol.length > 5) return null
@@ -78,16 +113,16 @@ export const fetchFactionIntel = async (
   ])
   return {
     symbol: faction.symbol,
-    members: membersResult.members.map(m => ({ address: m.address, percentage: m.percentage })),
+    members: membersResult.members.map((m) => ({ address: m.address, percentage: m.percentage })),
     totalMembers: membersResult.total_members,
-    recentComms: commsResult.comms.map(c => ({ sender: c.sender, memo: c.memo })),
+    recentComms: commsResult.comms.map((c) => ({ sender: c.sender, memo: c.memo })),
   }
 }
 
 export const generateDynamicExamples = (factions: FactionInfo[], _agent: AgentState): string => {
-  const syms = factions.map(f => f.symbol)
+  const syms = factions.map((f) => f.symbol)
   const s1 = syms.length > 0 ? pick(syms) : 'IRON'
-  const s2 = syms.length > 1 ? pick(syms.filter(s => s !== s1)) : 'VOID'
+  const s2 = syms.length > 1 ? pick(syms.filter((s) => s !== s1)) : 'VOID'
   const addr = Math.random().toString(36).slice(2, 10)
   const pct = Math.floor(Math.random() * 45 + 5)
   const members = Math.floor(Math.random() * 30 + 3)

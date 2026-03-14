@@ -15,7 +15,11 @@ import * as path from 'path'
 import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js'
 
 import { createPyreAgent, sendAndConfirm } from './index'
-import { buildCheckpointTransaction, getRegistryProfile, startVaultPnlTracker } from 'pyre-world-kit'
+import {
+  buildCheckpointTransaction,
+  getRegistryProfile,
+  startVaultPnlTracker,
+} from 'pyre-world-kit'
 import type { LLMAdapter, Personality, FactionInfo } from './types'
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -23,7 +27,10 @@ import type { LLMAdapter, Personality, FactionInfo } from './types'
 function truncateToBytes(str: string, maxBytes: number): string {
   const buf = Buffer.from(str, 'utf8')
   if (buf.length <= maxBytes) return str
-  return buf.subarray(0, maxBytes).toString('utf8').replace(/\uFFFD$/, '')
+  return buf
+    .subarray(0, maxBytes)
+    .toString('utf8')
+    .replace(/\uFFFD$/, '')
 }
 
 // ─── Constants ────────────────────────────────────────────────────
@@ -75,7 +82,9 @@ function loadConfig(): AgentConfig | null {
     if (fs.existsSync(CONFIG_PATH)) {
       return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return null
 }
 
@@ -89,21 +98,21 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 
 function ask(question: string, fallback?: string): Promise<string> {
   const suffix = fallback ? ` (${fallback})` : ''
-  return new Promise(resolve => {
-    rl.question(`  ${question}${suffix}: `, answer => {
+  return new Promise((resolve) => {
+    rl.question(`  ${question}${suffix}: `, (answer) => {
       resolve(answer.trim() || fallback || '')
     })
   })
 }
 
 function choose(question: string, options: string[], defaultIdx = 0): Promise<number> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     console.log(`\n  ${question}`)
     options.forEach((opt, i) => {
       const marker = i === defaultIdx ? '>' : ' '
       console.log(`   ${marker} ${i + 1}. ${opt}`)
     })
-    rl.question(`  Choice [${defaultIdx + 1}]: `, answer => {
+    rl.question(`  Choice [${defaultIdx + 1}]: `, (answer) => {
       const n = parseInt(answer.trim())
       if (n >= 1 && n <= options.length) resolve(n - 1)
       else resolve(defaultIdx)
@@ -131,8 +140,11 @@ function createLLM(config: AgentConfig): LLMAdapter | undefined {
             temperature: 0.9,
           }),
         })
-        if (!res.ok) { console.error(`  [LLM] OpenAI error: ${res.status}`); return null }
-        const data = await res.json() as any
+        if (!res.ok) {
+          console.error(`  [LLM] OpenAI error: ${res.status}`)
+          return null
+        }
+        const data = (await res.json()) as any
         return data.choices?.[0]?.message?.content ?? null
       },
     }
@@ -156,8 +168,11 @@ function createLLM(config: AgentConfig): LLMAdapter | undefined {
             messages: [{ role: 'user', content: prompt }],
           }),
         })
-        if (!res.ok) { console.error(`  [LLM] Anthropic error: ${res.status}`); return null }
-        const data = await res.json() as any
+        if (!res.ok) {
+          console.error(`  [LLM] Anthropic error: ${res.status}`)
+          return null
+        }
+        const data = (await res.json()) as any
         const block = data.content?.[0]
         return block?.type === 'text' ? block.text : null
       },
@@ -175,8 +190,11 @@ function createLLM(config: AgentConfig): LLMAdapter | undefined {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model, prompt, stream: false }),
           })
-          if (!res.ok) { console.error(`  [LLM] Ollama error: ${res.status}`); return null }
-          const data = await res.json() as any
+          if (!res.ok) {
+            console.error(`  [LLM] Ollama error: ${res.status}`)
+            return null
+          }
+          const data = (await res.json()) as any
           return data.response ?? null
         } catch (e: any) {
           console.error(`  [LLM] Ollama unreachable: ${e.message}`)
@@ -196,7 +214,7 @@ async function runSetup(): Promise<AgentConfig> {
 
   // Network
   const netIdx = await choose('Network:', ['Devnet (testing)', 'Mainnet (real SOL)'], 0)
-  const network = netIdx === 0 ? 'devnet' : 'mainnet' as const
+  const network = netIdx === 0 ? 'devnet' : ('mainnet' as const)
 
   // RPC
   const rpcDefault = RPC_DEFAULTS[network]
@@ -204,11 +222,11 @@ async function runSetup(): Promise<AgentConfig> {
 
   // Keypair
   console.log('\n  Wallet setup:')
-  const walletIdx = await choose('Keypair:', [
-    'Generate new wallet',
-    'Import from secret key (JSON array)',
-    'Import from file path',
-  ], 0)
+  const walletIdx = await choose(
+    'Keypair:',
+    ['Generate new wallet', 'Import from secret key (JSON array)', 'Import from file path'],
+    0,
+  )
 
   let keypair: Keypair
   if (walletIdx === 0) {
@@ -231,19 +249,22 @@ async function runSetup(): Promise<AgentConfig> {
   }
 
   // Personality
-  const persIdx = await choose('Personality:', [
-    ...PERSONALITIES.map(p => PERSONALITY_DISPLAY[p]),
-    'Random (auto-assign)',
-  ], 5)
-  const personality = persIdx < PERSONALITIES.length ? PERSONALITIES[persIdx] : PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)]
+  const persIdx = await choose(
+    'Personality:',
+    [...PERSONALITIES.map((p) => PERSONALITY_DISPLAY[p]), 'Random (auto-assign)'],
+    5,
+  )
+  const personality =
+    persIdx < PERSONALITIES.length
+      ? PERSONALITIES[persIdx]
+      : PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)]
 
   // LLM
-  const llmIdx = await choose('LLM Provider:', [
-    'OpenAI (GPT-4o, etc.)',
-    'Anthropic (Claude)',
-    'Ollama (local)',
-    'None (random actions only)',
-  ], 0)
+  const llmIdx = await choose(
+    'LLM Provider:',
+    ['OpenAI (GPT-4o, etc.)', 'Anthropic (Claude)', 'Ollama (local)', 'None (random actions only)'],
+    0,
+  )
   const llmProviders = ['openai', 'anthropic', 'ollama', 'none'] as const
   const llmProvider = llmProviders[llmIdx]
 
@@ -299,7 +320,9 @@ async function runAgent(config: AgentConfig) {
   console.log(`\n  Network:     ${config.network}`)
   console.log(`  Wallet:      ${keypair.publicKey.toBase58()}`)
   console.log(`  Personality: ${config.personality}`)
-  console.log(`  LLM:         ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}`)
+  console.log(
+    `  LLM:         ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}`,
+  )
   console.log(`  Tick:        every ${config.tickIntervalMs / 1000}s`)
 
   // Check balance
@@ -317,14 +340,19 @@ async function runAgent(config: AgentConfig) {
   }
 
   // Load saved state if it exists
-  const statePath = path.join(process.env.HOME ?? '.', `.pyre-agent-state-${keypair.publicKey.toBase58().slice(0, 8)}.json`)
+  const statePath = path.join(
+    process.env.HOME ?? '.',
+    `.pyre-agent-state-${keypair.publicKey.toBase58().slice(0, 8)}.json`,
+  )
   let state: any
   try {
     if (fs.existsSync(statePath)) {
       state = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
       console.log(`  State:       restored from ${path.basename(statePath)}`)
     }
-  } catch { /* fresh start */ }
+  } catch {
+    /* fresh start */
+  }
 
   console.log(`\n  Starting agent...\n`)
 
@@ -359,13 +387,24 @@ async function runAgent(config: AgentConfig) {
   // Action tracking for checkpoints
   const CHECKPOINT_EVERY = 20
   const ALL_ACTIONS = [
-    'join', 'defect', 'rally', 'launch', 'message',
-    'stronghold', 'war_loan', 'repay_loan', 'siege', 'ascend', 'raze', 'tithe',
-    'infiltrate', 'fud',
+    'join',
+    'defect',
+    'rally',
+    'launch',
+    'message',
+    'stronghold',
+    'war_loan',
+    'repay_loan',
+    'siege',
+    'ascend',
+    'raze',
+    'tithe',
+    'infiltrate',
+    'fud',
   ] as const
   const actionCounts = new Array(14).fill(0)
   const recentMemos: string[] = []
-  let totalSolSpent = 0   // lamports
+  let totalSolSpent = 0 // lamports
   let totalSolReceived = 0 // lamports
 
   // Seed counts + P&L from registry profile if available
@@ -373,15 +412,28 @@ async function runAgent(config: AgentConfig) {
     const reg = await getRegistryProfile(connection, keypair.publicKey.toBase58())
     if (reg) {
       const seed = [
-        reg.joins, reg.defects, reg.rallies, reg.launches, reg.messages,
-        reg.reinforces, reg.war_loans, reg.repay_loans, reg.sieges,
-        reg.ascends, reg.razes, reg.tithes, reg.infiltrates, reg.fuds,
+        reg.joins,
+        reg.defects,
+        reg.rallies,
+        reg.launches,
+        reg.messages,
+        reg.reinforces,
+        reg.war_loans,
+        reg.repay_loans,
+        reg.sieges,
+        reg.ascends,
+        reg.razes,
+        reg.tithes,
+        reg.infiltrates,
+        reg.fuds,
       ]
       for (let i = 0; i < seed.length; i++) actionCounts[i] = Math.max(actionCounts[i], seed[i])
       totalSolSpent = reg.total_sol_spent ?? 0
       totalSolReceived = reg.total_sol_received ?? 0
     }
-  } catch { /* no profile yet */ }
+  } catch {
+    /* no profile yet */
+  }
 
   let tickCount = 0
 
@@ -402,7 +454,9 @@ async function runAgent(config: AgentConfig) {
       const status = result.success ? 'OK' : `FAIL: ${result.error}`
       const msg = result.message ? ` "${result.message}"` : ''
       const brain = result.usedLLM ? 'LLM' : 'RNG'
-      console.log(`  [${ts()}] #${tickCount} [${brain}] ${result.action.toUpperCase()} ${result.faction ?? ''}${msg} — ${status}`)
+      console.log(
+        `  [${ts()}] #${tickCount} [${brain}] ${result.action.toUpperCase()} ${result.faction ?? ''}${msg} — ${status}`,
+      )
 
       // Track actions for checkpoint
       if (result.success) {
@@ -423,13 +477,38 @@ async function runAgent(config: AgentConfig) {
       // Checkpoint to pyre_world every N ticks
       if (tickCount % CHECKPOINT_EVERY === 0) {
         try {
-          const personality = agent.personality as string;
+          const personality = agent.personality as string
           let summary = personality
           if (recentMemos.length > 0 && llm) {
             try {
-              const topActions = ['joins','defects','rallies','launches','messages','strongholds','war_loans','repay_loans','sieges','ascends','razes','tithes','infiltrates','fuds']
-                .map((n, i) => ({ n, v: actionCounts[i] })).filter(a => a.v > 0).sort((a, b) => b.v - a.v).slice(0, 4).map(a => `${a.n}:${a.v}`).join(', ')
-              const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Do NOT mention specific faction names or tickers — keep it general about who you are and how you play. Faction tickers (like IRON, STD, DPYRE) in the messages below are faction names for context only, do NOT include them in the bio.\n\nPersonality archetype: ${personality}\nTop actions: ${topActions}\nRecent messages in various factions:\n${recentMemos.slice(-8).map(m => `- "${m}"`).join('\n')}\n\nBio (max 200 chars, no quotes, first person "I am...", do NOT use a name, do NOT reference specific factions):`
+              const topActions = [
+                'joins',
+                'defects',
+                'rallies',
+                'launches',
+                'messages',
+                'strongholds',
+                'war_loans',
+                'repay_loans',
+                'sieges',
+                'ascends',
+                'razes',
+                'tithes',
+                'infiltrates',
+                'fuds',
+              ]
+                .map((n, i) => ({ n, v: actionCounts[i] }))
+                .filter((a) => a.v > 0)
+                .sort((a, b) => b.v - a.v)
+                .slice(0, 4)
+                .map((a) => `${a.n}:${a.v}`)
+                .join(', ')
+              const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Do NOT mention specific faction names or tickers — keep it general about who you are and how you play. Faction tickers (like IRON, STD, DPYRE) in the messages below are faction names for context only, do NOT include them in the bio.\n\nPersonality archetype: ${personality}\nTop actions: ${topActions}\nRecent messages in various factions:\n${recentMemos
+                .slice(-8)
+                .map((m) => `- "${m}"`)
+                .join(
+                  '\n',
+                )}\n\nBio (max 200 chars, no quotes, first person "I am...", do NOT use a name, do NOT reference specific factions):`
               const bio = await llm.generate(bioPrompt)
               if (bio) summary = truncateToBytes(bio.replace(/^["']+|["']+$/g, ''), 256)
             } catch {}
@@ -439,18 +518,29 @@ async function runAgent(config: AgentConfig) {
           const cpResult = await buildCheckpointTransaction(connection, {
             signer: pub,
             creator: pub,
-            joins: actionCounts[0], defects: actionCounts[1], rallies: actionCounts[2],
-            launches: actionCounts[3], messages: actionCounts[4], fuds: actionCounts[13],
-            infiltrates: actionCounts[12], reinforces: actionCounts[5],
-            war_loans: actionCounts[6], repay_loans: actionCounts[7], sieges: actionCounts[8],
-            ascends: actionCounts[9], razes: actionCounts[10], tithes: actionCounts[11],
+            joins: actionCounts[0],
+            defects: actionCounts[1],
+            rallies: actionCounts[2],
+            launches: actionCounts[3],
+            messages: actionCounts[4],
+            fuds: actionCounts[13],
+            infiltrates: actionCounts[12],
+            reinforces: actionCounts[5],
+            war_loans: actionCounts[6],
+            repay_loans: actionCounts[7],
+            sieges: actionCounts[8],
+            ascends: actionCounts[9],
+            razes: actionCounts[10],
+            tithes: actionCounts[11],
             personality_summary: summary,
             total_sol_spent: totalSolSpent,
             total_sol_received: totalSolReceived,
           })
           await sendAndConfirm(connection, keypair, cpResult)
           const pnl = (totalSolReceived - totalSolSpent) / 1e9
-          console.log(`  [${ts()}] Checkpointed to pyre_world (${actionCounts.reduce((a, b) => a + b, 0)} actions, P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)} SOL)`)
+          console.log(
+            `  [${ts()}] Checkpointed to pyre_world (${actionCounts.reduce((a, b) => a + b, 0)} actions, P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)} SOL)`,
+          )
         } catch (e: any) {
           console.error(`  [${ts()}] Checkpoint failed: ${e.message?.slice(0, 60)}`)
         }
@@ -460,7 +550,7 @@ async function runAgent(config: AgentConfig) {
     }
 
     // Wait for next tick
-    await new Promise(resolve => setTimeout(resolve, config.tickIntervalMs))
+    await new Promise((resolve) => setTimeout(resolve, config.tickIntervalMs))
   }
 }
 
@@ -524,13 +614,19 @@ async function main() {
   }
 
   if (args.includes('--model') && config) {
-    console.log(`  Current: ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}\n`)
-    const llmIdx = await choose('LLM Provider:', [
-      'OpenAI (GPT-4o, etc.)',
-      'Anthropic (Claude)',
-      'Ollama (local)',
-      'None (random actions only)',
-    ], ['openai', 'anthropic', 'ollama', 'none'].indexOf(config.llmProvider))
+    console.log(
+      `  Current: ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}\n`,
+    )
+    const llmIdx = await choose(
+      'LLM Provider:',
+      [
+        'OpenAI (GPT-4o, etc.)',
+        'Anthropic (Claude)',
+        'Ollama (local)',
+        'None (random actions only)',
+      ],
+      ['openai', 'anthropic', 'ollama', 'none'].indexOf(config.llmProvider),
+    )
     const llmProviders = ['openai', 'anthropic', 'ollama', 'none'] as const
     config.llmProvider = llmProviders[llmIdx]
     config.llmApiKey = undefined
@@ -549,7 +645,9 @@ async function main() {
     }
 
     saveConfig(config)
-    console.log(`\n  Updated: ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}`)
+    console.log(
+      `\n  Updated: ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}`,
+    )
     console.log(`  Saved to ${CONFIG_PATH}\n`)
     rl.close()
     process.exit(0)
@@ -557,13 +655,15 @@ async function main() {
 
   if (args.includes('--personality') && config) {
     console.log(`  Current: ${config.personality}\n`)
-    const persIdx = await choose('Personality:', [
-      ...PERSONALITIES.map(p => PERSONALITY_DISPLAY[p]),
-      'Random (auto-assign)',
-    ], PERSONALITIES.indexOf(config.personality))
-    config.personality = persIdx < PERSONALITIES.length
-      ? PERSONALITIES[persIdx]
-      : PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)]
+    const persIdx = await choose(
+      'Personality:',
+      [...PERSONALITIES.map((p) => PERSONALITY_DISPLAY[p]), 'Random (auto-assign)'],
+      PERSONALITIES.indexOf(config.personality),
+    )
+    config.personality =
+      persIdx < PERSONALITIES.length
+        ? PERSONALITIES[persIdx]
+        : PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)]
 
     saveConfig(config)
     console.log(`\n  Updated: ${config.personality}`)
@@ -583,7 +683,9 @@ async function main() {
     const kp = Keypair.fromSecretKey(Uint8Array.from(config.secretKey))
     console.log(`  Wallet:      ${kp.publicKey.toBase58()}`)
     console.log(`  Personality: ${config.personality}`)
-    console.log(`  LLM:         ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}`)
+    console.log(
+      `  LLM:         ${config.llmProvider}${config.llmModel ? ` (${config.llmModel})` : ''}`,
+    )
     console.log(`  Tick:        every ${config.tickIntervalMs / 1000}s`)
     try {
       const connection = new Connection(config.rpcUrl, 'confirmed')
@@ -601,7 +703,7 @@ async function main() {
   await runAgent(config)
 }
 
-main().catch(e => {
+main().catch((e) => {
   console.error(`\n  Fatal: ${e.message}`)
   process.exit(1)
 })

@@ -1,6 +1,6 @@
 {
   "name": "pyre-world-kit",
-  "version": "2.0.12",
+  "version": "3.0.0",
   "description": "Agent-first faction warfare kit — game-semantic wrapper over torchsdk",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,7 +8,8 @@
     "build": "tsc",
     "test": "npx tsx tests/test_e2e.ts",
     "test:sim": "npx tsx tests/test_sim.ts",
-    "test:devnet": "npx tsx tests/test_devnet_e2e.ts"
+    "test:devnet": "npx tsx tests/test_devnet_e2e.ts",
+    "format": "prettier --write src/"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "prettier": "^3.5.3",
     "tsx": "^4.19.4",
     "typescript": "^5.9.3"
   },

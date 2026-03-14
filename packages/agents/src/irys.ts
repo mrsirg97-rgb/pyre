@@ -25,13 +25,10 @@ async function getUploader(keypair: Keypair): Promise<IrysUploader> {
   const keyStr = keypair.publicKey.toBase58()
   if (cachedUploader?.key === keyStr) return cachedUploader.uploader
 
-  const builder = Uploader(Solana)
-    .withWallet(Buffer.from(keypair.secretKey))
-    .withRpc(RPC_URL)
+  const builder = Uploader(Solana).withWallet(Buffer.from(keypair.secretKey)).withRpc(RPC_URL)
 
-  const uploader = NETWORK === 'mainnet'
-    ? await builder.mainnet().build()
-    : await builder.devnet().build()
+  const uploader =
+    NETWORK === 'mainnet' ? await builder.mainnet().build() : await builder.devnet().build()
 
   cachedUploader = { key: keyStr, uploader }
   return uploader
@@ -47,7 +44,11 @@ async function ensureFunded(irys: IrysUploader, dataSize: number): Promise<void>
 }
 
 /** Upload raw bytes (image) to Arweave, returns gateway URL */
-export async function uploadImage(keypair: Keypair, imageBuffer: Buffer, contentType: string): Promise<string> {
+export async function uploadImage(
+  keypair: Keypair,
+  imageBuffer: Buffer,
+  contentType: string,
+): Promise<string> {
   const irys = await getUploader(keypair)
   await ensureFunded(irys, imageBuffer.length)
   const receipt = await irys.upload(imageBuffer, {

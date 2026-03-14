@@ -8,54 +8,69 @@ import { NETWORK } from './config'
 // Mainnet: mostly message + fud, with rare join/defect/launch
 // [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
 // [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
-export const PERSONALITY_WEIGHTS: Record<Personality, number[]> = NETWORK === 'mainnet' ? {
-  loyalist:     [0.02, 0.01, 0, 0.005, 0.78, 0, 0, 0, 0, 0, 0, 0, 0, 0.185],
-  mercenary:    [0.02, 0.02, 0, 0.005, 0.65, 0, 0, 0, 0, 0, 0, 0, 0, 0.305],
-  provocateur:  [0.01, 0.01, 0, 0.005, 0.55, 0, 0, 0, 0, 0, 0, 0, 0, 0.425],
-  scout:        [0.02, 0.01, 0, 0.005, 0.82, 0, 0, 0, 0, 0, 0, 0, 0, 0.145],
-  whale:        [0.03, 0.02, 0, 0.005, 0.70, 0, 0, 0, 0, 0, 0, 0, 0, 0.245],
-} : {
-  loyalist:     [0.28, 0.06, 0.14, 0.02, 0.12, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.10, 0.02, 0.03],
-  mercenary:    [0.16, 0.18, 0.04, 0.02, 0.08, 0.04, 0.08, 0.04, 0.06, 0.03, 0.04, 0.03, 0.12, 0.08],
-  provocateur:  [0.12, 0.08, 0.04, 0.06, 0.18, 0.05, 0.04, 0.03, 0.04, 0.03, 0.05, 0.04, 0.12, 0.12],
-  scout:        [0.18, 0.10, 0.08, 0.02, 0.16, 0.04, 0.04, 0.03, 0.06, 0.04, 0.05, 0.04, 0.08, 0.08],
-  whale:        [0.24, 0.14, 0.06, 0.02, 0.06, 0.06, 0.06, 0.04, 0.02, 0.04, 0.04, 0.04, 0.12, 0.06],
-}
+export const PERSONALITY_WEIGHTS: Record<Personality, number[]> =
+  NETWORK === 'mainnet'
+    ? {
+        loyalist: [0.02, 0.01, 0, 0.005, 0.78, 0, 0, 0, 0, 0, 0, 0, 0, 0.185],
+        mercenary: [0.02, 0.02, 0, 0.005, 0.65, 0, 0, 0, 0, 0, 0, 0, 0, 0.305],
+        provocateur: [0.01, 0.01, 0, 0.005, 0.55, 0, 0, 0, 0, 0, 0, 0, 0, 0.425],
+        scout: [0.02, 0.01, 0, 0.005, 0.82, 0, 0, 0, 0, 0, 0, 0, 0, 0.145],
+        whale: [0.03, 0.02, 0, 0.005, 0.7, 0, 0, 0, 0, 0, 0, 0, 0, 0.245],
+      }
+    : {
+        loyalist: [
+          0.28, 0.06, 0.14, 0.02, 0.12, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.1, 0.02, 0.03,
+        ],
+        mercenary: [
+          0.16, 0.18, 0.04, 0.02, 0.08, 0.04, 0.08, 0.04, 0.06, 0.03, 0.04, 0.03, 0.12, 0.08,
+        ],
+        provocateur: [
+          0.12, 0.08, 0.04, 0.06, 0.18, 0.05, 0.04, 0.03, 0.04, 0.03, 0.05, 0.04, 0.12, 0.12,
+        ],
+        scout: [0.18, 0.1, 0.08, 0.02, 0.16, 0.04, 0.04, 0.03, 0.06, 0.04, 0.05, 0.04, 0.08, 0.08],
+        whale: [0.24, 0.14, 0.06, 0.02, 0.06, 0.06, 0.06, 0.04, 0.02, 0.04, 0.04, 0.04, 0.12, 0.06],
+      }
 
 // Tick interval ranges per personality (ms) — fast agents dominate comms, slow agents drop big moves
-export const PERSONALITY_INTERVALS: Record<Personality, [number, number]> = NETWORK === 'mainnet' ? {
-  loyalist:     [180000, 360000],
-  mercenary:    [120000, 300000],
-  provocateur:  [90000, 240000],
-  scout:        [120000, 270000],
-  whale:        [240000, 450000],
-} : {
-  loyalist:     [45000, 180000],
-  mercenary:    [30000, 150000],
-  provocateur:  [15000, 75000],
-  scout:        [24000, 120000],
-  whale:        [75000, 270000],
-}
+export const PERSONALITY_INTERVALS: Record<Personality, [number, number]> =
+  NETWORK === 'mainnet'
+    ? {
+        loyalist: [180000, 360000],
+        mercenary: [120000, 300000],
+        provocateur: [90000, 240000],
+        scout: [120000, 270000],
+        whale: [240000, 450000],
+      }
+    : {
+        loyalist: [45000, 180000],
+        mercenary: [30000, 150000],
+        provocateur: [15000, 75000],
+        scout: [24000, 120000],
+        whale: [75000, 270000],
+      }
 
 // SOL spend ranges per personality — scaled down on mainnet
-export const PERSONALITY_SOL: Record<Personality, [number, number]> = NETWORK === 'mainnet' ? {
-  loyalist:     [0.001, 0.005],
-  mercenary:    [0.001, 0.004],
-  provocateur:  [0.001, 0.003],
-  scout:        [0.001, 0.002],
-  whale:        [0.002, 0.01],
-} : {
-  loyalist:     [0.02, 0.1],
-  mercenary:    [0.01, 0.08],
-  provocateur:  [0.005, 0.05],
-  scout:        [0.005, 0.03],
-  whale:        [0.1, 0.5],
-}
+export const PERSONALITY_SOL: Record<Personality, [number, number]> =
+  NETWORK === 'mainnet'
+    ? {
+        loyalist: [0.001, 0.005],
+        mercenary: [0.001, 0.004],
+        provocateur: [0.001, 0.003],
+        scout: [0.001, 0.002],
+        whale: [0.002, 0.01],
+      }
+    : {
+        loyalist: [0.02, 0.1],
+        mercenary: [0.01, 0.08],
+        provocateur: [0.005, 0.05],
+        scout: [0.005, 0.03],
+        whale: [0.1, 0.5],
+      }
 
 export const assignPersonality = (index: number): Personality => {
   const personalities: Personality[] = ['loyalist', 'mercenary', 'provocateur', 'scout', 'whale']
   // Weighted distribution: more loyalists + mercenaries
-  const weights = [0.30, 0.25, 0.15, 0.20, 0.10]
+  const weights = [0.3, 0.25, 0.15, 0.2, 0.1]
   const roll = Math.random()
   let cumulative = 0
   for (let i = 0; i < weights.length; i++) {

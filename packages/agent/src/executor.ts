@@ -1,10 +1,28 @@
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js'
 import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token'
 import {
-  launchFaction, joinFaction, defect, messageFaction, fudFaction, rally,
-  tradeOnDex, fundStronghold,
-  requestWarLoan, repayWarLoan, getWarLoan, getAllWarLoans, getMaxWarLoan,
-  siege, ascend, raze, tithe, convertTithe, isPyreMint, getAgentFactions,
+  launchFaction,
+  joinFaction,
+  defect,
+  messageFaction,
+  fudFaction,
+  rally,
+  tradeOnDex,
+  fundStronghold,
+  requestWarLoan,
+  repayWarLoan,
+  getWarLoan,
+  getAllWarLoans,
+  getMaxWarLoan,
+  siege,
+  ascend,
+  raze,
+  tithe,
+  convertTithe,
+  isPyreMint,
+  isBlacklistedMint,
+  getAgentFactions,
+  getStrongholdForAgent,
 } from 'pyre-world-kit'
 import type { WarLoan } from 'pyre-world-kit'
 
@@ -14,7 +32,11 @@ import { sendAndConfirm } from './tx'
 import { ensureStronghold } from './stronghold'
 import { sentimentBuySize } from './action'
 import { parseCustomError } from './error'
-import { generateFactionIdentity, FALLBACK_FACTION_NAMES, FALLBACK_FACTION_SYMBOLS } from './faction'
+import {
+  generateFactionIdentity,
+  FALLBACK_FACTION_NAMES,
+  FALLBACK_FACTION_SYMBOLS,
+} from './faction'
 import { executeScout, pendingScoutResults } from './agent'
 
 interface ExecutorContext {
@@ -27,13 +49,13 @@ interface ExecutorContext {
   llm?: LLMAdapter
   maxFoundedFactions: number
   usedFactionNames: Set<string>
-  strongholdOpts?: { fundSol?: number, topupThresholdSol?: number, topupReserveSol?: number }
+  strongholdOpts?: { fundSol?: number; topupThresholdSol?: number; topupReserveSol?: number }
 }
 
 type ActionHandler = (ctx: ExecutorContext) => Promise<string | null>
 
 const findFaction = (factions: FactionInfo[], mint?: string) =>
-  factions.find(f => f.mint === mint)
+  factions.find((f) => f.mint === mint)
 
 /** Refresh all holdings from chain (wallet + vault). Returns fresh map. */
 async function refreshHoldings(connection: Connection, agent: AgentState): Promise<void> {
@@ -50,16 +72,42 @@ async function refreshHoldings(connection: Connection, agent: AgentState): Promi
   } catch {}
 }
 
-/** Fetch on-chain token balance for a single mint (wallet ATA only — use refreshHoldings for wallet+vault). */
-async function getOnChainBalance(connection: Connection, mint: string, owner: string): Promise<number> {
+/** Fetch on-chain token balance for a single mint (wallet ATA + vault ATA). */
+async function getOnChainBalance(
+  connection: Connection,
+  mint: string,
+  owner: string,
+  vaultCreator?: string,
+): Promise<number> {
+  const mintPk = new PublicKey(mint)
+  let total = 0
+
+  // Wallet ATA
   try {
-    const mintPk = new PublicKey(mint)
-    const ata = getAssociatedTokenAddressSync(mintPk, new PublicKey(owner), false, TOKEN_2022_PROGRAM_ID)
+    const ata = getAssociatedTokenAddressSync(
+      mintPk,
+      new PublicKey(owner),
+      false,
+      TOKEN_2022_PROGRAM_ID,
+    )
     const info = await connection.getTokenAccountBalance(ata)
-    return Number(info.value.amount)
-  } catch {
-    return 0
+    total += Number(info.value.amount)
+  } catch {}
+
+  // Vault ATA — vault-routed buys deposit tokens here, not in the wallet
+  if (vaultCreator) {
+    try {
+      const vaultInfo = await getStrongholdForAgent(connection, owner)
+      if (vaultInfo) {
+        const vaultPk = new PublicKey(vaultInfo.address)
+        const vaultAta = getAssociatedTokenAddressSync(mintPk, vaultPk, true, TOKEN_2022_PROGRAM_ID)
+        const info = await connection.getTokenAccountBalance(vaultAta)
+        total += Number(info.value.amount)
+      }
+    } catch {}
   }
+
+  return total
 }
 
 /** Vault creator key — may differ from agent key for linked vaults */
@@ -77,14 +125,22 @@ const handlers: Record<Action, ActionHandler> = {
 
     if (faction.status === 'ascended') {
       const result = await tradeOnDex(ctx.connection, {
-        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: vault(ctx.agent),
-        amount_in: lamports, minimum_amount_out: 1, is_buy: true, message: ctx.decision.message,
+        mint: faction.mint,
+        signer: ctx.agent.publicKey,
+        stronghold_creator: vault(ctx.agent),
+        amount_in: lamports,
+        minimum_amount_out: 1,
+        is_buy: true,
+        message: ctx.decision.message,
       })
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     } else {
       const params: any = {
-        mint: faction.mint, agent: ctx.agent.publicKey, amount_sol: lamports,
-        message: ctx.decision.message, stronghold: vault(ctx.agent),
+        mint: faction.mint,
+        agent: ctx.agent.publicKey,
+        amount_sol: lamports,
+        message: ctx.decision.message,
+        stronghold: vault(ctx.agent),
       }
       let result = await joinFaction(ctx.connection, params)
       try {
@@ -95,11 +151,18 @@ const handlers: Record<Action, ActionHandler> = {
           params.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
           result = await joinFaction(ctx.connection, params)
           await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
-        } else { throw err }
+        } else {
+          throw err
+        }
       }
     }
 
-    const newBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    const newBal = await getOnChainBalance(
+      ctx.connection,
+      faction.mint,
+      ctx.agent.publicKey,
+      vault(ctx.agent),
+    )
     ctx.agent.holdings.set(faction.mint, newBal > 0 ? newBal : 1)
     ctx.agent.voted.add(faction.mint)
     ctx.agent.lastAction = `joined ${faction.symbol}`
@@ -115,17 +178,24 @@ const handlers: Record<Action, ActionHandler> = {
     if (balance <= 0) return null
 
     const isInfiltrated = ctx.agent.infiltrated.has(faction.mint)
-    const sellPortion = isInfiltrated ? 1.0
-      : ctx.agent.personality === 'mercenary' ? 0.5 + Math.random() * 0.5
-      : 0.2 + Math.random() * 0.3
+    const sellPortion = isInfiltrated
+      ? 1.0
+      : ctx.agent.personality === 'mercenary'
+        ? 0.5 + Math.random() * 0.5
+        : 0.2 + Math.random() * 0.3
     const sellAmount = Math.max(1, Math.floor(balance * sellPortion))
 
     if (faction.status === 'ascended') {
       await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
       if (!ctx.agent.hasStronghold) return null
       let result = await tradeOnDex(ctx.connection, {
-        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: vault(ctx.agent),
-        amount_in: sellAmount, minimum_amount_out: 1, is_buy: false, message: ctx.decision.message,
+        mint: faction.mint,
+        signer: ctx.agent.publicKey,
+        stronghold_creator: vault(ctx.agent),
+        amount_in: sellAmount,
+        minimum_amount_out: 1,
+        is_buy: false,
+        message: ctx.decision.message,
       })
       try {
         await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
@@ -133,16 +203,26 @@ const handlers: Record<Action, ActionHandler> = {
         const p = parseCustomError(err)
         if (p?.code === 0x9c9) {
           result = await tradeOnDex(ctx.connection, {
-            mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: ctx.agent.publicKey,
-            amount_in: sellAmount, minimum_amount_out: 1, is_buy: false, message: ctx.decision.message,
+            mint: faction.mint,
+            signer: ctx.agent.publicKey,
+            stronghold_creator: ctx.agent.publicKey,
+            amount_in: sellAmount,
+            minimum_amount_out: 1,
+            is_buy: false,
+            message: ctx.decision.message,
           })
           await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
-        } else { throw err }
+        } else {
+          throw err
+        }
       }
     } else {
       let result = await defect(ctx.connection, {
-        mint: faction.mint, agent: ctx.agent.publicKey, amount_tokens: sellAmount,
-        message: ctx.decision.message, stronghold: vault(ctx.agent),
+        mint: faction.mint,
+        agent: ctx.agent.publicKey,
+        amount_tokens: sellAmount,
+        message: ctx.decision.message,
+        stronghold: vault(ctx.agent),
       })
       try {
         await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
@@ -150,17 +230,24 @@ const handlers: Record<Action, ActionHandler> = {
         const p = parseCustomError(err)
         if (p?.code === 0x9c9) {
           result = await defect(ctx.connection, {
-            mint: faction.mint, agent: ctx.agent.publicKey, amount_tokens: sellAmount,
-            message: ctx.decision.message, stronghold: ctx.agent.publicKey,
+            mint: faction.mint,
+            agent: ctx.agent.publicKey,
+            amount_tokens: sellAmount,
+            message: ctx.decision.message,
+            stronghold: ctx.agent.publicKey,
           })
           await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
-        } else { throw err }
+        } else {
+          throw err
+        }
       }
     }
 
     await refreshHoldings(ctx.connection, ctx.agent)
     const remaining = ctx.agent.holdings.get(faction.mint) ?? 0
-    if (remaining <= 0) { ctx.agent.infiltrated.delete(faction.mint) }
+    if (remaining <= 0) {
+      ctx.agent.infiltrated.delete(faction.mint)
+    }
 
     const prefix = isInfiltrated ? 'dumped (infiltration complete)' : 'defected from'
     ctx.agent.lastAction = `defected ${faction.symbol}`
@@ -171,7 +258,9 @@ const handlers: Record<Action, ActionHandler> = {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
     if (!faction || ctx.agent.rallied.has(faction.mint)) return null
     const result = await rally(ctx.connection, {
-      mint: faction.mint, agent: ctx.agent.publicKey, stronghold: vault(ctx.agent),
+      mint: faction.mint,
+      agent: ctx.agent.publicKey,
+      stronghold: vault(ctx.agent),
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     ctx.agent.rallied.add(faction.mint)
@@ -184,12 +273,20 @@ const handlers: Record<Action, ActionHandler> = {
 
     let name: string | null = null
     let symbol: string | null = null
-    const identity = await generateFactionIdentity(ctx.agent.personality, ctx.usedFactionNames, ctx.llm)
-    if (identity) { name = identity.name; symbol = identity.symbol }
-    else {
+    const identity = await generateFactionIdentity(
+      ctx.agent.personality,
+      ctx.usedFactionNames,
+      ctx.llm,
+    )
+    if (identity) {
+      name = identity.name
+      symbol = identity.symbol
+    } else {
       for (let i = 0; i < FALLBACK_FACTION_NAMES.length; i++) {
         if (!ctx.usedFactionNames.has(FALLBACK_FACTION_NAMES[i])) {
-          name = FALLBACK_FACTION_NAMES[i]; symbol = FALLBACK_FACTION_SYMBOLS[i]; break
+          name = FALLBACK_FACTION_NAMES[i]
+          symbol = FALLBACK_FACTION_SYMBOLS[i]
+          break
         }
       }
     }
@@ -197,7 +294,11 @@ const handlers: Record<Action, ActionHandler> = {
 
     const metadataUri = `https://pyre.gg/factions/${symbol.toLowerCase()}.json`
     const result = await launchFaction(ctx.connection, {
-      founder: ctx.agent.publicKey, name, symbol, metadata_uri: metadataUri, community_faction: true,
+      founder: ctx.agent.publicKey,
+      name,
+      symbol,
+      metadata_uri: metadataUri,
+      community_faction: true,
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     const mint = result.mint.toBase58()
@@ -211,15 +312,26 @@ const handlers: Record<Action, ActionHandler> = {
 
   async message(ctx) {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
-    if (!faction) { ctx.log(`[${ctx.agent.publicKey.slice(0, 8)}] message: faction not found for ${ctx.decision.faction?.slice(0, 8)}`); return null }
-    if (!ctx.decision.message) { ctx.log(`[${ctx.agent.publicKey.slice(0, 8)}] message: no message text`); return null }
+    if (!faction) {
+      ctx.log(
+        `[${ctx.agent.publicKey.slice(0, 8)}] message: faction not found for ${ctx.decision.faction?.slice(0, 8)}`,
+      )
+      return null
+    }
+    if (!ctx.decision.message) {
+      ctx.log(`[${ctx.agent.publicKey.slice(0, 8)}] message: no message text`)
+      return null
+    }
 
     await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
     if (!ctx.agent.hasStronghold) return null
 
     const msgParams: any = {
-      mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
-      stronghold: vault(ctx.agent), ascended: faction.status === 'ascended',
+      mint: faction.mint,
+      agent: ctx.agent.publicKey,
+      message: ctx.decision.message,
+      stronghold: vault(ctx.agent),
+      ascended: faction.status === 'ascended',
     }
     let result = await messageFaction(ctx.connection, msgParams)
     try {
@@ -231,10 +343,17 @@ const handlers: Record<Action, ActionHandler> = {
         msgParams.strategy = Math.random() > 0.5 ? 'fortify' : 'scorched_earth'
         result = await messageFaction(ctx.connection, msgParams)
         await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
-      } else { throw retryErr }
+      } else {
+        throw retryErr
+      }
     }
 
-    const msgBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    const msgBal = await getOnChainBalance(
+      ctx.connection,
+      faction.mint,
+      ctx.agent.publicKey,
+      vault(ctx.agent),
+    )
     ctx.agent.holdings.set(faction.mint, msgBal > 0 ? msgBal : 1)
     ctx.agent.voted.add(faction.mint)
     ctx.agent.lastAction = `messaged ${faction.symbol}`
@@ -244,30 +363,43 @@ const handlers: Record<Action, ActionHandler> = {
   async stronghold(ctx) {
     if (ctx.agent.hasStronghold) return null
     // Kit agents don't create vaults — they must be created on pyre.world
-    ctx.log(`[${ctx.agent.publicKey.slice(0, 8)}] no vault — create one at pyre.world and link agent key ${ctx.agent.publicKey}`)
+    ctx.log(
+      `[${ctx.agent.publicKey.slice(0, 8)}] no vault — create one at pyre.world and link agent key ${ctx.agent.publicKey}`,
+    )
     return null
   },
 
   async war_loan(ctx) {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
     if (!faction) return null
-    const balance = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
-    if (balance <= 0) { ctx.agent.holdings.delete(faction.mint); return null }
+    const balance = await getOnChainBalance(
+      ctx.connection,
+      faction.mint,
+      ctx.agent.publicKey,
+      vault(ctx.agent),
+    )
+    if (balance <= 0) {
+      ctx.agent.holdings.delete(faction.mint)
+      return null
+    }
 
-    const collateral = Math.max(1, Math.floor(balance * (0.90 + Math.random() * 0.09)))
+    const collateral = Math.max(1, Math.floor(balance * (0.9 + Math.random() * 0.09)))
     let borrowLamports: number
     try {
       const quote = await getMaxWarLoan(ctx.connection, faction.mint, collateral)
       if (quote.max_borrow_sol < 0.1 * LAMPORTS_PER_SOL) return null
-      borrowLamports = Math.floor(quote.max_borrow_sol * (0.80 + Math.random() * 0.15))
+      borrowLamports = Math.floor(quote.max_borrow_sol * (0.8 + Math.random() * 0.15))
     } catch {
       borrowLamports = Math.floor(0.1 * LAMPORTS_PER_SOL)
     }
 
     await ensureStronghold(ctx.connection, ctx.agent, ctx.log, ctx.strongholdOpts)
     const result = await requestWarLoan(ctx.connection, {
-      mint: faction.mint, borrower: ctx.agent.publicKey, collateral_amount: collateral,
-      sol_to_borrow: borrowLamports, stronghold: vault(ctx.agent),
+      mint: faction.mint,
+      borrower: ctx.agent.publicKey,
+      collateral_amount: collateral,
+      sol_to_borrow: borrowLamports,
+      stronghold: vault(ctx.agent),
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     ctx.agent.activeLoans.add(faction.mint)
@@ -280,12 +412,21 @@ const handlers: Record<Action, ActionHandler> = {
     if (!faction || !ctx.agent.activeLoans.has(faction.mint)) return null
 
     let loan: WarLoan
-    try { loan = await getWarLoan(ctx.connection, faction.mint, ctx.agent.publicKey) } catch { return null }
-    if (loan.total_owed <= 0) { ctx.agent.activeLoans.delete(faction.mint); return null }
+    try {
+      loan = await getWarLoan(ctx.connection, faction.mint, ctx.agent.publicKey)
+    } catch {
+      return null
+    }
+    if (loan.total_owed <= 0) {
+      ctx.agent.activeLoans.delete(faction.mint)
+      return null
+    }
 
     const result = await repayWarLoan(ctx.connection, {
-      mint: faction.mint, borrower: ctx.agent.publicKey,
-      sol_amount: Math.ceil(loan.total_owed), stronghold: vault(ctx.agent),
+      mint: faction.mint,
+      borrower: ctx.agent.publicKey,
+      sol_amount: Math.ceil(loan.total_owed),
+      stronghold: vault(ctx.agent),
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     ctx.agent.activeLoans.delete(faction.mint)
@@ -301,14 +442,21 @@ const handlers: Record<Action, ActionHandler> = {
     try {
       const allLoans = await getAllWarLoans(ctx.connection, faction.mint)
       for (const pos of allLoans.positions) {
-        if (pos.health === 'liquidatable') { targetBorrower = pos.borrower; break }
+        if (pos.health === 'liquidatable') {
+          targetBorrower = pos.borrower
+          break
+        }
       }
-    } catch { return null }
+    } catch {
+      return null
+    }
     if (!targetBorrower) return null
 
     const result = await siege(ctx.connection, {
-      mint: faction.mint, liquidator: ctx.agent.publicKey,
-      borrower: targetBorrower, stronghold: vault(ctx.agent),
+      mint: faction.mint,
+      liquidator: ctx.agent.publicKey,
+      borrower: targetBorrower,
+      stronghold: vault(ctx.agent),
     })
     await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     ctx.agent.lastAction = `siege ${faction.symbol}`
@@ -338,7 +486,11 @@ const handlers: Record<Action, ActionHandler> = {
     const faction = findFaction(ctx.factions, ctx.decision.faction)
     if (!faction) return null
     try {
-      const result = await convertTithe(ctx.connection, { mint: faction.mint, payer: ctx.agent.publicKey, harvest: true })
+      const result = await convertTithe(ctx.connection, {
+        mint: faction.mint,
+        payer: ctx.agent.publicKey,
+        harvest: true,
+      })
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     } catch {
       const result = await tithe(ctx.connection, { mint: faction.mint, payer: ctx.agent.publicKey })
@@ -359,22 +511,35 @@ const handlers: Record<Action, ActionHandler> = {
 
     if (faction.status === 'ascended') {
       const result = await tradeOnDex(ctx.connection, {
-        mint: faction.mint, signer: ctx.agent.publicKey, stronghold_creator: vault(ctx.agent),
-        amount_in: lamports, minimum_amount_out: 1, is_buy: true, message: ctx.decision.message,
+        mint: faction.mint,
+        signer: ctx.agent.publicKey,
+        stronghold_creator: vault(ctx.agent),
+        amount_in: lamports,
+        minimum_amount_out: 1,
+        is_buy: true,
+        message: ctx.decision.message,
       })
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     } else {
       const alreadyVoted = ctx.agent.voted.has(faction.mint)
       const params: any = {
-        mint: faction.mint, agent: ctx.agent.publicKey, amount_sol: lamports,
-        message: ctx.decision.message, stronghold: vault(ctx.agent),
+        mint: faction.mint,
+        agent: ctx.agent.publicKey,
+        amount_sol: lamports,
+        message: ctx.decision.message,
+        stronghold: vault(ctx.agent),
       }
       if (!alreadyVoted) params.strategy = 'scorched_earth'
       const result = await joinFaction(ctx.connection, params)
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, result)
     }
 
-    const infBal = await getOnChainBalance(ctx.connection, faction.mint, ctx.agent.publicKey)
+    const infBal = await getOnChainBalance(
+      ctx.connection,
+      faction.mint,
+      ctx.agent.publicKey,
+      vault(ctx.agent),
+    )
     ctx.agent.holdings.set(faction.mint, infBal > 0 ? infBal : 1)
     ctx.agent.infiltrated.add(faction.mint)
     ctx.agent.voted.add(faction.mint)
@@ -395,8 +560,11 @@ const handlers: Record<Action, ActionHandler> = {
     if (!ctx.agent.hasStronghold) return null
 
     let fudResult = await fudFaction(ctx.connection, {
-      mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
-      stronghold: vault(ctx.agent), ascended: faction.status === 'ascended',
+      mint: faction.mint,
+      agent: ctx.agent.publicKey,
+      message: ctx.decision.message,
+      stronghold: vault(ctx.agent),
+      ascended: faction.status === 'ascended',
     })
     try {
       await sendAndConfirm(ctx.connection, ctx.agent.keypair, fudResult)
@@ -405,11 +573,16 @@ const handlers: Record<Action, ActionHandler> = {
       if (p?.code === 0x9c9) {
         // InsufficientFunds — retry without vault
         fudResult = await fudFaction(ctx.connection, {
-          mint: faction.mint, agent: ctx.agent.publicKey, message: ctx.decision.message,
-          stronghold: ctx.agent.publicKey, ascended: faction.status === 'ascended',
+          mint: faction.mint,
+          agent: ctx.agent.publicKey,
+          message: ctx.decision.message,
+          stronghold: ctx.agent.publicKey,
+          ascended: faction.status === 'ascended',
         })
         await sendAndConfirm(ctx.connection, ctx.agent.keypair, fudResult)
-      } else { throw err }
+      } else {
+        throw err
+      }
     }
     // Fudding tanks your own sentiment — you're going bearish
     const fudSentiment = ctx.agent.sentiment.get(faction.mint) ?? 0
@@ -445,7 +618,9 @@ const handlers: Record<Action, ActionHandler> = {
   },
 }
 
-export async function executeAction(ctx: ExecutorContext): Promise<{ success: boolean, description?: string, error?: string }> {
+export async function executeAction(
+  ctx: ExecutorContext,
+): Promise<{ success: boolean; description?: string; error?: string }> {
   const short = ctx.agent.publicKey.slice(0, 8)
   try {
     // Fresh holdings from wallet + vault before every operation
@@ -458,7 +633,8 @@ export async function executeAction(ctx: ExecutorContext): Promise<{ success: bo
     if (!desc) return { success: false, error: 'action precondition not met' }
 
     ctx.agent.recentHistory.push(desc)
-    if (ctx.agent.recentHistory.length > 10) ctx.agent.recentHistory = ctx.agent.recentHistory.slice(-10)
+    if (ctx.agent.recentHistory.length > 10)
+      ctx.agent.recentHistory = ctx.agent.recentHistory.slice(-10)
     ctx.agent.actionCount++
 
     ctx.log(`[${short}] [${ctx.agent.personality}] [${ctx.brain}] ${desc}`)
@@ -466,21 +642,32 @@ export async function executeAction(ctx: ExecutorContext): Promise<{ success: bo
   } catch (err: any) {
     const parsed = parseCustomError(err)
     if (parsed) {
-      const factionObj = ctx.decision.faction ? findFaction(ctx.factions, ctx.decision.faction) : null
+      const factionObj = ctx.decision.faction
+        ? findFaction(ctx.factions, ctx.decision.faction)
+        : null
       const factionLabel = factionObj?.symbol ?? ctx.decision.faction?.slice(0, 8) ?? '?'
-      ctx.log(`[${short}] [${ctx.agent.personality}] [${ctx.brain}] ERROR (${ctx.decision.action} ${factionLabel}): ${parsed.name} [0x${parsed.code.toString(16)}]`)
+      ctx.log(
+        `[${short}] [${ctx.agent.personality}] [${ctx.brain}] ERROR (${ctx.decision.action} ${factionLabel}): ${parsed.name} [0x${parsed.code.toString(16)}]`,
+      )
 
       // Adapt behavior based on error
       if (parsed.code === 6002 && ctx.decision.faction) {
         // MaxWalletExceeded means we already hold tokens — resync all holdings
         if (factionObj) {
-          ctx.agent.sentiment.set(factionObj.mint, (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 1)
+          ctx.agent.sentiment.set(
+            factionObj.mint,
+            (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 1,
+          )
           await refreshHoldings(ctx.connection, ctx.agent)
         }
       } else if (parsed.code === 6055) {
         ctx.agent.recentHistory.push('vault empty — need funds')
       } else if (parsed.code === 6051) {
-        if (factionObj) ctx.agent.sentiment.set(factionObj.mint, (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 2)
+        if (factionObj)
+          ctx.agent.sentiment.set(
+            factionObj.mint,
+            (ctx.agent.sentiment.get(factionObj.mint) ?? 0) + 2,
+          )
       } else if (parsed.code === 6046) {
         ctx.agent.recentHistory.push(`loan rejected on ${factionLabel} — LTV too high`)
       } else if (parsed.code === 6049) {
@@ -491,7 +678,9 @@ export async function executeAction(ctx: ExecutorContext): Promise<{ success: bo
     }
 
     const msg = err.message?.slice(0, 120) ?? String(err)
-    ctx.log(`[${short}] [${ctx.agent.personality}] [${ctx.brain}] ERROR (${ctx.decision.action}): ${msg}`)
+    ctx.log(
+      `[${short}] [${ctx.agent.personality}] [${ctx.brain}] ERROR (${ctx.decision.action}): ${msg}`,
+    )
     return { success: false, error: msg }
   }
 }

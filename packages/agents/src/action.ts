@@ -2,9 +2,20 @@ import { PERSONALITY_SOL, PERSONALITY_WEIGHTS } from './identity'
 import { Action, AgentState, FactionInfo, Personality } from './types'
 
 const ALL_ACTIONS: Action[] = [
-  'join', 'defect', 'rally', 'launch', 'message',
-  'stronghold', 'war_loan', 'repay_loan', 'siege', 'ascend', 'raze', 'tithe',
-  'infiltrate', 'fud',
+  'join',
+  'defect',
+  'rally',
+  'launch',
+  'message',
+  'stronghold',
+  'war_loan',
+  'repay_loan',
+  'siege',
+  'ascend',
+  'raze',
+  'tithe',
+  'infiltrate',
+  'fud',
 ]
 
 export const chooseAction = (
@@ -18,43 +29,70 @@ export const chooseAction = (
   const hasHoldings = agent.holdings.size > 0
   const heldMints = [...agent.holdings.keys()]
   // Factions we don't hold (targets for infiltrate/fud)
-  const rivalFactions = knownFactions.filter(f => !heldMints.includes(f.mint))
+  const rivalFactions = knownFactions.filter((f) => !heldMints.includes(f.mint))
 
   // Can't defect without holdings
-  if (!hasHoldings) { weights[0] += weights[1]; weights[1] = 0 }
+  if (!hasHoldings) {
+    weights[0] += weights[1]
+    weights[1] = 0
+  }
   // Can't rally if nothing to rally
-  if (!canRally) { weights[0] += weights[2]; weights[2] = 0 }
+  if (!canRally) {
+    weights[0] += weights[2]
+    weights[2] = 0
+  }
   // Already has stronghold — skip creating another
-  if (agent.hasStronghold) { weights[0] += weights[5]; weights[5] = 0 }
+  if (agent.hasStronghold) {
+    weights[0] += weights[5]
+    weights[5] = 0
+  }
   // War loans/siege only work on ascended (migrated) factions
-  const ascendedFactions = knownFactions.filter(f => f.status === 'ascended')
-  const holdsAscended = ascendedFactions.some(f => agent.holdings.has(f.mint))
+  const ascendedFactions = knownFactions.filter((f) => f.status === 'ascended')
+  const holdsAscended = ascendedFactions.some((f) => agent.holdings.has(f.mint))
   // Can't take war loan without holdings in an ascended faction
-  if (!holdsAscended) { weights[0] += weights[6]; weights[6] = 0 }
+  if (!holdsAscended) {
+    weights[0] += weights[6]
+    weights[6] = 0
+  }
   // Can't repay without active loans
-  if (agent.activeLoans.size === 0) { weights[0] += weights[7]; weights[7] = 0 }
+  if (agent.activeLoans.size === 0) {
+    weights[0] += weights[7]
+    weights[7] = 0
+  }
   // Siege only on ascended factions (lending must be enabled)
-  if (ascendedFactions.length === 0) { weights[0] += weights[8]; weights[8] = 0 }
+  if (ascendedFactions.length === 0) {
+    weights[0] += weights[8]
+    weights[8] = 0
+  }
   // Ascend only if there are ready (bonding complete) factions
-  const readyFactions = knownFactions.filter(f => f.status === 'ready')
-  if (readyFactions.length === 0) { weights[0] += weights[9]; weights[9] = 0 }
+  const readyFactions = knownFactions.filter((f) => f.status === 'ready')
+  if (readyFactions.length === 0) {
+    weights[0] += weights[9]
+    weights[9] = 0
+  }
   // Raze only rising factions
-  const risingFactions = knownFactions.filter(f => f.status === 'rising')
-  if (risingFactions.length === 0) { weights[0] += weights[10]; weights[10] = 0 }
+  const risingFactions = knownFactions.filter((f) => f.status === 'rising')
+  if (risingFactions.length === 0) {
+    weights[0] += weights[10]
+    weights[10] = 0
+  }
   // Can't infiltrate without rival factions to target
   if (rivalFactions.length === 0) {
     weights[0] += weights[12]
     weights[12] = 0
   }
   // Can't fud without holdings (it's a micro sell)
-  if (!hasHoldings) { weights[0] += weights[13]; weights[13] = 0 }
+  if (!hasHoldings) {
+    weights[0] += weights[13]
+    weights[13] = 0
+  }
   // If we have infiltrated factions ready to dump, boost defect weight
   if (agent.infiltrated.size > 0) {
-    weights[1] += 0.10
+    weights[1] += 0.1
   }
   // Bearish sentiment on held factions → boost defect (sell what you don't believe in)
   if (hasHoldings) {
-    const bearishHeld = heldMints.filter(m => (agent.sentiment.get(m) ?? 0) < -2)
+    const bearishHeld = heldMints.filter((m) => (agent.sentiment.get(m) ?? 0) < -2)
     if (bearishHeld.length > 0) {
       weights[1] += 0.05 * bearishHeld.length // more bearish holdings = more likely to sell
     }
@@ -62,13 +100,13 @@ export const chooseAction = (
   // Boost war loans and sieges when ascended factions exist
   if (ascendedFactions.length > 0) {
     if (holdsAscended) {
-      weights[6] += 0.15  // war_loan: borrow against ascended holdings
+      weights[6] += 0.15 // war_loan: borrow against ascended holdings
     }
     // Boost siege — more loans means more liquidation opportunities
-    weights[8] += 0.12  // siege
+    weights[8] += 0.12 // siege
     // If agent has active loans, boost repay slightly to keep healthy
     if (agent.activeLoans.size > 0) {
-      weights[7] += 0.06  // repay_loan
+      weights[7] += 0.06 // repay_loan
     }
   }
 
@@ -97,11 +135,11 @@ export const sentimentBuySize = (agent: AgentState, factionMint: string): number
 
   // Personality multipliers for conviction scaling
   const convictionScale: Record<Personality, number> = {
-    loyalist: 1.5,     // buys bigger when bullish, stubborn
-    mercenary: 2.0,    // swings hardest with sentiment
-    provocateur: 1.2,  // moderate, chaos doesn't care about size
-    scout: 0.8,        // always cautious
-    whale: 2.5,        // whales go huge on conviction
+    loyalist: 1.5, // buys bigger when bullish, stubborn
+    mercenary: 2.0, // swings hardest with sentiment
+    provocateur: 1.2, // moderate, chaos doesn't care about size
+    scout: 0.8, // always cautious
+    whale: 2.5, // whales go huge on conviction
   }
 
   const scale = convictionScale[agent.personality]

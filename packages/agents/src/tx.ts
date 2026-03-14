@@ -8,17 +8,25 @@ async function confirm(connection: Connection, sig: string): Promise<void> {
     const start = Date.now()
     while (Date.now() - start < 60000) {
       const status = await connection.getSignatureStatus(sig)
-      if (status?.value?.confirmationStatus === 'confirmed' || status?.value?.confirmationStatus === 'finalized') {
-        if (status.value.err) throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`)
+      if (
+        status?.value?.confirmationStatus === 'confirmed' ||
+        status?.value?.confirmationStatus === 'finalized'
+      ) {
+        if (status.value.err)
+          throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`)
         return
       }
-      await new Promise(r => setTimeout(r, 2000))
+      await new Promise((r) => setTimeout(r, 2000))
     }
     throw new Error(`Transaction confirmation timeout: ${sig}`)
   }
 }
 
-export const sendAndConfirm = async (connection: Connection, keypair: Keypair, result: any): Promise<string> => {
+export const sendAndConfirm = async (
+  connection: Connection,
+  keypair: Keypair,
+  result: any,
+): Promise<string> => {
   const tx = result.transaction
   tx.partialSign(keypair)
   const sig = await connection.sendRawTransaction(tx.serialize(), {

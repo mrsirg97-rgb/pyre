@@ -4,9 +4,16 @@ import { createStronghold, fundStronghold, getStronghold, LAMPORTS_PER_SOL } fro
 import { AgentState } from './types'
 import { sendAndConfirm } from './tx'
 import { log } from './util'
-import { STRONGHOLD_FUND_SOL, STRONGHOLD_TOPUP_THRESHOLD_SOL, STRONGHOLD_TOPUP_RESERVE_SOL } from './config'
+import {
+  STRONGHOLD_FUND_SOL,
+  STRONGHOLD_TOPUP_THRESHOLD_SOL,
+  STRONGHOLD_TOPUP_RESERVE_SOL,
+} from './config'
 
-export const ensureStronghold = async (connection: Connection, agent: AgentState): Promise<void> => {
+export const ensureStronghold = async (
+  connection: Connection,
+  agent: AgentState,
+): Promise<void> => {
   const short = agent.publicKey.slice(0, 8)
 
   if (agent.hasStronghold) {
@@ -15,12 +22,18 @@ export const ensureStronghold = async (connection: Connection, agent: AgentState
       const existing = await getStronghold(connection, agent.publicKey)
       const vaultBal = existing?.sol_balance ?? 0
       const threshold = STRONGHOLD_TOPUP_THRESHOLD_SOL * LAMPORTS_PER_SOL
-      log(short, `[${agent.personality}] vault check: ${vaultBal} lamports, threshold: ${threshold}`)
+      log(
+        short,
+        `[${agent.personality}] vault check: ${vaultBal} lamports, threshold: ${threshold}`,
+      )
       if (existing && vaultBal < threshold) {
         const walletBal = await connection.getBalance(new PublicKey(agent.publicKey))
         const reserve = STRONGHOLD_TOPUP_RESERVE_SOL * LAMPORTS_PER_SOL
         const available = walletBal - reserve
-        log(short, `[${agent.personality}] wallet: ${walletBal}, reserve: ${reserve}, available: ${available}`)
+        log(
+          short,
+          `[${agent.personality}] wallet: ${walletBal}, reserve: ${reserve}, available: ${available}`,
+        )
         if (available > 0.01 * LAMPORTS_PER_SOL) {
           const fundAmt = Math.floor(available)
           const fundResult = await fundStronghold(connection, {
@@ -29,10 +42,18 @@ export const ensureStronghold = async (connection: Connection, agent: AgentState
             amount_sol: fundAmt,
           })
           await sendAndConfirm(connection, agent.keypair, fundResult)
-          log(short, `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
+          log(
+            short,
+            `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(2)} SOL`,
+          )
         }
       }
-    } catch (err: any) { log(short, `[${agent.personality}] vault topup check failed: ${err.message?.slice(0, 80) ?? err}`) }
+    } catch (err: any) {
+      log(
+        short,
+        `[${agent.personality}] vault topup check failed: ${err.message?.slice(0, 80) ?? err}`,
+      )
+    }
     return
   }
 
@@ -55,13 +76,20 @@ export const ensureStronghold = async (connection: Connection, agent: AgentState
               amount_sol: fundAmt,
             })
             await sendAndConfirm(connection, agent.keypair, fundResult)
-            log(short, `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
+            log(
+              short,
+              `[${agent.personality}] topped up vault with ${(fundAmt / LAMPORTS_PER_SOL).toFixed(2)} SOL`,
+            )
           }
-        } catch { /* top-up failed, continue anyway */ }
+        } catch {
+          /* top-up failed, continue anyway */
+        }
       }
       return
     }
-  } catch { /* not found, create one */ }
+  } catch {
+    /* not found, create one */
+  }
 
   try {
     const result = await createStronghold(connection, { creator: agent.publicKey })
@@ -77,7 +105,9 @@ export const ensureStronghold = async (connection: Connection, agent: AgentState
         amount_sol: fundAmt,
       })
       await sendAndConfirm(connection, agent.keypair, fundResult)
-    } catch { /* fund failed, stronghold still created */ }
+    } catch {
+      /* fund failed, stronghold still created */
+    }
 
     log(short, `[${agent.personality}] auto-created stronghold`)
   } catch (err: any) {

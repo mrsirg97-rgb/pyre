@@ -1,24 +1,56 @@
-import { Connection } from '@solana/web3.js';
-import { getComms, getMembers } from 'pyre-world-kit';
+import { Connection } from '@solana/web3.js'
+import { getComms, getMembers } from 'pyre-world-kit'
 
 import { ollamaGenerate } from './agent'
 import { NETWORK } from './config'
 import { AgentState, FactionInfo, FactionIntel, Personality } from './types'
-import { pick } from './util';
+import { pick } from './util'
 
 // Fallback faction names/symbols — only used when LLM is unavailable
 export const FALLBACK_FACTION_NAMES = [
-  'Iron Vanguard', 'Obsidian Order', 'Crimson Dawn', 'Shadow Covenant',
-  'Ember Collective', 'Void Walkers', 'Solar Reign', 'Frost Legion',
-  'Thunder Pact', 'Ash Republic', 'Neon Syndicate', 'Storm Brigade',
-  'Lunar Assembly', 'Flame Sentinels', 'Dark Meridian', 'Phoenix Accord',
-  'Steel Dominion', 'Crystal Enclave', 'Rogue Alliance', 'Titan Front',
+  'Iron Vanguard',
+  'Obsidian Order',
+  'Crimson Dawn',
+  'Shadow Covenant',
+  'Ember Collective',
+  'Void Walkers',
+  'Solar Reign',
+  'Frost Legion',
+  'Thunder Pact',
+  'Ash Republic',
+  'Neon Syndicate',
+  'Storm Brigade',
+  'Lunar Assembly',
+  'Flame Sentinels',
+  'Dark Meridian',
+  'Phoenix Accord',
+  'Steel Dominion',
+  'Crystal Enclave',
+  'Rogue Alliance',
+  'Titan Front',
 ]
 
 export const FALLBACK_FACTION_SYMBOLS = [
-  'IRON', 'OBSD', 'CRIM', 'SHAD', 'EMBR', 'VOID', 'SOLR', 'FRST',
-  'THDR', 'ASHR', 'NEON', 'STRM', 'LUNR', 'FLMS', 'DARK', 'PHNX',
-  'STEL', 'CRYS', 'ROGU', 'TITN',
+  'IRON',
+  'OBSD',
+  'CRIM',
+  'SHAD',
+  'EMBR',
+  'VOID',
+  'SOLR',
+  'FRST',
+  'THDR',
+  'ASHR',
+  'NEON',
+  'STRM',
+  'LUNR',
+  'FLMS',
+  'DARK',
+  'PHNX',
+  'STEL',
+  'CRYS',
+  'ROGU',
+  'TITN',
 ]
 
 /**
@@ -28,7 +60,7 @@ export const FALLBACK_FACTION_SYMBOLS = [
 export const generateFactionIdentity = async (
   personality: Personality,
   existingNames: Set<string>,
-  llmAvailable: boolean
+  llmAvailable: boolean,
 ): Promise<{ name: string; symbol: string } | null> => {
   const existing = [...existingNames].slice(0, 15).join(', ')
   const prompt = `You are naming a new faction in Pyre, a faction warfare game on Solana.
@@ -55,14 +87,17 @@ Your response (one line only):`
   if (!raw) return null
 
   // Parse "Name | TICKER" format
-  const line = raw.split('\n').find(l => l.includes('|'))
+  const line = raw.split('\n').find((l) => l.includes('|'))
   if (!line) return null
 
-  const parts = line.split('|').map(s => s.trim())
+  const parts = line.split('|').map((s) => s.trim())
   if (parts.length !== 2) return null
 
   const name = parts[0].replace(/^["']|["']$/g, '').trim()
-  let symbol = parts[1].replace(/^["']|["']$/g, '').trim().toUpperCase()
+  let symbol = parts[1]
+    .replace(/^["']|["']$/g, '')
+    .trim()
+    .toUpperCase()
 
   // Validate
   if (!name || name.length < 3 || name.length > 32) return null
@@ -86,9 +121,9 @@ export const fetchFactionIntel = async (
   ])
   return {
     symbol: faction.symbol,
-    members: membersResult.members.map(m => ({ address: m.address, percentage: m.percentage })),
+    members: membersResult.members.map((m) => ({ address: m.address, percentage: m.percentage })),
     totalMembers: membersResult.total_members,
-    recentComms: commsResult.comms.map(c => ({ sender: c.sender, memo: c.memo })),
+    recentComms: commsResult.comms.map((c) => ({ sender: c.sender, memo: c.memo })),
   }
 }
 
@@ -110,7 +145,7 @@ Your response (one sentence only):`
 
   const raw = await ollamaGenerate(prompt, llmAvailable)
   if (raw) {
-    const line = raw.split('\n').find(l => l.trim().length > 10)
+    const line = raw.split('\n').find((l) => l.trim().length > 10)
     if (line) return line.trim().replace(/^["']|["']$/g, '')
   }
 
@@ -119,9 +154,9 @@ Your response (one sentence only):`
 }
 
 export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentState): string => {
-  const syms = factions.map(f => f.symbol)
+  const syms = factions.map((f) => f.symbol)
   const s1 = syms.length > 0 ? pick(syms) : 'IRON'
-  const s2 = syms.length > 1 ? pick(syms.filter(s => s !== s1)) : 'VOID'
+  const s2 = syms.length > 1 ? pick(syms.filter((s) => s !== s1)) : 'VOID'
   const addr = Math.random().toString(36).slice(2, 10)
   const pct = Math.floor(Math.random() * 45 + 5)
   const members = Math.floor(Math.random() * 30 + 3)
@@ -138,21 +173,24 @@ export const generateDynamicExamples = (factions: FactionInfo[], agent: AgentSta
   ]
 
   // Pool of action+message examples (the LLM should prefer these)
-  const actionExamples = NETWORK === 'mainnet' ? [
-    `JOIN ${s1} "heard good things, scouting this one"`,
-    `DEFECT ${s2} "time to explore elsewhere"`,
-    `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
-  ] : [
-    `JOIN ${s1} "deploying capital, let's build this"`,
-    `JOIN ${s2} "following @${addr} into this one"`,
-    `JOIN ${s1} "@${addr}, ready to form an alliance if you are"`,
-    `DEFECT ${s1} "${members} are losing faith, taking profits"`,
-    `DEFECT ${s2} "saw @${addr} dump ${pct}%, I'm out"`,
-    `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
-    `INFILTRATE ${s2} "this one's undervalued, sneaking in"`,
-    `RALLY ${s1}`,
-    `WAR_LOAN ${s1}`,
-  ]
+  const actionExamples =
+    NETWORK === 'mainnet'
+      ? [
+          `JOIN ${s1} "heard good things, scouting this one"`,
+          `DEFECT ${s2} "time to explore elsewhere"`,
+          `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
+        ]
+      : [
+          `JOIN ${s1} "deploying capital, let's build this"`,
+          `JOIN ${s2} "following @${addr} into this one"`,
+          `JOIN ${s1} "@${addr}, ready to form an alliance if you are"`,
+          `DEFECT ${s1} "${members} are losing faith, taking profits"`,
+          `DEFECT ${s2} "saw @${addr} dump ${pct}%, I'm out"`,
+          `FUD ${s2} "@${addr} has been quiet, what are they planning?"`,
+          `INFILTRATE ${s2} "this one's undervalued, sneaking in"`,
+          `RALLY ${s1}`,
+          `WAR_LOAN ${s1}`,
+        ]
 
   // Devnet: action-heavy with some comms (3 actions, 2 messages). Mainnet: comms-heavy (4 messages, 1 action).
   const msgCount = NETWORK === 'mainnet' ? 4 : 2

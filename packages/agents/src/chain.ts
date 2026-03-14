@@ -13,9 +13,20 @@ const TORCH_PROGRAM_ID = '8hbUkonssSEEtkqzwM7ZcZrD9evacM92TcWSooVF4BeT'
 const MEMO_PROGRAM_IDS = new Set(['MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'])
 
 const ALL_ACTIONS: Action[] = [
-  'join', 'defect', 'rally', 'launch', 'message',
-  'stronghold', 'war_loan', 'repay_loan', 'siege', 'ascend', 'raze', 'tithe',
-  'infiltrate', 'fud',
+  'join',
+  'defect',
+  'rally',
+  'launch',
+  'message',
+  'stronghold',
+  'war_loan',
+  'repay_loan',
+  'siege',
+  'ascend',
+  'raze',
+  'tithe',
+  'infiltrate',
+  'fud',
 ]
 
 interface OnChainAction {
@@ -48,7 +59,7 @@ async function rpcRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
       const is429 = err?.message?.includes('429') || err?.status === 429
       if (!is429 || attempt === retries - 1) throw err
       const delay = 1000 * Math.pow(2, attempt) // 1s, 2s, 4s
-      await new Promise(r => setTimeout(r, delay))
+      await new Promise((r) => setTimeout(r, delay))
     }
   }
   throw new Error('unreachable')
@@ -68,7 +79,7 @@ async function fetchAgentHistory(
   while (fetched < maxSigs) {
     const batchSize = Math.min(maxSigs - fetched, 1000)
     const signatures = await rpcRetry(() =>
-      connection.getSignaturesForAddress(pubkey, { limit: batchSize, before }, 'confirmed')
+      connection.getSignaturesForAddress(pubkey, { limit: batchSize, before }, 'confirmed'),
     )
     if (signatures.length === 0) break
     fetched += signatures.length
@@ -81,11 +92,13 @@ async function fetchAgentHistory(
       try {
         txs = await rpcRetry(() =>
           connection.getParsedTransactions(
-            batch.map(s => s.signature),
+            batch.map((s) => s.signature),
             { maxSupportedTransactionVersion: 0 },
-          )
+          ),
         )
-      } catch { continue }
+      } catch {
+        continue
+      }
 
       for (let j = 0; j < txs.length; j++) {
         const tx = txs[j]
@@ -107,14 +120,14 @@ function parseTransaction(
   knownMints: Set<string>,
 ): OnChainAction | null {
   const logs = tx.meta?.logMessages ?? []
-  const accountKeys = tx.transaction.message.accountKeys.map(k => k.pubkey.toString())
+  const accountKeys = tx.transaction.message.accountKeys.map((k) => k.pubkey.toString())
 
-  const isTorchTx = accountKeys.includes(TORCH_PROGRAM_ID) ||
-    logs.some(l => l.includes(TORCH_PROGRAM_ID))
+  const isTorchTx =
+    accountKeys.includes(TORCH_PROGRAM_ID) || logs.some((l) => l.includes(TORCH_PROGRAM_ID))
   if (!isTorchTx) return null
 
   let action = categorizeFromLogs(logs)
-  const mint = accountKeys.find(k => knownMints.has(k))
+  const mint = accountKeys.find((k) => knownMints.has(k))
   const memo = extractMemo(tx)
 
   // A buy with a memo = message, a sell with a memo = fud
@@ -128,30 +141,45 @@ function parseTransaction(
 
 function categorizeFromLogs(logs: string[]): OnChainAction['action'] {
   const logStr = logs.join(' ')
-  if (logs.some(l => l.includes('Instruction: CreateToken') || l.includes('create_token'))) return 'launch'
-  if (logs.some(l => l.includes('Instruction: CreateVault') || l.includes('create_vault'))) return 'stronghold'
-  if (logs.some(l => l.includes('Instruction: VaultSwap') || l.includes('vault_swap'))) {
+  if (logs.some((l) => l.includes('Instruction: CreateToken') || l.includes('create_token')))
+    return 'launch'
+  if (logs.some((l) => l.includes('Instruction: CreateVault') || l.includes('create_vault')))
+    return 'stronghold'
+  if (logs.some((l) => l.includes('Instruction: VaultSwap') || l.includes('vault_swap'))) {
     if (logStr.includes('is_buy: true') || logStr.includes('Buy')) return 'dex_buy'
     if (logStr.includes('is_buy: false') || logStr.includes('Sell')) return 'dex_sell'
     return 'dex_buy'
   }
-  if (logs.some(l => l.includes('Instruction: Buy') || l.includes('Program log: Buy'))) return 'join'
-  if (logs.some(l => l.includes('Instruction: Sell') || l.includes('Program log: Sell'))) return 'defect'
-  if (logs.some(l => l.includes('Instruction: Star') || l.includes('star'))) return 'rally'
-  if (logs.some(l => l.includes('Instruction: Borrow') || l.includes('borrow'))) return 'war_loan'
-  if (logs.some(l => l.includes('Instruction: Repay') || l.includes('repay'))) return 'repay_loan'
-  if (logs.some(l => l.includes('Instruction: Liquidate') || l.includes('liquidate'))) return 'siege'
-  if (logs.some(l => l.includes('Instruction: Migrate') || l.includes('migrate'))) return 'ascend'
-  if (logs.some(l => l.includes('Instruction: ReclaimFailedToken') || l.includes('reclaim'))) return 'raze'
-  if (logs.some(l => l.includes('Instruction: HarvestFees') || l.includes('SwapFeesToSol') || l.includes('harvest'))) return 'tithe'
-  if (logs.some(l => l.includes('Instruction: DepositVault') || l.includes('deposit_vault'))) return 'fund'
+  if (logs.some((l) => l.includes('Instruction: Buy') || l.includes('Program log: Buy')))
+    return 'join'
+  if (logs.some((l) => l.includes('Instruction: Sell') || l.includes('Program log: Sell')))
+    return 'defect'
+  if (logs.some((l) => l.includes('Instruction: Star') || l.includes('star'))) return 'rally'
+  if (logs.some((l) => l.includes('Instruction: Borrow') || l.includes('borrow'))) return 'war_loan'
+  if (logs.some((l) => l.includes('Instruction: Repay') || l.includes('repay'))) return 'repay_loan'
+  if (logs.some((l) => l.includes('Instruction: Liquidate') || l.includes('liquidate')))
+    return 'siege'
+  if (logs.some((l) => l.includes('Instruction: Migrate') || l.includes('migrate'))) return 'ascend'
+  if (logs.some((l) => l.includes('Instruction: ReclaimFailedToken') || l.includes('reclaim')))
+    return 'raze'
+  if (
+    logs.some(
+      (l) =>
+        l.includes('Instruction: HarvestFees') ||
+        l.includes('SwapFeesToSol') ||
+        l.includes('harvest'),
+    )
+  )
+    return 'tithe'
+  if (logs.some((l) => l.includes('Instruction: DepositVault') || l.includes('deposit_vault')))
+    return 'fund'
   return 'unknown'
 }
 
 function extractMemo(tx: ParsedTransactionWithMeta): string | undefined {
   const allInstructions = [
     ...tx.transaction.message.instructions,
-    ...(tx.meta?.innerInstructions ?? []).flatMap(i => i.instructions),
+    ...(tx.meta?.innerInstructions ?? []).flatMap((i) => i.instructions),
   ]
   for (const ix of allInstructions) {
     const programId = 'programId' in ix ? ix.programId.toString() : ''
@@ -170,15 +198,24 @@ function extractMemo(tx: ParsedTransactionWithMeta): string | undefined {
 
 function normalizeAction(action: OnChainAction['action']): Action {
   switch (action) {
-    case 'dex_buy': return 'join'
-    case 'dex_sell': return 'defect'
-    case 'fund': return 'stronghold'
-    case 'unknown': return 'join'
-    default: return action
+    case 'dex_buy':
+      return 'join'
+    case 'dex_sell':
+      return 'defect'
+    case 'fund':
+      return 'stronghold'
+    case 'unknown':
+      return 'join'
+    default:
+      return action
   }
 }
 
-export function computeWeights(history: OnChainAction[], seedPersonality: Personality, decay = 0.85): number[] {
+export function computeWeights(
+  history: OnChainAction[],
+  seedPersonality: Personality,
+  decay = 0.85,
+): number[] {
   const seed = [...PERSONALITY_WEIGHTS[seedPersonality]]
   if (history.length === 0) return seed
 
@@ -224,11 +261,16 @@ export function actionIndex(action: Action): number {
 // ─── Memo Content Personality Signals ─────────────────────────────
 
 // Keywords that signal personality from memo content
-const PROVOCATEUR_VOICE = /trash|beef|fight|chaos|war|destroy|crush|pathetic|laughable|weak|dead|fake|scam|clown|joke|fool|coward|expose|call.?out|dare|challenge|predict|bold|hot.?take/
-const SCOUT_VOICE = /intel|data|notice|observ|suspicious|watch|track|report|warn|alert|question|why did|who.?s|pattern|trend|%|percent|member|holder|accumul/
-const LOYALIST_VOICE = /ride.?or.?die|loyal|hold|believe|strong|build|together|ally|alliance|trust|support|back|hype|power|conviction|never.?sell|diamond/
-const MERCENARY_VOICE = /profit|alpha|flip|exit|dump|cash|roi|returns|opportunity|play|angle|trade|stack|bag|gain|solo|lone.?wolf/
-const WHALE_VOICE = /flex|position|size|deploy|capital|market|move|massive|big|dominate|everyone.?watch|listen|whale|stack|load/
+const PROVOCATEUR_VOICE =
+  /trash|beef|fight|chaos|war|destroy|crush|pathetic|laughable|weak|dead|fake|scam|clown|joke|fool|coward|expose|call.?out|dare|challenge|predict|bold|hot.?take/
+const SCOUT_VOICE =
+  /intel|data|notice|observ|suspicious|watch|track|report|warn|alert|question|why did|who.?s|pattern|trend|%|percent|member|holder|accumul/
+const LOYALIST_VOICE =
+  /ride.?or.?die|loyal|hold|believe|strong|build|together|ally|alliance|trust|support|back|hype|power|conviction|never.?sell|diamond/
+const MERCENARY_VOICE =
+  /profit|alpha|flip|exit|dump|cash|roi|returns|opportunity|play|angle|trade|stack|bag|gain|solo|lone.?wolf/
+const WHALE_VOICE =
+  /flex|position|size|deploy|capital|market|move|massive|big|dominate|everyone.?watch|listen|whale|stack|load/
 
 /**
  * Score personality signals from memo content.
@@ -236,7 +278,11 @@ const WHALE_VOICE = /flex|position|size|deploy|capital|market|move|massive|big|d
  */
 function scoreMemoPersonality(memos: string[]): Record<Personality, number> {
   const scores: Record<Personality, number> = {
-    loyalist: 0, mercenary: 0, provocateur: 0, scout: 0, whale: 0,
+    loyalist: 0,
+    mercenary: 0,
+    provocateur: 0,
+    scout: 0,
+    whale: 0,
   }
 
   for (const memo of memos) {
@@ -279,7 +325,8 @@ function buildClassifyPrompt(
   factionNames?: Map<string, string>,
 ): string {
   const total = weights.reduce((a, b) => a + b, 0)
-  const r = total > 0 ? weights.map(w => ((w / total) * 100).toFixed(1) + '%') : weights.map(() => '0%')
+  const r =
+    total > 0 ? weights.map((w) => ((w / total) * 100).toFixed(1) + '%') : weights.map(() => '0%')
 
   let actionSummary = `Overall action distribution:\n`
   actionSummary += `  join: ${r[0]}, defect: ${r[1]}, rally: ${r[2]}, launch: ${r[3]}, message: ${r[4]}\n`
@@ -292,15 +339,16 @@ function buildClassifyPrompt(
       const fTotal = counts.reduce((a, b) => a + b, 0)
       if (fTotal < 2) continue
       const name = factionNames?.get(mint) ?? mint.slice(0, 8)
-      const fr = counts.map(c => c)
+      const fr = counts.map((c) => c)
       actionSummary += `  ${name}: join=${fr[0]} defect=${fr[1]} rally=${fr[2]} message=${fr[4]} fud=${fr[13]} (${fTotal} total)\n`
     }
   }
 
   const recentMemos = memos.slice(-150)
-  const memoBlock = recentMemos.length > 0
-    ? `\nThis agent's last ${recentMemos.length} messages (oldest first):\n${recentMemos.map((m, i) => `  ${i + 1}. "${m}"`).join('\n')}`
-    : '\nNo messages from this agent.'
+  const memoBlock =
+    recentMemos.length > 0
+      ? `\nThis agent's last ${recentMemos.length} messages (oldest first):\n${recentMemos.map((m, i) => `  ${i + 1}. "${m}"`).join('\n')}`
+      : '\nNo messages from this agent.'
 
   return `Classify this Pyre agent into one of 5 personality types. Consider both action numbers and message tone.
 
@@ -340,12 +388,17 @@ export async function classifyPersonality(
       const prompt = buildClassifyPrompt(weights, memos, perFactionHistory, factionNames)
       const response = await llmGenerate(prompt)
       if (response) {
-        const cleaned = response.toLowerCase().replace(/[^a-z]/g, '').trim()
+        const cleaned = response
+          .toLowerCase()
+          .replace(/[^a-z]/g, '')
+          .trim()
         const valid: Personality[] = ['loyalist', 'mercenary', 'provocateur', 'scout', 'whale']
-        const match = valid.find(p => cleaned.includes(p))
+        const match = valid.find((p) => cleaned.includes(p))
         if (match) return match
       }
-    } catch { /* fall through to formula */ }
+    } catch {
+      /* fall through to formula */
+    }
   }
 
   // Fallback: formula-based scoring
@@ -361,26 +414,35 @@ function classifyPersonalityFormula(
   const total = weights.reduce((a, b) => a + b, 0)
   if (total === 0) return 'loyalist'
 
-  const r = weights.map(w => w / total)
-  const joinRate = r[0], defectRate = r[1], rallyRate = r[2], messageRate = r[4]
-  const warLoanRate = r[6], siegeRate = r[8], titheRate = r[11]
-  const infiltrateRate = r[12], fudRate = r[13]
+  const r = weights.map((w) => w / total)
+  const joinRate = r[0],
+    defectRate = r[1],
+    rallyRate = r[2],
+    messageRate = r[4]
+  const warLoanRate = r[6],
+    siegeRate = r[8],
+    titheRate = r[11]
+  const infiltrateRate = r[12],
+    fudRate = r[13]
   const commsRate = messageRate + fudRate
   const tradeRate = joinRate + defectRate
   const fudRatio = commsRate > 0 ? fudRate / commsRate : 0
   const msgRatio = commsRate > 0 ? messageRate / commsRate : 0
 
   const scores: Record<Personality, number> = {
-    loyalist: msgRatio * 3 + joinRate * 2 + rallyRate * 3 + titheRate * 2
-      - fudRatio * 3 - defectRate * 2,
-    mercenary: defectRate * 3 + infiltrateRate * 3
-      + warLoanRate * 2 + siegeRate * 2
-      - msgRatio * 2 - rallyRate * 2,
-    provocateur: fudRatio * 4 + infiltrateRate * 2 + defectRate * 1.5
-      - msgRatio * 1 - rallyRate * 1,
+    loyalist:
+      msgRatio * 3 + joinRate * 2 + rallyRate * 3 + titheRate * 2 - fudRatio * 3 - defectRate * 2,
+    mercenary:
+      defectRate * 3 +
+      infiltrateRate * 3 +
+      warLoanRate * 2 +
+      siegeRate * 2 -
+      msgRatio * 2 -
+      rallyRate * 2,
+    provocateur:
+      fudRatio * 4 + infiltrateRate * 2 + defectRate * 1.5 - msgRatio * 1 - rallyRate * 1,
     scout: rallyRate * 2 - commsRate * 2 - fudRatio * 2 - defectRate,
-    whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2
-      - commsRate * 3,
+    whale: (tradeRate > commsRate ? 1 : 0) * 2 + warLoanRate * 3 + defectRate * 2 - commsRate * 3,
   }
 
   // Blend with memo keyword scores
@@ -401,7 +463,8 @@ function classifyPersonalityFormula(
 
 // ─── Sentiment ───────────────────────────────────────────────────
 
-const POSITIVE = /strong|rally|bull|pump|rising|hold|loyal|power|growing|moon|love|trust|alpha|build|conviction/
+const POSITIVE =
+  /strong|rally|bull|pump|rising|hold|loyal|power|growing|moon|love|trust|alpha|build|conviction/
 const NEGATIVE = /weak|dump|bear|dead|fail|raze|crash|abandon|scam|rug|sell|exit|trash|hate|fake/
 
 function computeSentiment(history: OnChainAction[]): Map<string, number> {
@@ -411,12 +474,26 @@ function computeSentiment(history: OnChainAction[]): Map<string, number> {
     const current = sentiment.get(entry.mint) ?? 0
     let delta = 0
     switch (entry.action) {
-      case 'join': case 'dex_buy': delta = 1; break
-      case 'defect': case 'dex_sell': delta = -2; break
-      case 'rally': delta = 3; break
-      case 'message': delta = 0.5; break
-      case 'fud': delta = -1.5; break
-      case 'war_loan': delta = 1; break
+      case 'join':
+      case 'dex_buy':
+        delta = 1
+        break
+      case 'defect':
+      case 'dex_sell':
+        delta = -2
+        break
+      case 'rally':
+        delta = 3
+        break
+      case 'message':
+        delta = 0.5
+        break
+      case 'fud':
+        delta = -1.5
+        break
+      case 'war_loan':
+        delta = 1
+        break
     }
     if (entry.memo) {
       const text = entry.memo.toLowerCase()
@@ -438,11 +515,11 @@ export async function reconstructFromChain(
   maxSignatures = 500,
   llmGenerate?: (prompt: string) => Promise<string | null>,
 ): Promise<ChainDerivedState> {
-  const knownMints = new Set(factions.map(f => f.mint))
+  const knownMints = new Set(factions.map((f) => f.mint))
   const history = await fetchAgentHistory(connection, agentPubkey, knownMints, maxSignatures)
 
   const weights = computeWeights(history, seedPersonality)
-  const memoTexts = history.filter(h => h.memo?.trim()).map(h => h.memo!)
+  const memoTexts = history.filter((h) => h.memo?.trim()).map((h) => h.memo!)
 
   // Build per-faction action counts for per-ticker personality scoring
   const perFaction = new Map<string, number[]>()
@@ -451,7 +528,8 @@ export async function reconstructFromChain(
     const normalized = normalizeAction(entry.action)
     const idx = ALL_ACTIONS.indexOf(normalized)
     if (idx < 0) continue
-    if (!perFaction.has(entry.mint)) perFaction.set(entry.mint, new Array(ALL_ACTIONS.length).fill(0))
+    if (!perFaction.has(entry.mint))
+      perFaction.set(entry.mint, new Array(ALL_ACTIONS.length).fill(0))
     perFaction.get(entry.mint)![idx]++
   }
 
@@ -459,28 +537,36 @@ export async function reconstructFromChain(
   const factionNames = new Map<string, string>()
   for (const f of factions) factionNames.set(f.mint, f.symbol)
 
-  const personality = history.length > 0
-    ? await classifyPersonality(weights, memoTexts, perFaction, llmGenerate, factionNames)
-    : seedPersonality
+  const personality =
+    history.length > 0
+      ? await classifyPersonality(weights, memoTexts, perFaction, llmGenerate, factionNames)
+      : seedPersonality
   const sentiment = computeSentiment(history)
 
-  const founded = history.filter(h => h.action === 'launch' && h.mint).map(h => h.mint!)
+  const founded = history.filter((h) => h.action === 'launch' && h.mint).map((h) => h.mint!)
 
   const memories = history
-    .filter(h => h.memo && h.memo.trim().length > 0)
-    .map(h => {
+    .filter((h) => h.memo && h.memo.trim().length > 0)
+    .map((h) => {
       const faction = h.mint
-        ? factions.find(f => f.mint === h.mint)?.symbol ?? h.mint.slice(0, 8)
+        ? (factions.find((f) => f.mint === h.mint)?.symbol ?? h.mint.slice(0, 8))
         : '???'
-      const action = h.action === 'join' || h.action === 'dex_buy' ? 'joined'
-        : h.action === 'defect' || h.action === 'dex_sell' ? 'defected'
-        : h.action === 'fud' ? 'fudded' : h.action === 'message' ? 'said' : h.action
+      const action =
+        h.action === 'join' || h.action === 'dex_buy'
+          ? 'joined'
+          : h.action === 'defect' || h.action === 'dex_sell'
+            ? 'defected'
+            : h.action === 'fud'
+              ? 'fudded'
+              : h.action === 'message'
+                ? 'said'
+                : h.action
       return `${action} ${faction}: "${h.memo}"`
     })
 
-  const recentHistory = history.slice(-15).map(h => {
+  const recentHistory = history.slice(-15).map((h) => {
     const faction = h.mint
-      ? factions.find(f => f.mint === h.mint)?.symbol ?? h.mint.slice(0, 8)
+      ? (factions.find((f) => f.mint === h.mint)?.symbol ?? h.mint.slice(0, 8))
       : '?'
     const memo = h.memo ? ` — "${h.memo.slice(0, 60)}"` : ''
     return `${h.action} ${faction}${memo}`

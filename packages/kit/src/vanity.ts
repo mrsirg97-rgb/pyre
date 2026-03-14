@@ -14,10 +14,7 @@ import {
   SYSVAR_RENT_PUBKEY,
   Keypair,
 } from '@solana/web3.js'
-import {
-  getAssociatedTokenAddressSync,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-} from '@solana/spl-token'
+import { getAssociatedTokenAddressSync, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { BN, Program, AnchorProvider, Wallet } from '@coral-xyz/anchor'
 import type { CreateTokenResult, CreateTokenParams } from 'torchsdk'
 import { PROGRAM_ID } from 'torchsdk'
@@ -63,7 +60,11 @@ const makeDummyProvider = (connection: Connection, payer: PublicKey): AnchorProv
   return new AnchorProvider(connection, dummyWallet as unknown as Wallet, {})
 }
 
-const finalizeTransaction = async (connection: Connection, tx: Transaction, feePayer: PublicKey): Promise<void> => {
+const finalizeTransaction = async (
+  connection: Connection,
+  tx: Transaction,
+  feePayer: PublicKey,
+): Promise<void> => {
   const { blockhash } = await connection.getLatestBlockhash()
   tx.recentBlockhash = blockhash
   tx.feePayer = feePayer
@@ -74,7 +75,7 @@ const finalizeTransaction = async (connection: Connection, tx: Transaction, feeP
 const PYRE_SUFFIX = 'py'
 
 /** Grind for a keypair whose base58 address ends with "py" */
-export function grindPyreMint(maxAttempts: number = 500_000): Keypair {
+export const grindPyreMint = (maxAttempts: number = 500_000): Keypair => {
   for (let i = 0; i < maxAttempts; i++) {
     const kp = Keypair.generate()
     if (kp.publicKey.toBase58().endsWith(PYRE_SUFFIX)) {
@@ -86,17 +87,22 @@ export function grindPyreMint(maxAttempts: number = 500_000): Keypair {
 }
 
 /** Check if a mint address is a pyre faction (ends with "py") */
-export function isPyreMint(mint: string): boolean {
-  return mint.endsWith(PYRE_SUFFIX)
-}
+export const isPyreMint = (mint: string): boolean => mint.endsWith(PYRE_SUFFIX)
 
 // ── Build create transaction with pyre vanity address ──
 
-export async function buildCreateFactionTransaction(
+export const buildCreateFactionTransaction = async (
   connection: Connection,
   params: CreateTokenParams,
-): Promise<CreateTokenResult> {
-  const { creator: creatorStr, name, symbol, metadata_uri, sol_target = 0, community_token = true } = params
+): Promise<CreateTokenResult> => {
+  const {
+    creator: creatorStr,
+    name,
+    symbol,
+    metadata_uri,
+    sol_target = 0,
+    community_token = true,
+  } = params
 
   const creator = new PublicKey(creatorStr)
 
@@ -125,8 +131,15 @@ export async function buildCreateFactionTransaction(
   const provider = makeDummyProvider(connection, creator)
   const program = new Program(idl as any, provider)
 
-  const createIx = await (program.methods
-    .createToken({ name, symbol, uri: metadata_uri, solTarget: new BN(sol_target), communityToken: community_token }) as any)
+  const createIx = await (
+    program.methods.createToken({
+      name,
+      symbol,
+      uri: metadata_uri,
+      solTarget: new BN(sol_target),
+      communityToken: community_token,
+    }) as any
+  )
     .accounts({
       creator,
       globalConfig,

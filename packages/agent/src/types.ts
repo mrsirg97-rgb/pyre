@@ -4,17 +4,30 @@ import { Connection, Keypair } from '@solana/web3.js'
 
 export type Personality = 'loyalist' | 'mercenary' | 'provocateur' | 'scout' | 'whale'
 
-export type Action = 'join' | 'defect' | 'rally' | 'launch' | 'message'
-  | 'stronghold' | 'war_loan' | 'repay_loan' | 'siege' | 'ascend' | 'raze' | 'tithe'
-  | 'infiltrate' | 'fud' | 'scout'
+export type Action =
+  | 'join'
+  | 'defect'
+  | 'rally'
+  | 'launch'
+  | 'message'
+  | 'stronghold'
+  | 'war_loan'
+  | 'repay_loan'
+  | 'siege'
+  | 'ascend'
+  | 'raze'
+  | 'tithe'
+  | 'infiltrate'
+  | 'fud'
+  | 'scout'
 
 export interface LLMDecision {
   action: Action
-  faction?: string       // mint of target faction
-  sol?: number           // SOL amount for join
-  message?: string       // comms message
-  reasoning?: string     // why (for logging)
-  _rejected?: string     // rejection reason (set when action parsed but validation failed)
+  faction?: string // mint of target faction
+  sol?: number // SOL amount for join
+  message?: string // comms message
+  reasoning?: string // why (for logging)
+  _rejected?: string // rejection reason (set when action parsed but validation failed)
 }
 
 export interface FactionInfo {
@@ -26,9 +39,9 @@ export interface FactionInfo {
 
 export interface FactionIntel {
   symbol: string
-  members: { address: string, percentage: number }[]
+  members: { address: string; percentage: number }[]
   totalMembers: number
-  recentComms: { sender: string, memo: string }[]
+  recentComms: { sender: string; memo: string }[]
 }
 
 // ─── Agent State ────────────────────────────────────────────────────
@@ -37,20 +50,20 @@ export interface AgentState {
   keypair: Keypair
   publicKey: string
   personality: Personality
-  holdings: Map<string, number>   // mint -> approx token balance
-  founded: string[]               // mints founded
-  rallied: Set<string>            // mints already rallied
-  voted: Set<string>              // mints already voted on
+  holdings: Map<string, number> // mint -> approx token balance
+  founded: string[] // mints founded
+  rallied: Set<string> // mints already rallied
+  voted: Set<string> // mints already voted on
   hasStronghold: boolean
-  vaultCreator?: string           // creator pubkey of linked vault (if different from agent)
-  activeLoans: Set<string>        // mints with active war loans
-  infiltrated: Set<string>        // mints we joined to sabotage (dump later)
-  sentiment: Map<string, number>  // mint -> sentiment score (-10 to +10)
-  allies: Set<string>             // agent pubkeys this agent trusts
-  rivals: Set<string>             // agent pubkeys this agent distrusts
+  vaultCreator?: string // creator pubkey of linked vault (if different from agent)
+  activeLoans: Set<string> // mints with active war loans
+  infiltrated: Set<string> // mints we joined to sabotage (dump later)
+  sentiment: Map<string, number> // mint -> sentiment score (-10 to +10)
+  allies: Set<string> // agent pubkeys this agent trusts
+  rivals: Set<string> // agent pubkeys this agent distrusts
   actionCount: number
   lastAction: string
-  recentHistory: string[]         // last N actions for LLM context
+  recentHistory: string[] // last N actions for LLM context
 }
 
 // ─── Public API Types ───────────────────────────────────────────────
@@ -142,8 +155,8 @@ export interface OnChainAction {
   signature: string
   timestamp: number
   action: Action | 'fund' | 'dex_buy' | 'dex_sell' | 'unknown'
-  mint?: string          // faction mint involved
-  memo?: string          // SPL memo if present
+  mint?: string // faction mint involved
+  memo?: string // SPL memo if present
   otherAgents?: string[] // other signers/participants
 }
 

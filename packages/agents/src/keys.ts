@@ -14,7 +14,7 @@ export const generateKeys = (count: number): Keypair[] => {
 }
 
 export const saveKeys = (keypairs: Keypair[]) => {
-  const data = keypairs.map(kp => ({
+  const data = keypairs.map((kp) => ({
     publicKey: kp.publicKey.toBase58(),
     secretKey: Array.from(kp.secretKey),
   }))

@@ -20,7 +20,9 @@ export async function ensureRegistryProfile(
   try {
     const existing = await getRegistryProfile(connection, agent.publicKey)
     if (existing) {
-      log(`[${short}] registry profile found (${existing.address.slice(0, 8)}), last checkpoint: ${existing.last_checkpoint > 0 ? new Date(existing.last_checkpoint * 1000).toISOString().slice(0, 10) : 'never'}`)
+      log(
+        `[${short}] registry profile found (${existing.address.slice(0, 8)}), last checkpoint: ${existing.last_checkpoint > 0 ? new Date(existing.last_checkpoint * 1000).toISOString().slice(0, 10) : 'never'}`,
+      )
       return existing
     }
   } catch {

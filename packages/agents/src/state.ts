@@ -6,7 +6,7 @@ import { STATE_FILE } from './config'
 export const saveState = (agents: AgentState[], factions: FactionInfo[]) => {
   const data = {
     factions,
-    agents: agents.map(a => ({
+    agents: agents.map((a) => ({
       publicKey: a.publicKey,
       personality: a.personality,
       holdings: Object.fromEntries(a.holdings),
@@ -27,7 +27,7 @@ export const saveState = (agents: AgentState[], factions: FactionInfo[]) => {
   fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2))
 }
 
-export const loadState = (): { agents: Map<string, any>, factions: FactionInfo[] } => {
+export const loadState = (): { agents: Map<string, any>; factions: FactionInfo[] } => {
   if (!fs.existsSync(STATE_FILE)) return { agents: new Map(), factions: [] }
   const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
   const agents = new Map<string, any>()
