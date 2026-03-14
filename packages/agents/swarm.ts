@@ -21,7 +21,9 @@
 
 if (!process.env.TORCH_NETWORK) process.env.TORCH_NETWORK = 'devnet'
 
-import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js'
+import { Connection, Keypair, LAMPORTS_PER_SOL, Transaction, SystemProgram } from '@solana/web3.js'
+import * as path from 'path'
+import * as os from 'os'
 import { PyreKit, createEphemeralAgent, isPyreMint, isBlacklistedMint } from 'pyre-world-kit'
 import { createPyreAgent, PyreAgent, FactionInfo, Personality } from 'pyre-agent-kit'
 import * as fs from 'fs'
@@ -103,43 +105,94 @@ async function status() {
 }
 
 async function fund() {
-  const keys = loadKeys()
-  if (keys.length === 0) {
+  const keypairs = loadKeys()
+  if (keypairs.length === 0) {
     console.log('No keys. Run `pnpm run keygen` first.')
     return
   }
 
-  const connection = new Connection(RPC_URL, 'confirmed')
-  console.log(`Funding ${keys.length} agents on ${NETWORK}...`)
-  console.log(`Target: ${FUND_TARGET_SOL} SOL per agent\n`)
-
-  let funded = 0
-  const BATCH = 10
-  for (let i = 0; i < keys.length; i += BATCH) {
-    const batch = keys.slice(i, i + BATCH)
-    await Promise.allSettled(
-      batch.map(async (kp) => {
-        const balance = await connection.getBalance(kp.publicKey)
-        const sol = balance / LAMPORTS_PER_SOL
-        if (sol >= FUND_TARGET_SOL) {
-          console.log(`  ✓ ${kp.publicKey.toBase58().slice(0, 12)}... ${sol.toFixed(4)} SOL (already funded)`)
-          funded++
-          return
-        }
-        const needed = Math.ceil((FUND_TARGET_SOL - sol) * LAMPORTS_PER_SOL)
-        try {
-          const sig = await connection.requestAirdrop(kp.publicKey, needed)
-          await connection.confirmTransaction(sig, 'confirmed')
-          funded++
-          console.log(`  ✓ ${kp.publicKey.toBase58().slice(0, 12)}... airdropped ${(needed / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
-        } catch (err: any) {
-          console.log(`  ✗ ${kp.publicKey.toBase58().slice(0, 12)}... ${err.message?.slice(0, 60)}`)
-        }
-      })
-    )
-    if (i + BATCH < keys.length) await sleep(1000)
+  const WALLET_PATH = process.env.WALLET_PATH ?? path.join(os.homedir(), '.config/solana/id.json')
+  if (!fs.existsSync(WALLET_PATH)) {
+    console.log(`Master wallet not found at ${WALLET_PATH}`)
+    console.log('Set WALLET_PATH=/path/to/keypair.json or copy your keypair to ~/.config/solana/id.json')
+    return
   }
-  console.log(`\n  ${funded}/${keys.length} funded`)
+
+  const walletRaw = JSON.parse(fs.readFileSync(WALLET_PATH, 'utf-8'))
+  const wallet = Keypair.fromSecretKey(Uint8Array.from(walletRaw))
+  const connection = new Connection(RPC_URL, 'confirmed')
+
+  const walletBalance = await connection.getBalance(wallet.publicKey)
+  const walletSol = walletBalance / LAMPORTS_PER_SOL
+  logGlobal(`Master wallet: ${wallet.publicKey.toBase58()}`)
+  logGlobal(`Balance: ${walletSol.toFixed(4)} SOL`)
+
+  const TARGET_SOL = FUND_TARGET_SOL
+  const TARGET_LAMPORTS = TARGET_SOL * LAMPORTS_PER_SOL
+
+  // Check each agent's balance
+  const needsFunding: { kp: Keypair; topUp: number }[] = []
+  logGlobal('Checking agent balances...')
+
+  for (const kp of keypairs) {
+    const bal = await connection.getBalance(kp.publicKey)
+    const currentSol = bal / LAMPORTS_PER_SOL
+    if (bal < TARGET_LAMPORTS) {
+      const topUp = TARGET_LAMPORTS - bal
+      needsFunding.push({ kp, topUp })
+      console.log(`  ${kp.publicKey.toBase58().slice(0, 8)}...  ${currentSol.toFixed(2)} SOL  → needs ${(topUp / LAMPORTS_PER_SOL).toFixed(2)} SOL`)
+    } else {
+      console.log(`  ${kp.publicKey.toBase58().slice(0, 8)}...  ${currentSol.toFixed(2)} SOL  ✓`)
+    }
+  }
+
+  if (needsFunding.length === 0) {
+    logGlobal(`All ${keypairs.length} agents at ${TARGET_SOL}+ SOL`)
+    return
+  }
+
+  const totalNeeded = needsFunding.reduce((sum, a) => sum + a.topUp, 0)
+  logGlobal(`${needsFunding.length} agents need top-up (${(totalNeeded / LAMPORTS_PER_SOL).toFixed(2)} SOL total)`)
+
+  if (walletBalance < totalNeeded + 0.01 * LAMPORTS_PER_SOL) {
+    logGlobal(`Not enough SOL. Need ~${(totalNeeded / LAMPORTS_PER_SOL).toFixed(1)} SOL, have ${walletSol.toFixed(4)} SOL`)
+    return
+  }
+
+  // Batch transfers — max 20 per tx to stay under size limits
+  const BATCH_SIZE = 20
+  let funded = 0
+
+  for (let i = 0; i < needsFunding.length; i += BATCH_SIZE) {
+    const batch = needsFunding.slice(i, i + BATCH_SIZE)
+    const tx = new Transaction()
+
+    for (const { kp, topUp } of batch) {
+      tx.add(SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: kp.publicKey,
+        lamports: topUp,
+      }))
+    }
+
+    const { blockhash } = await connection.getLatestBlockhash()
+    tx.recentBlockhash = blockhash
+    tx.feePayer = wallet.publicKey
+    tx.partialSign(wallet)
+
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    })
+    await connection.confirmTransaction(sig, 'confirmed')
+
+    funded += batch.length
+    logGlobal(`Funded ${funded}/${needsFunding.length} agents (tx: ${sig.slice(0, 16)}...)`)
+  }
+
+  const remaining = await connection.getBalance(wallet.publicKey)
+  logGlobal(`Done. ${funded} agents topped up to ${TARGET_SOL} SOL each.`)
+  logGlobal(`Master wallet remaining: ${(remaining / LAMPORTS_PER_SOL).toFixed(4)} SOL`)
 }
 
 async function swarm() {
