@@ -258,20 +258,13 @@ async function swarm() {
     const pubkey = kp.publicKey.toBase58()
     try {
       // Check if vault already exists
-      const existing = await (async () => {
-        try {
-          const { getVaultForWallet } = await import('torchsdk')
-          return await getVaultForWallet(connection, pubkey)
-        } catch { return null }
-      })()
+      const tempKit = new PyreKit(connection, pubkey)
+      const existing = await tempKit.actions.getStrongholdForAgent(pubkey)
 
       if (existing) {
         vaultCount++
         continue
       }
-
-      // Create vault
-      const tempKit = new PyreKit(connection, pubkey)
       const createResult = await tempKit.actions.createStronghold({ creator: pubkey })
       const createTx = createResult.transaction
       createTx.partialSign(kp)
