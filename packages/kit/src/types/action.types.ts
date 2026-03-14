@@ -71,6 +71,7 @@ export interface Action {
   raze(params: RazeParams): Promise<TransactionResult>
   repayWarLoan(params: RepayWarLoanParams): Promise<TransactionResult>
   requestWarLoan(params: RequestWarLoanParams): Promise<TransactionResult>
+  scout(targetAddress: string): Promise<string>
   siege(params: SiegeParams): Promise<TransactionResult>
   tithe(params: TitheParams): Promise<TransactionResult>
 }

@@ -1,9 +1,3 @@
-/**
- * Pyre Kit Mappers
- *
- * Internal mapping functions between Torch SDK types and Pyre game types.
- */
-
 import type {
   AllLoanPositionsResult,
   BuyTransactionResult,

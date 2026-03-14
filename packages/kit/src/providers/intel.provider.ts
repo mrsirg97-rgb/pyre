@@ -1,5 +1,7 @@
 import { Connection, PublicKey } from '@solana/web3.js'
-import { MapperProvider } from './mapper.provider'
+
+import { getBondingCurvePda, getTokenTreasuryPda, getTreasuryLockPda, isPyreMint } from '../vanity'
+import { isBlacklistedMint } from '../util'
 import {
   AgentFactionPosition,
   AgentProfile,
@@ -13,8 +15,6 @@ import {
   RivalFaction,
 } from '../types'
 import { Intel } from '../types/intel.types'
-import { getBondingCurvePda, getTokenTreasuryPda, getTreasuryLockPda, isPyreMint } from '../vanity'
-import { isBlacklistedMint } from '../util'
 import { Action } from '../types/action.types'
 
 export class IntelProvider implements Intel {

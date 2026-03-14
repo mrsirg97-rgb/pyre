@@ -7,26 +7,32 @@
  */
 
 import { Connection } from '@solana/web3.js'
+
+import { Action } from './types/action.types'
+import { Intel } from './types/intel.types'
+import { Registry } from './types/registry.types'
+
 import { ActionProvider } from './providers/action.provider'
 import { IntelProvider } from './providers/intel.provider'
 import { RegistryProvider } from './providers/registry.provider'
 import { StateProvider } from './providers/state.provider'
-import type { Action } from './types/action.types'
-import type { Intel } from './types/intel.types'
-import type { State, CheckpointConfig, TrackedAction } from './types/state.types'
+
+import type { CheckpointConfig, TrackedAction } from './types/state.types'
 
 // ─── Top-level Kit ────────────────────────────────────────────────
 
 export class PyreKit {
-  readonly actions: ActionProvider
-  readonly intel: IntelProvider
-  readonly registry: RegistryProvider
+  readonly connection: Connection
+  readonly actions: Action
+  readonly intel: Intel
+  readonly registry: Registry
   readonly state: StateProvider
 
   constructor(connection: Connection, publicKey: string) {
+    this.connection = connection
     this.registry = new RegistryProvider(connection)
-    this.state = new StateProvider(connection, publicKey, this.registry)
-    this.actions = new ActionProvider(connection)
+    this.state = new StateProvider(connection, this.registry, publicKey)
+    this.actions = new ActionProvider(connection, this.registry)
     this.intel = new IntelProvider(connection, this.actions)
 
     // Wire auto-checkpoint callback
@@ -42,19 +48,24 @@ export class PyreKit {
   }
 
   /**
-   * Execute an action with automatic state tracking.
+   * Execute an action with deferred state tracking.
    * On first call, initializes state from chain instead of executing.
-   * After execution, records the action and updates state.
+   *
+   * Returns { result, confirm }. Call confirm() after the transaction
+   * is signed and confirmed on-chain. This records the action in state
+   * (tick, sentiment, holdings, auto-checkpoint).
+   *
+   * For read-only methods (getFactions, getComms, etc.), confirm is a no-op.
    */
   async exec<T extends 'actions' | 'intel'>(
     provider: T,
     method: T extends 'actions' ? keyof Action : keyof Intel,
     ...args: any[]
-  ): Promise<any> {
+  ): Promise<{ result: any; confirm: () => Promise<void> }> {
     // First exec: initialize state
     if (!this.state.initialized) {
       await this.state.init()
-      return null
+      return { result: null, confirm: async () => {} }
     }
 
     const target = provider === 'actions' ? this.actions : this.intel
@@ -63,20 +74,21 @@ export class PyreKit {
 
     const result = await fn.call(target, ...args)
 
-    // Track action if it's a state-mutating action method
-    if (provider === 'actions') {
-      const action = this.methodToAction(method as string)
-      if (action) {
-        const mint = args[0]?.mint
-        const message = args[0]?.message
-        const description = message
-          ? `${action} ${mint?.slice(0, 8) ?? '?'} — "${message}"`
-          : `${action} ${mint?.slice(0, 8) ?? '?'}`
-        await this.state.record(action, mint, description)
-      }
-    }
+    // Build confirm callback for state-mutating actions
+    const trackedAction = provider === 'actions' ? this.methodToAction(method as string) : null
 
-    return result
+    const confirm = trackedAction
+      ? async () => {
+          const mint = args[0]?.mint
+          const message = args[0]?.message
+          const description = message
+            ? `${trackedAction} ${mint?.slice(0, 8) ?? '?'} — "${message}"`
+            : `${trackedAction} ${mint?.slice(0, 8) ?? '?'}`
+          await this.state.record(trackedAction, mint, description)
+        }
+      : async () => {} // no-op for reads
+
+    return { result, confirm }
   }
 
   /** Map action method names to tracked action types */

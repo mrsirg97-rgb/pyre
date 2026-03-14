@@ -1,14 +1,7 @@
-/**
- * Pyre World Agent Registry Provider
- *
- * On-chain agent identity and state persistence.
- * Agents checkpoint their action distributions and personality summaries
- * so any machine with the wallet key can reconstruct the agent.
- */
-
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js'
 import { BN, Program, AnchorProvider, type Wallet } from '@coral-xyz/anchor'
 import type { TransactionResult } from 'torchsdk'
+
 import type {
   RegistryProfile,
   RegistryWalletLink,
@@ -18,19 +11,13 @@ import type {
   UnlinkAgentWalletParams,
   TransferAgentAuthorityParams,
 } from '../types'
+import { Registry } from '../types/registry.types'
 
 import idl from '../pyre_world.json'
 
-// ─── Program ID ─────────────────────────────────────────────────────
-
 export const REGISTRY_PROGRAM_ID = new PublicKey(idl.address)
-
-// ─── PDA Seeds ──────────────────────────────────────────────────────
-
 const AGENT_SEED = 'pyre_agent'
 const AGENT_WALLET_SEED = 'pyre_agent_wallet'
-
-// ─── PDA Helpers ────────────────────────────────────────────────────
 
 export function getAgentProfilePda(creator: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
@@ -45,8 +32,6 @@ export function getAgentWalletLinkPda(wallet: PublicKey): [PublicKey, number] {
     REGISTRY_PROGRAM_ID,
   )
 }
-
-// ─── Anchor Program Helper ──────────────────────────────────────────
 
 function makeDummyProvider(connection: Connection, payer: PublicKey): AnchorProvider {
   const dummyWallet = {
@@ -67,9 +52,7 @@ async function finalizeTransaction(
   tx.feePayer = feePayer
 }
 
-// ─── Provider ───────────────────────────────────────────────────────
-
-export class RegistryProvider {
+export class RegistryProvider implements Registry {
   constructor(private connection: Connection) {}
 
   private getProgram(payer: PublicKey): Program {
@@ -77,9 +60,7 @@ export class RegistryProvider {
     return new Program(idl as any, provider)
   }
 
-  // ─── Read Operations ──────────────────────────────────────────────
-
-  async getProfile(creator: string): Promise<RegistryProfile | null> {
+  async getProfile(creator: string): Promise<RegistryProfile | undefined> {
     const creatorPk = new PublicKey(creator)
     const [profilePda] = getAgentProfilePda(creatorPk)
     const program = this.getProgram(creatorPk)
@@ -113,11 +94,11 @@ export class RegistryProvider {
         total_sol_received: account.totalSolReceived?.toNumber() ?? 0,
       }
     } catch {
-      return null
+      return undefined
     }
   }
 
-  async getWalletLink(wallet: string): Promise<RegistryWalletLink | null> {
+  async getWalletLink(wallet: string): Promise<RegistryWalletLink | undefined> {
     const walletPk = new PublicKey(wallet)
     const [linkPda] = getAgentWalletLinkPda(walletPk)
     const program = this.getProgram(walletPk)
@@ -132,11 +113,9 @@ export class RegistryProvider {
         bump: account.bump,
       }
     } catch {
-      return null
+      return undefined
     }
   }
-
-  // ─── Transaction Builders ─────────────────────────────────────────
 
   async register(params: RegisterAgentParams): Promise<TransactionResult> {
     const creator = new PublicKey(params.creator)

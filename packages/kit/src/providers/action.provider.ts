@@ -1,5 +1,4 @@
 import { Connection, GetProgramAccountsFilter, PublicKey } from '@solana/web3.js'
-import { Action } from '../types/action.types'
 import {
   buildBorrowTransaction,
   buildBuyTransaction,
@@ -37,6 +36,16 @@ import {
   SellQuoteResult,
   TransactionResult,
 } from 'torchsdk'
+
+import { MapperProvider } from './mapper.provider'
+import {
+  buildCreateFactionTransaction,
+  getBondingCurvePda,
+  getTokenTreasuryPda,
+  getTreasuryLockPda,
+  isPyreMint,
+} from '../vanity'
+import { isBlacklistedMint } from '../util'
 import {
   AgentLink,
   AllWarLoansResult,
@@ -74,19 +83,15 @@ import {
   WithdrawAssetsParams,
   WithdrawFromStrongholdParams,
 } from '../types'
-import { MapperProvider } from './mapper.provider'
-import {
-  buildCreateFactionTransaction,
-  getBondingCurvePda,
-  getTokenTreasuryPda,
-  getTreasuryLockPda,
-  isPyreMint,
-} from '../vanity'
-import { isBlacklistedMint } from '../util'
+import { Action } from '../types/action.types'
+import { Registry } from '../types/registry.types'
 
 export class ActionProvider implements Action {
   private mapper = new MapperProvider()
-  constructor(private connection: Connection) {}
+  constructor(
+    private connection: Connection,
+    private registryProvider: Registry,
+  ) {}
 
   async createStronghold(params: CreateStrongholdParams): Promise<TransactionResult> {
     return buildCreateVaultTransaction(this.connection, { creator: params.creator })
@@ -420,6 +425,61 @@ export class ActionProvider implements Action {
       sol_to_borrow: params.sol_to_borrow,
       vault: params.stronghold,
     })
+  }
+
+  async scout(targetAddress: string): Promise<string> {
+    try {
+      const p = await this.registryProvider.getProfile(targetAddress)
+      if (!p) return `  @${targetAddress.slice(0, 8)}: no pyre identity found`
+
+      const total =
+        p.joins +
+        p.defects +
+        p.rallies +
+        p.launches +
+        p.messages +
+        p.fuds +
+        p.infiltrates +
+        p.reinforces +
+        p.war_loans +
+        p.repay_loans +
+        p.sieges +
+        p.ascends +
+        p.razes +
+        p.tithes
+
+      const topActions = [
+        { n: 'joins', v: p.joins },
+        { n: 'defects', v: p.defects },
+        { n: 'rallies', v: p.rallies },
+        { n: 'messages', v: p.messages },
+        { n: 'fuds', v: p.fuds },
+        { n: 'infiltrates', v: p.infiltrates },
+        { n: 'reinforces', v: p.reinforces },
+        { n: 'war_loans', v: p.war_loans },
+        { n: 'sieges', v: p.sieges },
+      ]
+        .sort((a, b) => b.v - a.v)
+        .filter((a) => a.v > 0)
+        .slice(0, 4)
+        .map((a) => `${a.n}:${a.v}`)
+        .join(', ')
+
+      const personality = p.personality_summary || 'unknown'
+      const checkpoint =
+        p.last_checkpoint > 0
+          ? new Date(p.last_checkpoint * 1000).toISOString().slice(0, 10)
+          : 'never'
+
+      const spent = (p.total_sol_spent ?? 0) / 1e9
+      const received = (p.total_sol_received ?? 0) / 1e9
+      const pnl = received - spent
+      const pnlStr = pnl >= 0 ? `+${pnl.toFixed(3)}` : pnl.toFixed(3)
+
+      return `  @${targetAddress.slice(0, 8)}: "${personality}" | ${total} actions (${topActions}) | P&L: ${pnlStr} SOL | last seen: ${checkpoint}`
+    } catch {
+      return `  @${targetAddress.slice(0, 8)}: lookup failed`
+    }
   }
 
   async siege(params: SiegeParams): Promise<TransactionResult> {

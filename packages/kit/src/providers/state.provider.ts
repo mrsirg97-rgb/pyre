@@ -1,12 +1,7 @@
-/**
- * Pyre Kit State Provider
- *
- * Objective game state tracking for an agent.
- * Owns holdings, action counts, vault resolution, tick counter.
- * Injected into ActionProvider so every action automatically updates state.
- */
-
 import { Connection, PublicKey } from '@solana/web3.js'
+
+import { isPyreMint } from '../vanity'
+import { isBlacklistedMint } from '../util'
 import type {
   State,
   AgentGameState,
@@ -14,9 +9,7 @@ import type {
   TrackedAction,
   CheckpointConfig,
 } from '../types/state.types'
-import { RegistryProvider } from './registry.provider'
-import { isPyreMint } from '../vanity'
-import { isBlacklistedMint } from '../util'
+import { Registry } from '../types/registry.types'
 
 const EMPTY_COUNTS: Record<TrackedAction, number> = {
   join: 0,
@@ -42,11 +35,9 @@ export class StateProvider implements State {
 
   constructor(
     private connection: Connection,
+    private registry: Registry,
     private publicKey: string,
-    private registry: RegistryProvider,
   ) {}
-
-  // ─── Readonly accessors ─────────────────────────────────────────
 
   get state() {
     return this._state
@@ -61,14 +52,10 @@ export class StateProvider implements State {
     return this._state?.tick ?? 0
   }
 
-  // ─── Configuration ──────────────────────────────────────────────
-
   /** Configure auto-checkpoint behavior */
   setCheckpointConfig(config: CheckpointConfig) {
     this.checkpointConfig = config
   }
-
-  // ─── Initialization ─────────────────────────────────────────────
 
   async init(): Promise<AgentGameState> {
     if (this._state?.initialized) return this._state
@@ -94,7 +81,7 @@ export class StateProvider implements State {
 
     this._state = state
 
-    // Resolve vault link
+    // resolve vault link
     const { getVaultForWallet } = await import('torchsdk')
     try {
       const vault = await getVaultForWallet(this.connection, this.publicKey)
@@ -115,14 +102,13 @@ export class StateProvider implements State {
       }
     } catch {}
 
-    // Load registry profile — personality, action counts, SOL totals
     try {
       const profile = await this.registry.getProfile(this.publicKey)
       if (profile) {
         state.personalitySummary = profile.personality_summary || null
         state.totalSolSpent = profile.total_sol_spent
         state.totalSolReceived = profile.total_sol_received
-        // Seed action counts from on-chain checkpoint
+
         state.actionCounts.join = Math.max(state.actionCounts.join, profile.joins)
         state.actionCounts.defect = Math.max(state.actionCounts.defect, profile.defects)
         state.actionCounts.rally = Math.max(state.actionCounts.rally, profile.rallies)
@@ -137,20 +123,16 @@ export class StateProvider implements State {
         state.actionCounts.ascend = Math.max(state.actionCounts.ascend, profile.ascends)
         state.actionCounts.raze = Math.max(state.actionCounts.raze, profile.razes)
         state.actionCounts.tithe = Math.max(state.actionCounts.tithe, profile.tithes)
-        // Set tick to total actions from checkpoint
+
         const totalFromCheckpoint = Object.values(state.actionCounts).reduce((a, b) => a + b, 0)
         state.tick = totalFromCheckpoint
       }
     } catch {}
 
-    // Load holdings (wallet + vault token accounts)
     await this.refreshHoldings()
-
     state.initialized = true
     return state
   }
-
-  // ─── Action Recording ───────────────────────────────────────────
 
   async record(action: TrackedAction, mint?: string, description?: string): Promise<void> {
     if (!this._state) throw new Error('State not initialized — call init() first')
@@ -159,17 +141,14 @@ export class StateProvider implements State {
     this._state.actionCounts[action]++
     this.ticksSinceCheckpoint++
 
-    // Track founded factions
     if (action === 'launch' && mint) {
       this._state.founded.push(mint)
     }
 
-    // Update sentiment for the target faction
     if (mint) {
       this.updateSentiment(action, mint)
     }
 
-    // Track recent history for LLM memory block
     if (description) {
       this._state.recentHistory.push(description)
       if (this._state.recentHistory.length > 20) {
@@ -177,22 +156,16 @@ export class StateProvider implements State {
       }
     }
 
-    // Refresh holdings after any trade action
     await this.refreshHoldings()
-
-    // Auto-checkpoint check
     if (this.checkpointConfig && this.ticksSinceCheckpoint >= this.checkpointConfig.interval) {
       this.ticksSinceCheckpoint = 0
       this.onCheckpointDue?.()
     }
   }
 
-  /** Update sentiment score for a faction based on action type */
   private updateSentiment(action: TrackedAction, mint: string): void {
     if (!this._state) return
-
     const current = this._state.sentiment.get(mint) ?? 0
-
     const SENTIMENT_DELTAS: Partial<Record<TrackedAction, number>> = {
       join: 1,
       reinforce: 1.5,
@@ -211,10 +184,7 @@ export class StateProvider implements State {
     }
   }
 
-  /** Callback set by PyreKit to handle checkpoint triggers */
   onCheckpointDue: (() => void) | null = null
-
-  // ─── Holdings ───────────────────────────────────────────────────
 
   async refreshHoldings(): Promise<void> {
     if (!this._state) return
@@ -222,7 +192,6 @@ export class StateProvider implements State {
     const { TOKEN_2022_PROGRAM_ID } = await import('@solana/spl-token')
     const walletPk = new PublicKey(this.publicKey)
 
-    // Scan wallet token accounts
     let walletValues: any[] = []
     try {
       const walletAccounts = await this.connection.getParsedTokenAccountsByOwner(walletPk, {
@@ -231,7 +200,6 @@ export class StateProvider implements State {
       walletValues = walletAccounts.value
     } catch {}
 
-    // Scan vault token accounts
     let vaultValues: any[] = []
     if (this._state.stronghold) {
       try {
@@ -243,7 +211,6 @@ export class StateProvider implements State {
       } catch {}
     }
 
-    // Merge balances
     const newHoldings = new Map<string, number>()
     for (const a of [...walletValues, ...vaultValues]) {
       const mint = a.account.data.parsed.info.mint as string
@@ -253,7 +220,6 @@ export class StateProvider implements State {
       }
     }
 
-    // Update — clear stale, set fresh
     this._state.holdings.clear()
     for (const [mint, balance] of newHoldings) {
       this._state.holdings.set(mint, balance)
@@ -276,8 +242,6 @@ export class StateProvider implements State {
     return this._state?.holdings.get(mint) ?? 0
   }
 
-  // ─── Dedup Guards ───────────────────────────────────────────────
-
   hasVoted(mint: string): boolean {
     return this._state?.voted.has(mint) ?? false
   }
@@ -293,8 +257,6 @@ export class StateProvider implements State {
   markRallied(mint: string): void {
     this._state?.rallied.add(mint)
   }
-
-  // ─── Serialization ──────────────────────────────────────────────
 
   serialize(): SerializedGameState {
     if (!this._state) {
