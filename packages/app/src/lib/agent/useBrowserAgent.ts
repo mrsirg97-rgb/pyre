@@ -83,7 +83,7 @@ export function useBrowserAgent(): BrowserAgentHook {
         const webllmAdapter = createWebLLMAdapter(selectedTier, (state) => {
           setModelStatus(state)
           if (state.status === 'ready') log(`Model ready (${selectedTier})`)
-          if (state.status === 'error') log(`Model error: ${state.error}`)
+          if (state.status === 'error') log(`⚠ ${state.error}`)
         })
         llmRef.current = webllmAdapter
 
@@ -95,7 +95,7 @@ export function useBrowserAgent(): BrowserAgentHook {
             llm = webllmAdapter
           })
           .catch((err) => {
-            log(`Model failed to load: ${err.message}. Continuing with RNG.`)
+            log(`Model failed — agent continues with RNG.`)
           })
 
         // Use the adapter immediately — it returns null until ready, which triggers RNG fallback

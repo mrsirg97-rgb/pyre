@@ -24,23 +24,23 @@ export function AgentPanel() {
 
   if (!wallet.connected) {
     return (
-      <div className="p-6 border border-neutral-800 rounded-lg">
-        <h2 className="text-lg font-bold mb-2">Browser Agent</h2>
-        <p className="text-neutral-400">Connect your wallet to launch an autonomous agent.</p>
+      <div className="border border-neutral-800 rounded-lg" style={{ padding: '0.5rem', margin: '0.25rem' }}>
+        <h2 className="text-md font-bold mb-2">Browser Agent</h2>
+        <p className="text-neutral-400 text-sm">Connect your wallet to launch an autonomous agent.</p>
       </div>
     )
   }
 
   const tiers: { id: ModelTier; label: string; desc: string }[] = [
     { id: '3b', label: 'Qwen 3B', desc: `Full intelligence (${MODEL_SIZES['3b']})` },
-    { id: '1b', label: 'Llama 1B', desc: `Mobile-friendly (${MODEL_SIZES['1b']})` },
+    { id: 'smol', label: 'SmolLM 360M', desc: `Ultra-light (${MODEL_SIZES['smol']})` },
     { id: 'rng', label: 'No Model', desc: 'Instant start, random actions, no messages' },
   ]
 
   return (
     <div
       className="border border-neutral-800 rounded-lg space-y-4"
-      style={{ borderColor: 'var(--border)', padding: '0.5rem' }}
+      style={{ borderColor: 'var(--border)', padding: '0.5rem', margin: '0.25rem' }}
     >
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Browser Agent</h2>
@@ -116,7 +116,10 @@ export function AgentPanel() {
       )}
 
       {modelStatus.status === 'error' && (
-        <p className="text-sm text-red-400">Model error: {modelStatus.error}</p>
+        <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">
+          <p>{modelStatus.error}</p>
+          <p className="text-xs text-neutral-500 mt-1">Agent will continue with random actions.</p>
+        </div>
       )}
 
       {/* Agent Controls */}

@@ -1,4 +1,4 @@
-export type ModelTier = '3b' | '1b' | 'rng'
+export type ModelTier = '3b' | 'smol' | 'rng'
 
 export interface DeviceCapabilities {
   hasWebGPU: boolean
@@ -11,16 +11,16 @@ export interface DeviceCapabilities {
 // WebLLM model IDs
 export const MODEL_IDS: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': 'Qwen2.5-3B-Instruct-q4f16_1-MLC',
-  '1b': 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+  'smol': 'SmolLM2-360M-Instruct-q4f16_1-MLC',
 }
 
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': '~1.8 GB',
-  '1b': '~879 MB',
+  'smol': '~376 MB',
 }
 
 // Ordered from highest to lowest tier
-const TIER_ORDER: ModelTier[] = ['3b', '1b', 'rng']
+const TIER_ORDER: ModelTier[] = ['3b', 'smol', 'rng']
 
 /** Returns true if `tier` requires more capability than `recommended` */
 export function isTierAboveRecommended(tier: ModelTier, recommended: ModelTier): boolean {
@@ -57,8 +57,8 @@ export async function detectDevice(): Promise<DeviceCapabilities> {
       if (maxBuffer >= 2048 * MB && maxStorageBinding >= 256 * MB) {
         return { hasWebGPU: true, isMobile, maxBufferMB, recommendedTier: '3b', reason: 'Mobile with capable GPU' }
       }
-      if (maxBuffer >= 512 * MB) {
-        return { hasWebGPU: true, isMobile, maxBufferMB, recommendedTier: '1b', reason: 'Mobile with WebGPU' }
+      if (maxBuffer >= 256 * MB) {
+        return { hasWebGPU: true, isMobile, maxBufferMB, recommendedTier: 'smol', reason: 'Mobile with WebGPU' }
       }
       return { hasWebGPU: true, isMobile, maxBufferMB, recommendedTier: 'rng', reason: 'Mobile GPU too limited' }
     }
@@ -73,13 +73,13 @@ export async function detectDevice(): Promise<DeviceCapabilities> {
       }
     }
 
-    if (maxBuffer >= 512 * MB) {
+    if (maxBuffer >= 256 * MB) {
       return {
         hasWebGPU: true,
         isMobile,
         maxBufferMB,
-        recommendedTier: '1b',
-        reason: 'Desktop with limited VRAM',
+        recommendedTier: 'smol',
+        reason: 'Desktop with very limited VRAM',
       }
     }
 

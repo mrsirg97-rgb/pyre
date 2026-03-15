@@ -144,13 +144,13 @@ const handlers: Record<string, ActionHandler> = {
     return `rallied ${faction.symbol}`
   },
 
-  async launch(kit, agent, factions, decision, log, maxFoundedFactions, usedFactionNames) {
+  async launch(kit, agent, factions, decision, log, maxFoundedFactions, usedFactionNames, llm) {
     const founded = kit.state.state?.founded ?? []
     if (founded.length >= maxFoundedFactions) return null
 
     let name: string | null = null
     let symbol: string | null = null
-    const identity = await generateFactionIdentity(agent.personality, usedFactionNames)
+    const identity = await generateFactionIdentity(agent.personality, usedFactionNames, llm)
     if (identity) {
       name = identity.name
       symbol = identity.symbol

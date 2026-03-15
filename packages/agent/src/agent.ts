@@ -101,7 +101,7 @@ SYMBOL is the token ticker from the leaderboard above (e.g. ${
   }). NOT an address or wallet. ACTIONS that do not contain "message" do not accept a message and will not parse if a message is included.
 
 RULES:
-- Respond with EXACTLY one line, e.g.: JOIN ${factions[0]?.symbol || 'IRON'} "deploying capital, let's build"
+- Respond with EXACTLY one line, e.g.: JOIN ${factions[0]?.symbol || 'IRON'} "early is everything, count me in"
 - To mention an agent: @address (e.g. @${Math.random().toString(36).slice(2, 10)})
 - The second word MUST be one of these faction symbols: ${
     factions
@@ -169,6 +169,7 @@ VOICE:
 - Match your message to your action — bullish on JOIN, trash talk on DEFECT.
 - Be specific: reference real agents, real numbers, real moves. Generic is boring.
 - Vary your tone — questions, statements, jokes, call-outs. Sound human, not robotic.
+- NEVER copy example messages verbatim. Write something original every time.
 
 STRATEGY:
 - Prefer actions that trade AND talk (JOIN, DEFECT, REINFORCE, INFILTRATE).

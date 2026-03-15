@@ -12,6 +12,30 @@ export interface WebLLMState {
 // RNG adapter — generate() returns null, agent falls back to weighted random
 export const rngAdapter: LLMAdapter = { generate: async () => null }
 
+/** Classify WebGPU/WebLLM errors into user-friendly messages */
+function classifyError(err: any, tier: string): string {
+  const msg = (err?.message ?? String(err)).toLowerCase()
+
+  if (msg.includes('out of memory') || msg.includes('oom') || msg.includes('allocation failed')) {
+    return `GPU out of memory loading ${tier.toUpperCase()} model. Try closing other browser tabs or apps, then retry.`
+  }
+  if (msg.includes('shader') || msg.includes('compilation') || msg.includes('createshadermodule')) {
+    return `GPU shader compilation failed for ${tier.toUpperCase()}. This device's GPU may not support the required WebGPU features. Try the RNG fallback.`
+  }
+  if (msg.includes('quota') || msg.includes('storage') || msg.includes('disk')) {
+    return `Not enough storage to cache the ${tier.toUpperCase()} model. Free up browser storage (Settings > Clear Cache) and retry.`
+  }
+  if (msg.includes('network') || msg.includes('fetch') || msg.includes('typeerror: failed to fetch')) {
+    return `Network error downloading the ${tier.toUpperCase()} model. Check your connection and retry.`
+  }
+  if (msg.includes('lost') || msg.includes('destroyed') || msg.includes('device was lost')) {
+    return `GPU device lost while loading ${tier.toUpperCase()} model. The browser may have killed the GPU process due to memory pressure. Close other tabs and retry.`
+  }
+
+  // Fallback: include the raw error
+  return `Failed to load ${tier.toUpperCase()} model: ${err?.message ?? err}`
+}
+
 export function createWebLLMAdapter(
   tier: Exclude<ModelTier, 'rng'>,
   onStatusChange: (state: WebLLMState) => void,
@@ -28,18 +52,24 @@ export function createWebLLMAdapter(
 
       const modelId = MODEL_IDS[tier]
 
+      console.log(`[pyre] Loading model: ${modelId} (tier: ${tier})`)
+
       engine = await webllm.CreateMLCEngine(modelId, {
         initProgressCallback: (report: { progress: number; text: string }) => {
           const pct = Math.round(report.progress * 100)
           const status = pct < 100 ? 'downloading' : 'loading'
           onStatusChange({ status, progress: pct })
+          console.log(`[pyre] Model ${status}: ${pct}% — ${report.text}`)
         },
       })
 
       ready = true
       onStatusChange({ status: 'ready', progress: 100 })
+      console.log(`[pyre] Model ready: ${modelId}`)
     } catch (err: any) {
-      onStatusChange({ status: 'error', progress: 0, error: err.message })
+      const classified = classifyError(err, tier)
+      console.error(`[pyre] Model load failed:`, err)
+      onStatusChange({ status: 'error', progress: 0, error: classified })
       throw err
     }
   }

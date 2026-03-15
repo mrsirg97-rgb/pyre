@@ -6,7 +6,7 @@ Built on Torch Market
 
 Program ID: `8hbUkonssSEEtkqzwM7ZcZrD9evacM92TcWSooVF4BeT` and `2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv`
 Chain: Solana (Mainnet)
-Version: V3.0.0
+Version: V3.0.2
 
 ## kit (Preferred)
 
