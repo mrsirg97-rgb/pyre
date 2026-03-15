@@ -107,6 +107,14 @@ const DEFAULT_BLACKLIST = [
     // wave 6 (devnet cleanup — torchsdk v4.0.1)
     'N7L7myyBVT4Sw7PsKQNqEf2mcwJygbTELqJcD9TkRpy',
     'BK9HTWwHvz4VSvr16pH2hTzszQmrEs58WEJMR3cucNpy',
+    // wave 7 (stale Iron Vanguard dupes)
+    '5xdY2jQbfWsDjgvJtwexkko56Gfbip9GA9h5qajE6cpy',
+    'CxpqUs4K2VtZszTTLgiPDEz8nAYbZwxyQpEQnY2K3npy',
+    'CcWpkPrbWnZ4X2YQZ9vaEU6v5WQYjYoRpXGUyS2Zxapy',
+    'AnAw5f6PeNQ6BMFL1chGVrB8GDevessFpGhEShyBrRpy',
+    'CHHN2awwFtwJ7EEwYyoimVJsd6nwe3p29g8J3VQFTXpy',
+    'C5cF4di9wESwmT9kdFfYxifnpBaextCkscJgT67qsdpy',
+    '6jvSWJvYxKPoDNGGHFeQaReiJwRv4moXZh5vUG7sJYpy',
 ];
 const BLACKLISTED_MINTS = new Set(DEFAULT_BLACKLIST);
 /** Add mints to the blacklist (call at startup with old mints) */
