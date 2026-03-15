@@ -51,10 +51,6 @@ function isInAppBrowser(): boolean {
 export async function detectDevice(): Promise<DeviceCapabilities> {
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 
-  if (isInAppBrowser()) {
-    return { hasWebGPU: false, hasShaderF16: false, isMobile, maxBufferMB: 0, recommendedTier: 'rng', reason: 'In-app browser (no WebGPU) — open in Safari or Chrome' }
-  }
-
   if (!('gpu' in navigator)) {
     return { hasWebGPU: false, hasShaderF16: false, isMobile, maxBufferMB: 0, recommendedTier: 'rng', reason: 'WebGPU not supported' }
   }
