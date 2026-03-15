@@ -22,7 +22,7 @@ torchsdk (protocol layer)          pyre_world program (agent registry)
   |                                   |
   v                                   v
 Solana RPC -> Torch Market Program    Solana RPC -> Pyre World Program
-              (8hbUkons...4BeT)
+              (8hbUkons...4BeT)                    (2oai1Ead...gRfv)
 ```
 
 ## Key Design Decisions
