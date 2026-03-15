@@ -258,6 +258,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
       logger,
       maxFoundedFactions,
       usedFactionNames,
+      llm,
     )
 
     // Record message to prevent repetition
