@@ -44,15 +44,16 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
 
   const kit = new PyreKit(connection, publicKey)
 
-  // Always init to resolve vault link, then hydrate saved state on top
+  // Always init to resolve vault link from on-chain data
   await kit.state.init()
   if (config.kitState) {
-    // Preserve the vault creator resolved by init, overlay saved game state
+    // Save vault info before hydrate clears it
     const resolvedVaultCreator = kit.state.vaultCreator
+    const resolvedStronghold = kit.state.state?.stronghold ?? null
     kit.state.hydrate(config.kitState)
-    if (!kit.state.vaultCreator && resolvedVaultCreator) {
-      kit.state.state!.vaultCreator = resolvedVaultCreator
-    }
+    // Restore vault info — hydrate sets stronghold to null
+    if (resolvedVaultCreator) kit.state.state!.vaultCreator = resolvedVaultCreator
+    if (resolvedStronghold) kit.state.state!.stronghold = resolvedStronghold
   }
 
   let personality: Personality = config.personality ?? assignPersonality()
@@ -93,6 +94,9 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
   logger(
     `[${publicKey.slice(0, 8)}] browser agent initialized — ${personality}, tick ${kit.state.tick}, ${knownFactions.length} factions`,
   )
+
+  // Load current on-chain holdings so agent knows what it owns
+  await kit.state.refreshHoldings()
 
   const vc = kit.state.vaultCreator
   if (vc) {
@@ -161,13 +165,17 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
 
       switch (action) {
         case 'join': {
-          const { result, confirm } = await kit.exec('actions', 'join', {
+          const joinParams: any = {
             mint: faction.mint,
             agent: publicKey,
             amount_sol: Math.floor(sol * LAMPORTS_PER_SOL),
             stronghold: stronghold(),
             ascended: faction.status === 'ascended',
-          })
+          }
+          if (!kit.state.hasVoted(faction.mint)) {
+            joinParams.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
+          }
+          const { result, confirm } = await kit.exec('actions', 'join', joinParams)
           execResult = result
           execConfirm = confirm
           description = `join ${faction.symbol}`
@@ -290,13 +298,17 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           if (rivals.length === 0)
             return { action: 'infiltrate', success: false, error: 'no rival factions', usedLLM: false }
           const target = pick(rivals)
-          const { result, confirm } = await kit.exec('actions', 'join', {
+          const infiltrateParams: any = {
             mint: target.mint,
             agent: publicKey,
             amount_sol: Math.floor(sol * 1.5 * LAMPORTS_PER_SOL),
             stronghold: stronghold(),
             ascended: target.status === 'ascended',
-          })
+          }
+          if (!kit.state.hasVoted(target.mint)) {
+            infiltrateParams.strategy = 'smelt'
+          }
+          const { result, confirm } = await kit.exec('actions', 'join', infiltrateParams)
           execResult = result
           execConfirm = confirm
           description = `infiltrate ${target.symbol}`
@@ -333,13 +345,17 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
         }
         default: {
           // war_loan, repay_loan, siege, raze — fall back to join
-          const { result, confirm } = await kit.exec('actions', 'join', {
+          const defaultParams: any = {
             mint: faction.mint,
             agent: publicKey,
             amount_sol: Math.floor(sol * LAMPORTS_PER_SOL),
             stronghold: stronghold(),
             ascended: faction.status === 'ascended',
-          })
+          }
+          if (!kit.state.hasVoted(faction.mint)) {
+            defaultParams.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
+          }
+          const { result, confirm } = await kit.exec('actions', 'join', defaultParams)
           execResult = result
           execConfirm = confirm
           action = 'join'

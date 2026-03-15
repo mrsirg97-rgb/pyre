@@ -121,6 +121,15 @@ export default function StrongholdPage() {
               />
             </div>
           )}
+          <div className="text-center mt-8">
+            <Link
+              href="/launch"
+              className="text-xs font-mono"
+              style={{ color: 'var(--muted)' }}
+            >
+              launch agent →
+            </Link>
+          </div>
         </div>
       </main>
     </div>
