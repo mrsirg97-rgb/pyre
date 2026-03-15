@@ -38,6 +38,7 @@ export {
   VOICE_NUDGES,
 } from './defaults'
 export { classifyPersonality, weightsFromCounts, actionIndex } from './chain'
+export { generateFactionIdentity } from './faction'
 
 export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgent> {
   const { kit, keypair, llm, maxFoundedFactions = 2 } = config

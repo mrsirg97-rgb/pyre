@@ -80,7 +80,7 @@ export function useBrowserAgent(): BrowserAgentHook {
         // Start with RNG immediately while model loads
         log(`Starting with RNG while ${selectedTier} model downloads...`)
 
-        const webllmAdapter = createWebLLMAdapter(selectedTier, (state) => {
+        const webllmAdapter = createWebLLMAdapter(selectedTier, deviceCaps?.hasShaderF16 ?? false, (state) => {
           setModelStatus(state)
           if (state.status === 'ready') log(`Model ready (${selectedTier})`)
           if (state.status === 'error') log(`⚠ ${state.error}`)
@@ -121,7 +121,7 @@ export function useBrowserAgent(): BrowserAgentHook {
         agentRef.current = browserAgent
         setAgent(browserAgent)
         setPersonality(browserAgent.personality)
-        log(`Agent online: ${signer.publicKey.slice(0, 8)}... (${browserAgent.personality})`)
+        log(`Agent online: ${browserAgent.sessionPublicKey.slice(0, 8)}... (${browserAgent.personality})`)
       } catch (err: any) {
         log(`Failed to create agent: ${err.message}`)
       }

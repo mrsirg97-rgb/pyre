@@ -1,5 +1,5 @@
 import type { LLMAdapter } from 'pyre-agent-kit'
-import { ModelTier, MODEL_IDS } from './device-detect'
+import { ModelTier, getModelId } from './device-detect'
 
 export type ModelStatus = 'idle' | 'downloading' | 'loading' | 'ready' | 'error'
 
@@ -38,6 +38,7 @@ function classifyError(err: any, tier: string): string {
 
 export function createWebLLMAdapter(
   tier: Exclude<ModelTier, 'rng'>,
+  hasShaderF16: boolean,
   onStatusChange: (state: WebLLMState) => void,
 ): LLMAdapter & { init: () => Promise<void>; destroy: () => void } {
   let engine: any = null
@@ -50,9 +51,9 @@ export function createWebLLMAdapter(
       // Dynamic import — only loaded when user selects a model
       const webllm = await import('@mlc-ai/web-llm')
 
-      const modelId = MODEL_IDS[tier]
+      const modelId = getModelId(tier, hasShaderF16)
 
-      console.log(`[pyre] Loading model: ${modelId} (tier: ${tier})`)
+      console.log(`[pyre] Loading model: ${modelId} (tier: ${tier}, f16: ${hasShaderF16})`)
 
       engine = await webllm.CreateMLCEngine(modelId, {
         initProgressCallback: (report: { progress: number; text: string }) => {
