@@ -1,14 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useConnection, useWallet } from '@solana/wallet-adapter-react'
+import { useWallet } from '@solana/wallet-adapter-react'
 import { PublicKey } from '@solana/web3.js'
-import {
-  buildRegisterAgentTransaction,
-  buildLinkAgentWalletTransaction,
-  buildUnlinkAgentWalletTransaction,
-} from 'pyre-world-kit'
 import type { RegistryProfile } from 'pyre-world-kit'
+import { usePyreKit } from '@/hooks/usePyreKit'
 import { shortenAddress, timeAgo } from '@/lib/utils'
 
 interface PyreIdentityProps {
@@ -36,7 +32,7 @@ const ACTION_LABELS: { key: keyof RegistryProfile; label: string }[] = [
 ]
 
 export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreIdentityProps) {
-  const { connection } = useConnection()
+  const { registry, connection } = usePyreKit()
   const wallet = useWallet()
 
   const [creating, setCreating] = useState(false)
@@ -53,12 +49,14 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
     setError(null)
 
     try {
-      const { transaction: tx } = await buildRegisterAgentTransaction(connection, {
+      const { transaction: tx } = await registry.register({
         creator: wallet.publicKey.toString(),
       })
 
       const signedTx = await wallet.signTransaction(tx)
-      const txId = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true })
+      const txId = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: true,
+      })
       await connection.confirmTransaction(txId, 'confirmed')
 
       setTimeout(onSuccess, 1500)
@@ -74,8 +72,16 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
     if (!wallet.publicKey || !wallet.signTransaction || !profile) return
 
     const addr = linkAddress.trim()
-    if (!addr) { setError('Enter an agent wallet address'); return }
-    try { new PublicKey(addr) } catch { setError('Invalid address'); return }
+    if (!addr) {
+      setError('Enter an agent wallet address')
+      return
+    }
+    try {
+      new PublicKey(addr)
+    } catch {
+      setError('Invalid address')
+      return
+    }
 
     setLinking(true)
     setError(null)
@@ -83,14 +89,16 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
 
     try {
       const authority = wallet.publicKey.toString()
-      const { transaction: tx } = await buildLinkAgentWalletTransaction(connection, {
+      const { transaction: tx } = await registry.linkWallet({
         authority,
         creator: authority,
         wallet_to_link: addr,
       })
 
       const signedTx = await wallet.signTransaction(tx)
-      const txId = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true })
+      const txId = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: true,
+      })
       await connection.confirmTransaction(txId, 'confirmed')
 
       setLinkAddress('')
@@ -98,7 +106,13 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
       setTimeout(onSuccess, 1500)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed'
-      setError(msg.includes('User rejected') ? 'Cancelled' : msg.includes('WalletAlreadyLinked') ? 'Unlink the current wallet first' : msg)
+      setError(
+        msg.includes('User rejected')
+          ? 'Cancelled'
+          : msg.includes('WalletAlreadyLinked')
+            ? 'Unlink the current wallet first'
+            : msg,
+      )
     } finally {
       setLinking(false)
     }
@@ -114,14 +128,16 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
 
     try {
       const authority = wallet.publicKey.toString()
-      const { transaction: tx } = await buildUnlinkAgentWalletTransaction(connection, {
+      const { transaction: tx } = await registry.unlinkWallet({
         authority,
         creator: authority,
         wallet_to_unlink: profile.linked_wallet,
       })
 
       const signedTx = await wallet.signTransaction(tx)
-      const txId = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true })
+      const txId = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: true,
+      })
       await connection.confirmTransaction(txId, 'confirmed')
 
       setSuccess('Wallet unlinked')
@@ -136,16 +152,24 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
 
   if (loading) {
     return (
-      <div className="border rounded-lg p-5" style={{ borderColor: 'var(--border)', margin: '0.5rem' }}>
+      <div
+        className="border rounded-lg p-5"
+        style={{ borderColor: 'var(--border)', margin: '0.5rem' }}
+      >
         <h3 className="text-sm font-medium mb-2">Pyre Identity</h3>
-        <p className="text-xs" style={{ color: 'var(--muted)' }}>Loading...</p>
+        <p className="text-xs" style={{ color: 'var(--muted)' }}>
+          Loading...
+        </p>
       </div>
     )
   }
 
   if (!profile) {
     return (
-      <div className="border rounded-lg" style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}>
+      <div
+        className="border rounded-lg"
+        style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}
+      >
         <h3 className="text-sm font-medium mb-2">Pyre Identity</h3>
         <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>
           No on-chain identity found. Create one to persist agent history.
@@ -153,12 +177,21 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
 
         {isAuthority && (
           <>
-            {error && <p className="text-xs mb-2" style={{ color: 'var(--danger)' }}>{error}</p>}
+            {error && (
+              <p className="text-xs mb-2" style={{ color: 'var(--danger)' }}>
+                {error}
+              </p>
+            )}
             <button
               onClick={handleCreate}
               disabled={creating}
               className="text-xs rounded-lg cursor-pointer disabled:opacity-40 transition-colors"
-              style={{ background: 'var(--surface)', color: 'var(--foreground)', padding: '0.25rem 0.5rem', border: '1px solid var(--border)' }}
+              style={{
+                background: 'var(--surface)',
+                color: 'var(--foreground)',
+                padding: '0.25rem 0.5rem',
+                border: '1px solid var(--border)',
+              }}
             >
               {creating ? 'Creating...' : 'Create Identity'}
             </button>
@@ -172,18 +205,26 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
   const nonZeroActions = ACTION_LABELS.filter(({ key }) => (profile[key] as number) > 0)
 
   return (
-    <div className="border rounded-lg" style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}>
+    <div
+      className="border rounded-lg"
+      style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}
+    >
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium">Pyre Identity</h3>
         <div className="flex items-center gap-2">
-          {(profile.total_sol_spent > 0 || profile.total_sol_received > 0) && (() => {
-            const pnl = (profile.total_sol_received - profile.total_sol_spent) / 1e9
-            return (
-              <span className="text-xs font-medium" style={{ color: pnl >= 0 ? 'var(--success, #22c55e)' : 'var(--error, #ef4444)' }}>
-                {pnl >= 0 ? '+' : ''}{pnl.toFixed(3)} SOL
-              </span>
-            )
-          })()}
+          {(profile.total_sol_spent > 0 || profile.total_sol_received > 0) &&
+            (() => {
+              const pnl = (profile.total_sol_received - profile.total_sol_spent) / 1e9
+              return (
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: pnl >= 0 ? 'var(--success, #22c55e)' : 'var(--error, #ef4444)' }}
+                >
+                  {pnl >= 0 ? '+' : ''}
+                  {pnl.toFixed(3)} SOL
+                </span>
+              )
+            })()}
           <span className="text-xs" style={{ color: 'var(--muted)' }}>
             {totalActions} actions
           </span>
@@ -191,7 +232,10 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
       </div>
 
       {profile.personality_summary && (
-        <p className="text-xs mb-3 rounded" style={{ background: 'var(--surface)', padding: '0.25rem', color: 'var(--muted)' }}>
+        <p
+          className="text-xs mb-3 rounded"
+          style={{ background: 'var(--surface)', padding: '0.25rem', color: 'var(--muted)' }}
+        >
           {profile.personality_summary}
         </p>
       )}
@@ -199,9 +243,15 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
       {nonZeroActions.length > 0 && (
         <div className="grid grid-cols-3 gap-1 mb-3">
           {nonZeroActions.map(({ key, label }) => (
-            <div key={key} className="rounded text-center" style={{ background: 'var(--surface)', padding: '2px' }}>
+            <div
+              key={key}
+              className="rounded text-center"
+              style={{ background: 'var(--surface)', padding: '2px' }}
+            >
               <p className="text-xs font-mono">{profile[key] as number}</p>
-              <p className="text-xs" style={{ color: 'var(--muted)' }}>{label}</p>
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                {label}
+              </p>
             </div>
           ))}
         </div>
@@ -212,7 +262,9 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
         <div className="mb-3">
           {profile.linked_wallet === profile.creator ? (
             <div>
-              <label className="text-xs mb-1 block" style={{ color: 'var(--muted)' }}>Link Agent Wallet</label>
+              <label className="text-xs mb-1 block" style={{ color: 'var(--muted)' }}>
+                Link Agent Wallet
+              </label>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -220,13 +272,22 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
                   onChange={(e) => setLinkAddress(e.target.value)}
                   placeholder="Agent wallet address..."
                   className="flex-1 rounded-lg text-xs min-w-0 focus:outline-none"
-                  style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground)', padding: '0.25rem' }}
+                  style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--foreground)',
+                    padding: '0.25rem',
+                  }}
                 />
                 <button
                   onClick={handleLink}
                   disabled={linking || !linkAddress.trim()}
                   className="text-xs rounded-lg cursor-pointer disabled:opacity-40 transition-colors"
-                  style={{ background: 'var(--surface)', color: 'var(--foreground)', padding: '0.25rem' }}
+                  style={{
+                    background: 'var(--surface)',
+                    color: 'var(--foreground)',
+                    padding: '0.25rem',
+                  }}
                 >
                   {linking ? '...' : 'Link'}
                 </button>
@@ -251,10 +312,26 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
         </div>
       )}
 
-      {error && <p className="text-xs mb-2" style={{ color: 'var(--danger)' }}>{error}</p>}
-      {success && <p className="text-xs mb-2" style={{ color: 'var(--success)' }}>{success}</p>}
+      {error && (
+        <p className="text-xs mb-2" style={{ color: 'var(--danger)' }}>
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="text-xs mb-2" style={{ color: 'var(--success)' }}>
+          {success}
+        </p>
+      )}
 
-      <div className="border-t text-xs space-y-1" style={{ borderColor: 'var(--border)', color: 'var(--muted)', marginTop: '2px', padding: '2px' }}>
+      <div
+        className="border-t text-xs space-y-1"
+        style={{
+          borderColor: 'var(--border)',
+          color: 'var(--muted)',
+          marginTop: '2px',
+          padding: '2px',
+        }}
+      >
         <div className="flex items-center justify-between">
           <span>Profile</span>
           <span className="font-mono">{shortenAddress(profile.address, 6)}</span>

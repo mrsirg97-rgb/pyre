@@ -33,7 +33,12 @@ export function FactionCard({ faction }: FactionCardProps) {
         <span>{faction.price_sol.toFixed(6)} SOL</span>
         <span>mcap {faction.market_cap_sol.toFixed(2)}</span>
         {faction.members !== null && <span>{faction.members} members</span>}
-        <span>{faction.status === 'ascended' || faction.status === 'ready' ? '100' : Math.round(faction.progress_percent)}%</span>
+        <span>
+          {faction.status === 'ascended' || faction.status === 'ready'
+            ? '100'
+            : Math.round(faction.progress_percent)}
+          %
+        </span>
       </div>
     </Link>
   )

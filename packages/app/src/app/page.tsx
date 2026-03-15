@@ -1,9 +1,17 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, getDexPool, getDexVaults, isPyreMint, isBlacklistedMint, PROGRAM_ID } from 'pyre-world-kit'
+import {
+  ActionProvider,
+  RegistryProvider,
+  getDexPool,
+  getDexVaults,
+  isPyreMint,
+  isBlacklistedMint,
+  PROGRAM_ID,
+} from 'pyre-world-kit'
 import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { StageEntry } from '@/components/StageEntry'
@@ -51,283 +59,342 @@ export interface ActionEntry {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'argued' | 'ascended' | 'tithed'
+  action:
+    | 'joined'
+    | 'reinforced'
+    | 'defected'
+    | 'launched'
+    | 'rallied'
+    | 'messaged'
+    | 'argued'
+    | 'ascended'
+    | 'tithed'
   amount_sol: number | null
   memo: string | null
   timestamp: number
   signature: string
+  hadTokenDelta?: boolean
 }
 
 export default function StagePage() {
   const { connection } = useConnection()
   const { isSimnet } = useNetwork()
+  const registry = useMemo(() => new RegistryProvider(connection), [connection])
+  const kit = useMemo(() => new ActionProvider(connection, registry), [connection, registry])
   const [actions, setActions] = useState<ActionEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [showHelp, setShowHelp] = useState(false)
   const fetchingRef = useRef(false)
 
-  const fetchStage = useCallback(async (showLoading = false) => {
-    if (fetchingRef.current) return
-    fetchingRef.current = true
-    if (showLoading) setLoading(true)
-    try {
-      const result = await getFactions(connection, { limit: 50, sort: 'newest' })
-      const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && !isBlacklistedMint(t.mint))
+  const fetchStage = useCallback(
+    async (showLoading = false) => {
+      if (fetchingRef.current) return
+      fetchingRef.current = true
+      if (showLoading) setLoading(true)
+      try {
+        const result = await kit.getFactions({ limit: 50, sort: 'newest' })
+        const pyreFactions = result.factions.filter(
+          (t) => isPyreMint(t.mint) && !isBlacklistedMint(t.mint),
+        )
 
-      const entries: ActionEntry[] = []
+        const entries: ActionEntry[] = []
 
-      await Promise.all(
-        pyreFactions.slice(0, 20).map(async (faction) => {
-          try {
-            const mint = new PublicKey(faction.mint)
-            const bondingCurve = getBondingCurvePda(mint)
-            const bcAddress = bondingCurve.toString()
+        await Promise.all(
+          pyreFactions.slice(0, 20).map(async (faction) => {
+            try {
+              const mint = new PublicKey(faction.mint)
+              const bondingCurve = getBondingCurvePda(mint)
+              const bcAddress = bondingCurve.toString()
 
-            const signatures = await connection.getSignaturesForAddress(
-              bondingCurve,
-              { limit: 30 },
-              'confirmed',
-            )
-
-            if (signatures.length === 0) return
-
-            const txs = await connection.getParsedTransactions(
-              signatures.map(s => s.signature),
-              { maxSupportedTransactionVersion: 0 },
-            )
-
-            for (let i = 0; i < txs.length; i++) {
-              const tx = txs[i]
-              const sig = signatures[i]
-              if (!tx?.meta || tx.meta.err) continue
-
-              const accountKeys = tx.transaction.message.accountKeys
-              const bcIndex = accountKeys.findIndex(k => k.pubkey.toString() === bcAddress)
-              if (bcIndex === -1) continue
-
-              const trader = accountKeys[0]?.pubkey?.toString() || ''
-              const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
-              const absSol = Math.abs(solChange) / 1_000_000_000
-
-              const memo = extractMemo(tx)
-
-              // Detect action from token balance changes
-              const pre = tx.meta.preTokenBalances || []
-              const post = tx.meta.postTokenBalances || []
-
-              // 1. Check signer's token delta (direct trades)
-              let traderTokenDelta = 0
-              for (const postBal of post) {
-                if (postBal.mint !== faction.mint) continue
-                if (postBal.owner !== trader) continue
-                const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
-                const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
-                const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
-                traderTokenDelta = postAmt - preAmt
-                break
-              }
-
-              // 2. Vault-routed: signer delta is 0, check the vault's token account
-              // Find any non-signer, non-BC account with a token delta for this mint
-              let vaultTokenDelta = 0
-              if (traderTokenDelta === 0) {
-                for (const postBal of post) {
-                  if (postBal.mint !== faction.mint) continue
-                  if (postBal.owner === trader || postBal.owner === bcAddress) continue
-                  const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
-                  const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
-                  const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
-                  const delta = postAmt - preAmt
-                  if (delta !== 0) {
-                    vaultTokenDelta = delta
-                    break
-                  }
-                }
-              }
-
-              let action: ActionEntry['action']
-              const isCreateTx = i === txs.length - 1
-              const postBalance = tx.meta.postBalances[bcIndex]
-              const isMigrationTx = solChange < 0 && postBalance < 1_000_000_000 && faction.status === 'ascended'
-
-              if (isCreateTx) {
-                action = 'launched'
-              } else if (isMigrationTx) {
-                action = 'ascended'
-              } else if (traderTokenDelta > 0 || vaultTokenDelta > 0) {
-                action = 'joined'
-              } else if (traderTokenDelta < 0 || vaultTokenDelta < 0) {
-                action = 'defected'
-              } else if (solChange !== 0) {
-                action = solChange > 0 ? 'joined' : 'defected'
-              } else {
-                action = 'rallied'
-              }
-
-              entries.push({
-                agent: trader,
-                faction_mint: faction.mint,
-                faction_name: faction.name,
-                action,
-                amount_sol: absSol > 0.001 ? absSol : null,
-                memo,
-                timestamp: sig.blockTime || 0,
-                signature: sig.signature,
-              })
-            }
-          } catch {
-            // skip factions with errors
-          }
-        }),
-      )
-
-      // Fetch DEX activity for ascended factions (pool state transactions)
-      const ascendedFactions = pyreFactions.filter(f => f.status === 'ascended')
-
-      await Promise.all(
-        ascendedFactions.slice(0, 10).map(async (faction) => {
-          try {
-            const poolState = getDexPool(faction.mint)
-
-            const signatures = await connection.getSignaturesForAddress(
-              poolState,
-              { limit: 30 },
-              'confirmed',
-            )
-
-            if (signatures.length === 0) return
-
-            const txs = await connection.getParsedTransactions(
-              signatures.map(s => s.signature),
-              { maxSupportedTransactionVersion: 0 },
-            )
-
-            for (let i = 0; i < txs.length; i++) {
-              const tx = txs[i]
-              const sig = signatures[i]
-              if (!tx?.meta || tx.meta.err) continue
-
-              const trader = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || ''
-              const memo = extractMemo(tx)
-
-              // Detect buy vs sell from token balance changes
-              const pre = tx.meta.preTokenBalances || []
-              const post = tx.meta.postTokenBalances || []
-
-              // Check signer's token delta (direct trades)
-              let traderTokenDelta = 0
-              for (const postBal of post) {
-                if (postBal.mint !== faction.mint) continue
-                if (postBal.owner !== trader) continue
-                const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
-                const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
-                const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
-                traderTokenDelta = postAmt - preAmt
-                break
-              }
-
-              // Vault-routed: check vault's token account (non-signer, non-pool)
-              let vaultTokenDelta = 0
-              if (traderTokenDelta === 0) {
-                for (const postBal of post) {
-                  if (postBal.mint !== faction.mint) continue
-                  if (postBal.owner === trader) continue
-                  const preBal = pre.find(p => p.accountIndex === postBal.accountIndex)
-                  const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
-                  const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
-                  const delta = postAmt - preAmt
-                  if (delta !== 0) {
-                    vaultTokenDelta = delta
-                    break
-                  }
-                }
-              }
-
-              // SOL amount from pool's SOL vault
-              let absSol = 0
-              const { solVault } = getDexVaults(faction.mint)
-              const solVaultIndex = tx.transaction.message.accountKeys.findIndex(
-                k => k.pubkey.toString() === solVault
+              const signatures = await connection.getSignaturesForAddress(
+                bondingCurve,
+                { limit: 30 },
+                'confirmed',
               )
-              if (solVaultIndex !== -1) {
-                absSol = Math.abs(tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex]) / 1_000_000_000
+
+              if (signatures.length === 0) return
+
+              const txs = await connection.getParsedTransactions(
+                signatures.map((s) => s.signature),
+                { maxSupportedTransactionVersion: 0 },
+              )
+
+              for (let i = 0; i < txs.length; i++) {
+                const tx = txs[i]
+                const sig = signatures[i]
+                if (!tx?.meta || tx.meta.err) continue
+
+                const accountKeys = tx.transaction.message.accountKeys
+                const bcIndex = accountKeys.findIndex((k) => k.pubkey.toString() === bcAddress)
+                if (bcIndex === -1) continue
+
+                const trader = accountKeys[0]?.pubkey?.toString() || ''
+                const solChange = tx.meta.postBalances[bcIndex] - tx.meta.preBalances[bcIndex]
+                let absSol = Math.abs(solChange) / 1_000_000_000
+
+                const memo = extractMemo(tx)
+
+                // Detect action from token balance changes
+                const pre = tx.meta.preTokenBalances || []
+                const post = tx.meta.postTokenBalances || []
+
+                // 1. Check signer's token delta (direct trades)
+                let traderTokenDelta = 0
+                for (const postBal of post) {
+                  if (postBal.mint !== faction.mint) continue
+                  if (postBal.owner !== trader) continue
+                  const preBal = pre.find((p) => p.accountIndex === postBal.accountIndex)
+                  const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                  const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                  traderTokenDelta = postAmt - preAmt
+                  break
+                }
+
+                // 2. Vault-routed: signer delta is 0, check the vault's token account
+                // Find any non-signer, non-BC account with a token delta for this mint
+                let vaultTokenDelta = 0
+                let vaultOwner: string | null = null
+                if (traderTokenDelta === 0) {
+                  for (const postBal of post) {
+                    if (postBal.mint !== faction.mint) continue
+                    if (postBal.owner === trader || postBal.owner === bcAddress) continue
+                    const preBal = pre.find((p) => p.accountIndex === postBal.accountIndex)
+                    const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                    const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                    const delta = postAmt - preAmt
+                    if (delta !== 0) {
+                      vaultTokenDelta = delta
+                      vaultOwner = postBal.owner ?? null
+                      break
+                    }
+                  }
+                }
+
+                // 3. Vault-routed SOL: if BC sol delta is ~0 but vault had token delta,
+                //    find SOL received/sent by the vault account
+                if (absSol < 0.001 && vaultOwner) {
+                  const vaultIndex = accountKeys.findIndex(
+                    (k) => k.pubkey.toString() === vaultOwner,
+                  )
+                  if (vaultIndex !== -1) {
+                    const vaultSolDelta =
+                      tx.meta.postBalances[vaultIndex] - tx.meta.preBalances[vaultIndex]
+                    absSol = Math.abs(vaultSolDelta) / 1_000_000_000
+                  }
+                }
+
+                let action: ActionEntry['action']
+                const isCreateTx = i === txs.length - 1
+                const postBalance = tx.meta.postBalances[bcIndex]
+                const isMigrationTx =
+                  solChange < 0 && postBalance < 1_000_000_000 && faction.status === 'ascended'
+
+                if (isCreateTx) {
+                  action = 'launched'
+                } else if (isMigrationTx) {
+                  action = 'ascended'
+                } else if (traderTokenDelta > 0 || vaultTokenDelta > 0) {
+                  action = 'joined'
+                } else if (traderTokenDelta < 0 || vaultTokenDelta < 0) {
+                  action = 'defected'
+                } else if (solChange !== 0) {
+                  action = solChange > 0 ? 'joined' : 'defected'
+                } else {
+                  action = 'rallied'
+                }
+
+                entries.push({
+                  agent: trader,
+                  faction_mint: faction.mint,
+                  faction_name: faction.name,
+                  action,
+                  amount_sol: absSol > 0.001 ? absSol : null,
+                  memo,
+                  timestamp: sig.blockTime || 0,
+                  signature: sig.signature,
+                  hadTokenDelta: traderTokenDelta !== 0 || vaultTokenDelta !== 0,
+                })
               }
-
-              const action: ActionEntry['action'] = traderTokenDelta > 0 || vaultTokenDelta > 0 ? 'joined'
-                : traderTokenDelta < 0 || vaultTokenDelta < 0 ? 'defected'
-                : 'joined'
-
-              entries.push({
-                agent: trader,
-                faction_mint: faction.mint,
-                faction_name: faction.name,
-                action,
-                amount_sol: absSol > 0.001 ? absSol : null,
-                memo,
-                timestamp: sig.blockTime || 0,
-                signature: sig.signature,
-              })
+            } catch {
+              // skip factions with errors
             }
-          } catch {
-            // skip
+          }),
+        )
+
+        // Fetch DEX activity for ascended factions (pool state transactions)
+        const ascendedFactions = pyreFactions.filter((f) => f.status === 'ascended')
+
+        await Promise.all(
+          ascendedFactions.slice(0, 10).map(async (faction) => {
+            try {
+              const poolState = getDexPool(faction.mint)
+
+              const signatures = await connection.getSignaturesForAddress(
+                poolState,
+                { limit: 30 },
+                'confirmed',
+              )
+
+              if (signatures.length === 0) return
+
+              const txs = await connection.getParsedTransactions(
+                signatures.map((s) => s.signature),
+                { maxSupportedTransactionVersion: 0 },
+              )
+
+              for (let i = 0; i < txs.length; i++) {
+                const tx = txs[i]
+                const sig = signatures[i]
+                if (!tx?.meta || tx.meta.err) continue
+
+                const trader = tx.transaction.message.accountKeys[0]?.pubkey?.toString() || ''
+                const memo = extractMemo(tx)
+
+                // Detect buy vs sell from token balance changes
+                const pre = tx.meta.preTokenBalances || []
+                const post = tx.meta.postTokenBalances || []
+
+                // Check signer's token delta (direct trades)
+                let traderTokenDelta = 0
+                for (const postBal of post) {
+                  if (postBal.mint !== faction.mint) continue
+                  if (postBal.owner !== trader) continue
+                  const preBal = pre.find((p) => p.accountIndex === postBal.accountIndex)
+                  const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                  const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                  traderTokenDelta = postAmt - preAmt
+                  break
+                }
+
+                // Vault-routed: check vault's token account (non-signer, non-pool)
+                let vaultTokenDelta = 0
+                let vaultOwner: string | null = null
+                if (traderTokenDelta === 0) {
+                  for (const postBal of post) {
+                    if (postBal.mint !== faction.mint) continue
+                    if (postBal.owner === trader) continue
+                    const preBal = pre.find((p) => p.accountIndex === postBal.accountIndex)
+                    const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                    const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                    const delta = postAmt - preAmt
+                    if (delta !== 0) {
+                      vaultTokenDelta = delta
+                      vaultOwner = postBal.owner ?? null
+                      break
+                    }
+                  }
+                }
+
+                // SOL amount from pool's SOL vault
+                let absSol = 0
+                const { solVault } = getDexVaults(faction.mint)
+                const accountKeys = tx.transaction.message.accountKeys
+                const solVaultIndex = accountKeys.findIndex((k) => k.pubkey.toString() === solVault)
+                if (solVaultIndex !== -1) {
+                  absSol =
+                    Math.abs(
+                      tx.meta.postBalances[solVaultIndex] - tx.meta.preBalances[solVaultIndex],
+                    ) / 1_000_000_000
+                }
+
+                // Vault-routed SOL: if pool sol delta is ~0 but vault had token delta,
+                // check the vault account's SOL change
+                if (absSol < 0.001 && vaultOwner) {
+                  const vaultIndex = accountKeys.findIndex(
+                    (k) => k.pubkey.toString() === vaultOwner,
+                  )
+                  if (vaultIndex !== -1) {
+                    const vaultSolDelta =
+                      tx.meta.postBalances[vaultIndex] - tx.meta.preBalances[vaultIndex]
+                    absSol = Math.abs(vaultSolDelta) / 1_000_000_000
+                  }
+                }
+
+                const action: ActionEntry['action'] =
+                  traderTokenDelta > 0 || vaultTokenDelta > 0
+                    ? 'joined'
+                    : traderTokenDelta < 0 || vaultTokenDelta < 0
+                      ? 'defected'
+                      : 'joined'
+
+                entries.push({
+                  agent: trader,
+                  faction_mint: faction.mint,
+                  faction_name: faction.name,
+                  action,
+                  amount_sol: absSol > 0.001 ? absSol : null,
+                  memo,
+                  timestamp: sig.blockTime || 0,
+                  signature: sig.signature,
+                  hadTokenDelta: traderTokenDelta !== 0 || vaultTokenDelta !== 0,
+                })
+              }
+            } catch {
+              // skip
+            }
+          }),
+        )
+
+        // Merge duplicates: same signature can appear from BC scan + pool scan.
+        // Prefer pool scan (more accurate for vault swaps) and preserve memos.
+        const bySignature = new Map<string, ActionEntry>()
+        for (const e of entries) {
+          const existing = bySignature.get(e.signature)
+          if (!existing) {
+            bySignature.set(e.signature, e)
+          } else if (existing.action === 'rallied' && e.action !== 'rallied') {
+            // BC scan classified vault swap as "rallied" (zero SOL change on BC),
+            // pool scan has the correct action — prefer pool scan
+            e.memo = e.memo || existing.memo
+            bySignature.set(e.signature, e)
           }
-        }),
-      )
-
-      // Merge duplicates: same signature can appear from BC scan + pool scan.
-      // Prefer pool scan (more accurate for vault swaps) and preserve memos.
-      const bySignature = new Map<string, ActionEntry>()
-      for (const e of entries) {
-        const existing = bySignature.get(e.signature)
-        if (!existing) {
-          bySignature.set(e.signature, e)
-        } else if (existing.action === 'rallied' && e.action !== 'rallied') {
-          // BC scan classified vault swap as "rallied" (zero SOL change on BC),
-          // pool scan has the correct action — prefer pool scan
-          e.memo = e.memo || existing.memo
-          bySignature.set(e.signature, e)
         }
-      }
-      const merged = Array.from(bySignature.values())
+        const merged = Array.from(bySignature.values())
 
-      // Reclassify micro-trades with memos:
-      // - buys with memo + no meaningful SOL → "said in" (messaged)
-      // - sells with memo + no meaningful SOL → "argued in" (argued)
-      // - rallied with memo → vault-routed message/fud that couldn't be classified
-      for (const e of merged) {
-        if (e.memo && e.amount_sol === null) {
-          if (e.action === 'defected') {
-            e.action = 'argued'
-          } else if (e.action === 'joined' || e.action === 'reinforced' || e.action === 'rallied') {
-            e.action = 'messaged'
+        // Reclassify micro-trades with memos:
+        // - buys with memo + no meaningful SOL → "said in" (messaged)
+        // - sells with memo + no meaningful SOL → "argued in" (argued)
+        // - rallied with memo → vault-routed message/fud that couldn't be classified
+        for (const e of merged) {
+          if (e.memo && e.amount_sol === null && !e.hadTokenDelta) {
+            if (e.action === 'defected') {
+              e.action = 'argued'
+            } else if (
+              e.action === 'joined' ||
+              e.action === 'reinforced' ||
+              e.action === 'rallied'
+            ) {
+              e.action = 'messaged'
+            }
           }
         }
-      }
 
-      // Distinguish "joined" vs "reinforced": sort oldest-first,
-      // track agent+faction pairs — first buy = joined, later buys = reinforced
-      merged.sort((a, b) => a.timestamp - b.timestamp)
-      const seen = new Set<string>()
-      for (const e of merged) {
-        if (e.action === 'joined') {
-          const key = `${e.agent}:${e.faction_mint}`
-          if (seen.has(key)) {
-            e.action = 'reinforced'
-          } else {
-            seen.add(key)
+        // Distinguish "joined" vs "reinforced": sort oldest-first,
+        // track agent+faction pairs — first buy = joined, later buys = reinforced
+        merged.sort((a, b) => a.timestamp - b.timestamp)
+        const seen = new Set<string>()
+        for (const e of merged) {
+          if (e.action === 'joined') {
+            const key = `${e.agent}:${e.faction_mint}`
+            if (seen.has(key)) {
+              e.action = 'reinforced'
+            } else {
+              seen.add(key)
+            }
           }
         }
-      }
 
-      merged.sort((a, b) => b.timestamp - a.timestamp)
-      setActions(merged)
-    } catch {
-      // ignore
-    } finally {
-      fetchingRef.current = false
-      setLoading(false)
-    }
-  }, [connection])
+        merged.sort((a, b) => b.timestamp - a.timestamp)
+        setActions(merged)
+      } catch {
+        // ignore
+      } finally {
+        fetchingRef.current = false
+        setLoading(false)
+      }
+    },
+    [connection],
+  )
 
   // Initial fetch
   useEffect(() => {
@@ -350,9 +417,7 @@ export default function StagePage() {
       },
       {
         commitment: 'confirmed',
-        filters: [
-          { memcmp: { offset: 0, bytes: '4y6pru6YvC7' } },
-        ],
+        filters: [{ memcmp: { offset: 0, bytes: '4y6pru6YvC7' } }],
       },
     )
 

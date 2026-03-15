@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useConnection, useWallet } from '@solana/wallet-adapter-react'
-import { getStronghold, getStrongholdForAgent } from 'pyre-world-kit'
+import { useWallet } from '@solana/wallet-adapter-react'
 import type { Stronghold } from 'pyre-world-kit'
+import { usePyreKit } from './usePyreKit'
 
 export type { Stronghold }
 
@@ -16,7 +16,7 @@ interface UseVaultResult {
 }
 
 export function useVault(): UseVaultResult {
-  const { connection } = useConnection()
+  const { actions } = usePyreKit()
   const { publicKey } = useWallet()
 
   const [vault, setVault] = useState<Stronghold | null>(null)
@@ -34,17 +34,17 @@ export function useVault(): UseVaultResult {
     try {
       const walletStr = publicKey.toString()
       const [ownVault, linked] = await Promise.all([
-        getStronghold(connection, walletStr).catch(() => null),
-        getStrongholdForAgent(connection, walletStr).catch(() => null),
+        actions.getStronghold(walletStr).catch(() => undefined),
+        actions.getStrongholdForAgent(walletStr).catch(() => undefined),
       ])
-      setVault(ownVault)
+      setVault(ownVault ?? null)
       setLinkedVault(linked && linked.address !== ownVault?.address ? linked : null)
     } catch {
       // ignore
     } finally {
       setLoading(false)
     }
-  }, [connection, publicKey])
+  }, [actions, publicKey])
 
   useEffect(() => {
     fetchVault()

@@ -7,7 +7,16 @@ interface StageEntryProps {
   agent: string
   faction_mint: string
   faction_name: string
-  action: 'joined' | 'reinforced' | 'defected' | 'launched' | 'rallied' | 'messaged' | 'argued' | 'ascended' | 'tithed'
+  action:
+    | 'joined'
+    | 'reinforced'
+    | 'defected'
+    | 'launched'
+    | 'rallied'
+    | 'messaged'
+    | 'argued'
+    | 'ascended'
+    | 'tithed'
   amount_sol: number | null
   memo: string | null
   timestamp: number
@@ -38,15 +47,31 @@ const ACTION_COLORS: Record<string, string> = {
   tithed: 'var(--muted)',
 }
 
-export function StageEntry({ agent, faction_mint, faction_name, action, amount_sol, memo, timestamp, signature }: StageEntryProps) {
+export function StageEntry({
+  agent,
+  faction_mint,
+  faction_name,
+  action,
+  amount_sol,
+  memo,
+  timestamp,
+  signature,
+}: StageEntryProps) {
   return (
     <div className="border-b" style={{ borderColor: 'var(--border)', padding: '0.5rem' }}>
       <div className="flex items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-1.5 min-w-0 flex-wrap">
-          <Link href={`/agent/${agent}`} className="font-mono text-xs hover:underline" style={{ color: 'var(--foreground)' }}>
+          <Link
+            href={`/agent/${agent}`}
+            className="font-mono text-xs hover:underline"
+            style={{ color: 'var(--foreground)' }}
+          >
             {shortenAddress(agent)}
           </Link>
-          <span className="text-xs font-medium" style={{ color: ACTION_COLORS[action] || 'var(--muted)' }}>
+          <span
+            className="text-xs font-medium"
+            style={{ color: ACTION_COLORS[action] || 'var(--muted)' }}
+          >
             {ACTION_LABELS[action] || action}
           </span>
           <Link
@@ -67,7 +92,9 @@ export function StageEntry({ agent, faction_mint, faction_name, action, amount_s
         </span>
       </div>
       {memo && (
-        <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--muted)' }}>{memo}</p>
+        <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--muted)' }}>
+          {memo}
+        </p>
       )}
     </div>
   )

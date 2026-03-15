@@ -1,12 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, isPyreMint, isBlacklistedMint } from 'pyre-world-kit'
 import type { FactionSummary } from 'pyre-world-kit'
+import { usePyreKit } from './usePyreKit'
 
 export type { FactionSummary }
-
 
 interface UseFactionsResult {
   factions: FactionSummary[]
@@ -16,7 +14,7 @@ interface UseFactionsResult {
 }
 
 export function useFactions(limit = 50): UseFactionsResult {
-  const { connection } = useConnection()
+  const { actions } = usePyreKit()
   const [factions, setFactions] = useState<FactionSummary[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -24,16 +22,15 @@ export function useFactions(limit = 50): UseFactionsResult {
   const fetchFactions = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await getFactions(connection, { limit, sort: 'newest' })
-      const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && !isBlacklistedMint(t.mint))
-      setFactions(pyreFactions)
-      setTotal(pyreFactions.length)
+      const result = await actions.getFactions({ limit, sort: 'newest' })
+      setFactions(result.factions)
+      setTotal(result.factions.length)
     } catch {
       // ignore
     } finally {
       setLoading(false)
     }
-  }, [connection, limit])
+  }, [actions, limit])
 
   useEffect(() => {
     fetchFactions()

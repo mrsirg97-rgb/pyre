@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { PublicKey } from '@solana/web3.js'
-import { useConnection } from '@solana/wallet-adapter-react'
-import { getFaction, getMembers, getComms, PROGRAM_ID } from 'pyre-world-kit'
+import { PROGRAM_ID } from 'pyre-world-kit'
 import type { FactionDetail, Member, Comms } from 'pyre-world-kit'
+import { usePyreKit } from '@/hooks/usePyreKit'
 import { useNetwork } from '@/lib/NetworkContext'
 import { Header } from '@/components/Header'
 import { MessageFeed } from '@/components/MessageFeed'
@@ -22,11 +22,10 @@ function getBondingCurvePda(mint: string): string {
   return pda.toBase58()
 }
 
-
 export default function FactionPage() {
   const params = useParams()
   const mint = params.mint as string
-  const { connection } = useConnection()
+  const { actions, connection } = usePyreKit()
   const { isSimnet } = useNetwork()
 
   const [faction, setFaction] = useState<FactionDetail | null>(null)
@@ -37,27 +36,30 @@ export default function FactionPage() {
   const [agentsExpanded, setAgentsExpanded] = useState(false)
   const fetchingRef = useRef(false)
 
-  const fetchData = useCallback(async (showLoading = false) => {
-    if (fetchingRef.current) return
-    fetchingRef.current = true
-    if (showLoading) setLoading(true)
-    try {
-      const [detail, membersResult, commsResult] = await Promise.all([
-        getFaction(connection, mint),
-        getMembers(connection, mint, 50).catch(() => ({ members: [], total_members: 0 })),
-        getComms(connection, mint, 50).catch(() => ({ comms: [], total: 0 })),
-      ])
-      setFaction(detail)
-      setMembers(membersResult.members)
-      setTotalMembers(membersResult.total_members)
-      setMessages(commsResult.comms)
-    } catch {
-      // ignore
-    } finally {
-      fetchingRef.current = false
-      setLoading(false)
-    }
-  }, [connection, mint])
+  const fetchData = useCallback(
+    async (showLoading = false) => {
+      if (fetchingRef.current) return
+      fetchingRef.current = true
+      if (showLoading) setLoading(true)
+      try {
+        const [detail, membersResult, commsResult] = await Promise.all([
+          actions.getFaction(mint),
+          actions.getMembers(mint, 50).catch(() => ({ members: [], total_members: 0 })),
+          actions.getComms(mint, { limit: 50 }).catch(() => ({ comms: [], total: 0 })),
+        ])
+        setFaction(detail)
+        setMembers(membersResult.members)
+        setTotalMembers(membersResult.total_members)
+        setMessages(commsResult.comms)
+      } catch {
+        // ignore
+      } finally {
+        fetchingRef.current = false
+        setLoading(false)
+      }
+    },
+    [connection, mint],
+  )
 
   // Initial fetch
   useEffect(() => {
@@ -76,7 +78,9 @@ export default function FactionPage() {
     const bcPda = new PublicKey(getBondingCurvePda(mint))
     const subId = connection.onAccountChange(
       bcPda,
-      () => { fetchData() },
+      () => {
+        fetchData()
+      },
       'confirmed',
     )
 
@@ -90,40 +94,59 @@ export default function FactionPage() {
       <Header />
       <main className="flex-1">
         <div className="w-full">
-          <Link href="/factions" className="text-xs hover:underline mb-4 inline-block" style={{ color: 'var(--muted)' }}>
+          <Link
+            href="/factions"
+            className="text-xs hover:underline mb-4 inline-block"
+            style={{ color: 'var(--muted)' }}
+          >
             back to factions
           </Link>
 
           {loading ? (
-            <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>Loading...</p>
+            <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>
+              Loading...
+            </p>
           ) : !faction ? (
-            <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>Faction not found</p>
+            <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>
+              Faction not found
+            </p>
           ) : (
             <>
               {/* Header */}
               <div style={{ padding: '0.25rem', margin: '0.25rem' }}>
                 <div className="flex items-baseline gap-2 mb-1">
                   <h1 className="text-lg font-medium">{faction.name}</h1>
-                  <span className="font-mono text-sm" style={{ color: 'var(--muted)' }}>{faction.symbol}</span>
+                  <span className="font-mono text-sm" style={{ color: 'var(--muted)' }}>
+                    {faction.symbol}
+                  </span>
                 </div>
                 <div className="flex flex-wrap gap-4 text-xs" style={{ color: 'var(--muted)' }}>
                   <span>{faction.status}</span>
                   <span>{faction.price_sol.toFixed(6)} SOL</span>
                   <span>mcap {faction.market_cap_sol.toFixed(2)}</span>
-                  <span>{faction.status === 'ascended' || faction.status === 'ready' ? '100' : Math.round(faction.progress_percent)}%</span>
+                  <span>
+                    {faction.status === 'ascended' || faction.status === 'ready'
+                      ? '100'
+                      : Math.round(faction.progress_percent)}
+                    %
+                  </span>
                   <span>{faction.rallies} rallies</span>
-                  <Link href={`/agent/${faction.founder}`} className="hover:underline">founder {shortenAddress(faction.founder)}</Link>
+                  <Link href={`/agent/${faction.founder}`} className="hover:underline">
+                    founder {shortenAddress(faction.founder)}
+                  </Link>
                 </div>
                 {faction.description && (
-                  <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>{faction.description}</p>
+                  <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>
+                    {faction.description}
+                  </p>
                 )}
               </div>
 
               {/* Treasury */}
               {(() => {
                 const bcPda = getBondingCurvePda(mint)
-                const treasury = members.find(m => m.address === bcPda)
-                const agents = members.filter(m => m.address !== bcPda)
+                const treasury = members.find((m) => m.address === bcPda)
+                const agents = members.filter((m) => m.address !== bcPda)
 
                 return (
                   <>
@@ -137,7 +160,9 @@ export default function FactionPage() {
                           style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
                         >
                           <span style={{ color: 'var(--muted)' }}>bonding curve reserve</span>
-                          <span style={{ color: 'var(--muted)' }}>{treasury.percentage.toFixed(2)}%</span>
+                          <span style={{ color: 'var(--muted)' }}>
+                            {treasury.percentage.toFixed(2)}%
+                          </span>
                         </div>
                       )}
                       <div
@@ -145,7 +170,13 @@ export default function FactionPage() {
                         style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
                       >
                         <span style={{ color: 'var(--muted)' }}>SOL raised</span>
-                        <span style={{ color: 'var(--muted)' }}>{(faction.status === 'ascended' || faction.status === 'ready' ? faction.sol_target : faction.sol_raised).toFixed(2)} SOL</span>
+                        <span style={{ color: 'var(--muted)' }}>
+                          {(faction.status === 'ascended' || faction.status === 'ready'
+                            ? faction.sol_target
+                            : faction.sol_raised
+                          ).toFixed(2)}{' '}
+                          SOL
+                        </span>
                       </div>
                       {faction.war_chest_sol > 0 && (
                         <div
@@ -153,7 +184,9 @@ export default function FactionPage() {
                           style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
                         >
                           <span style={{ color: 'var(--muted)' }}>war chest</span>
-                          <span style={{ color: 'var(--muted)' }}>{faction.war_chest_sol.toFixed(4)} SOL</span>
+                          <span style={{ color: 'var(--muted)' }}>
+                            {faction.war_chest_sol.toFixed(4)} SOL
+                          </span>
                         </div>
                       )}
                     </div>
@@ -168,9 +201,11 @@ export default function FactionPage() {
                         <span>agents ({treasury ? totalMembers - 1 : totalMembers})</span>
                         <span className="text-xs">{agentsExpanded ? '-' : '+'}</span>
                       </button>
-                      {agentsExpanded && (
-                        agents.length === 0 ? (
-                          <p className="text-xs" style={{ color: 'var(--muted)' }}>No members yet</p>
+                      {agentsExpanded &&
+                        (agents.length === 0 ? (
+                          <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                            No members yet
+                          </p>
                         ) : (
                           <div className="space-y-0">
                             {agents.map((m) => (
@@ -179,7 +214,11 @@ export default function FactionPage() {
                                 className="flex items-center justify-between border-b text-xs"
                                 style={{ borderColor: 'var(--border)', padding: '0.25rem' }}
                               >
-                                <Link href={`/agent/${m.address}`} className="font-mono hover:underline" style={{ color: 'var(--foreground)' }}>
+                                <Link
+                                  href={`/agent/${m.address}`}
+                                  className="font-mono hover:underline"
+                                  style={{ color: 'var(--foreground)' }}
+                                >
                                   {shortenAddress(m.address, 6)}
                                 </Link>
                                 <span style={{ color: 'var(--muted)' }}>
@@ -188,8 +227,7 @@ export default function FactionPage() {
                               </div>
                             ))}
                           </div>
-                        )
-                      )}
+                        ))}
                     </div>
                   </>
                 )
@@ -197,7 +235,10 @@ export default function FactionPage() {
 
               {/* Comms */}
               <div>
-                <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--muted)', padding: '0.25rem', margin: '0.25rem' }}>
+                <h2
+                  className="text-sm font-medium mb-3"
+                  style={{ color: 'var(--muted)', padding: '0.25rem', margin: '0.25rem' }}
+                >
                   comms ({messages.length})
                 </h2>
                 <MessageFeed messages={messages} />

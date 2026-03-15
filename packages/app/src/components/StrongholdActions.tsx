@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useConnection, useWallet } from '@solana/wallet-adapter-react'
-import { fundStronghold, withdrawFromStronghold, LAMPORTS_PER_SOL } from 'pyre-world-kit'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { LAMPORTS_PER_SOL } from 'pyre-world-kit'
 import type { Stronghold } from 'pyre-world-kit'
+import { usePyreKit } from '@/hooks/usePyreKit'
 import { fmtSol } from '@/lib/utils'
 
 interface StrongholdActionsProps {
@@ -12,7 +13,7 @@ interface StrongholdActionsProps {
 }
 
 export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) {
-  const { connection } = useConnection()
+  const { actions, connection } = usePyreKit()
   const wallet = useWallet()
 
   const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit')
@@ -41,7 +42,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
       let tx
 
       if (tab === 'deposit') {
-        const result = await fundStronghold(connection, {
+        const result = await actions.fundStronghold({
           depositor: wallet.publicKey.toString(),
           stronghold_creator: vault.creator,
           amount_sol: lamports,
@@ -53,7 +54,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
           setLoading(false)
           return
         }
-        const result = await withdrawFromStronghold(connection, {
+        const result = await actions.withdrawFromStronghold({
           authority: wallet.publicKey.toString(),
           stronghold_creator: vault.creator,
           amount_sol: lamports,
@@ -62,7 +63,9 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
       }
 
       const signedTx = await wallet.signTransaction(tx)
-      const txId = await connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true })
+      const txId = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: true,
+      })
       await connection.confirmTransaction(txId, 'confirmed')
 
       setAmount('')
@@ -77,12 +80,22 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
   }
 
   return (
-    <div className="border rounded-lg p-5" style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}>
+    <div
+      className="border rounded-lg p-5"
+      style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}
+    >
       <h3 className="text-sm font-medium mb-3">SOL</h3>
 
-      <div className="flex mb-3 border-b" style={{ borderColor: 'var(--border)', marginBottom: '2px' }}>
+      <div
+        className="flex mb-3 border-b"
+        style={{ borderColor: 'var(--border)', marginBottom: '2px' }}
+      >
         <button
-          onClick={() => { setTab('deposit'); setError(null); setSuccess(null) }}
+          onClick={() => {
+            setTab('deposit')
+            setError(null)
+            setSuccess(null)
+          }}
           className="flex-1 pb-2 text-sm text-center transition-colors cursor-pointer"
           style={{
             color: tab === 'deposit' ? 'var(--foreground)' : 'var(--muted)',
@@ -92,7 +105,11 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
           Deposit
         </button>
         <button
-          onClick={() => { setTab('withdraw'); setError(null); setSuccess(null) }}
+          onClick={() => {
+            setTab('withdraw')
+            setError(null)
+            setSuccess(null)
+          }}
           className="flex-1 pb-2 text-sm text-center transition-colors cursor-pointer"
           style={{
             color: tab === 'withdraw' ? 'var(--foreground)' : 'var(--muted)',
@@ -106,7 +123,9 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
       <div className="space-y-3">
         <div>
           <div className="flex items-center justify-between" style={{ marginBottom: '2px' }}>
-            <label className="text-xs" style={{ color: 'var(--muted)' }}>Amount (SOL)</label>
+            <label className="text-xs" style={{ color: 'var(--muted)' }}>
+              Amount (SOL)
+            </label>
             <span className="text-xs" style={{ color: 'var(--muted)' }}>
               Balance: {fmtSol(vault.sol_balance)}
             </span>
@@ -121,17 +140,27 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
               background: 'var(--surface)',
               border: '1px solid var(--border)',
               color: 'var(--foreground)',
-              padding: '0.25rem'
+              padding: '0.25rem',
             }}
           />
         </div>
 
         {tab === 'withdraw' && !isAuthority && (
-          <p className="text-xs" style={{ color: 'var(--danger)' }}>Only the authority can withdraw.</p>
+          <p className="text-xs" style={{ color: 'var(--danger)' }}>
+            Only the authority can withdraw.
+          </p>
         )}
 
-        {error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
-        {success && <p className="text-xs" style={{ color: 'var(--success)' }}>{success}</p>}
+        {error && (
+          <p className="text-xs" style={{ color: 'var(--danger)' }}>
+            {error}
+          </p>
+        )}
+        {success && (
+          <p className="text-xs" style={{ color: 'var(--success)' }}>
+            {success}
+          </p>
+        )}
 
         <button
           onClick={handleAction}

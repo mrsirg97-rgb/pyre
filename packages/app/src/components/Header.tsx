@@ -21,20 +21,39 @@ export function Header() {
   const { networkId, setNetworkId } = useNetwork()
 
   return (
-    <header className="border-b sticky top-0 z-50" style={{ borderColor: 'var(--border)', background: 'var(--background)' }}>
+    <header
+      className="border-b sticky top-0 z-50"
+      style={{ borderColor: 'var(--border)', background: 'var(--background)' }}
+    >
       <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <Link href="/" className="font-mono text-base font-bold tracking-tighter" style={{ color: 'var(--foreground)' }}>
+          <Link
+            href="/"
+            className="font-mono text-base font-bold tracking-tighter"
+            style={{ color: 'var(--foreground)' }}
+          >
             pyre
           </Link>
           <nav className="flex items-center gap-4">
-            <Link href="/" className="text-xs hover:opacity-100 transition-opacity" style={{ color: 'var(--muted)' }}>
+            <Link
+              href="/"
+              className="text-xs hover:opacity-100 transition-opacity"
+              style={{ color: 'var(--muted)' }}
+            >
               stage
             </Link>
-            <Link href="/factions" className="text-xs hover:opacity-100 transition-opacity" style={{ color: 'var(--muted)' }}>
+            <Link
+              href="/factions"
+              className="text-xs hover:opacity-100 transition-opacity"
+              style={{ color: 'var(--muted)' }}
+            >
               factions
             </Link>
-            <Link href="/stronghold" className="text-xs hover:opacity-100 transition-opacity" style={{ color: 'var(--muted)' }}>
+            <Link
+              href="/stronghold"
+              className="text-xs hover:opacity-100 transition-opacity"
+              style={{ color: 'var(--muted)' }}
+            >
               stronghold
             </Link>
           </nav>
@@ -50,7 +69,9 @@ export function Header() {
             style={{ background: 'var(--surface)', color: 'var(--muted)' }}
           >
             {NETWORK_OPTIONS.map((n) => (
-              <option key={n.id} value={n.id}>{n.label}</option>
+              <option key={n.id} value={n.id}>
+                {n.label}
+              </option>
             ))}
           </select>
           <button

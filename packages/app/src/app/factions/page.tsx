@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PublicKey } from '@solana/web3.js'
-import { useConnection } from '@solana/wallet-adapter-react'
-import { getFactions, getMembers, getDexVaults, isPyreMint, isBlacklistedMint } from 'pyre-world-kit'
+import { getDexVaults, isPyreMint, isBlacklistedMint } from 'pyre-world-kit'
 import type { FactionSummary, Member } from 'pyre-world-kit'
+import { usePyreKit } from '@/hooks/usePyreKit'
 import Link from 'next/link'
 import { Header } from '@/components/Header'
 import { FactionCard } from '@/components/FactionCard'
@@ -17,7 +17,7 @@ interface AgentEntry {
 }
 
 export default function FactionsPage() {
-  const { connection } = useConnection()
+  const { actions, connection } = usePyreKit()
   const [tab, setTab] = useState<'factions' | 'agents'>('factions')
   const [factions, setFactions] = useState<FactionSummary[]>([])
   const [total, setTotal] = useState(0)
@@ -28,35 +28,46 @@ export default function FactionsPage() {
   const fetchFactions = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await getFactions(connection, { limit: 100, sort: 'newest' })
-      const pyreFactions = result.factions.filter(t => isPyreMint(t.mint) && !isBlacklistedMint(t.mint))
+      const result = await actions.getFactions({ limit: 100, sort: 'newest' })
+      const pyreFactions = result.factions.filter(
+        (t) => isPyreMint(t.mint) && !isBlacklistedMint(t.mint),
+      )
       pyreFactions.sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
       setFactions(pyreFactions)
       setTotal(pyreFactions.length)
 
       // Enrich ascended factions with live pool mcap (non-blocking)
-      const ascended = pyreFactions.filter(f => f.status === 'ascended')
+      const ascended = pyreFactions.filter((f) => f.status === 'ascended')
       if (ascended.length > 0) {
-        Promise.allSettled(ascended.map(async (faction) => {
-          try {
-            const { solVault, tokenVault } = getDexVaults(faction.mint)
-            const [solInfo, tokenInfo] = await Promise.all([
-              connection.getTokenAccountBalance(new PublicKey(solVault)),
-              connection.getTokenAccountBalance(new PublicKey(tokenVault)),
-            ])
-            const solReserves = Number(solInfo.value.amount)
-            const tokenReserves = Number(tokenInfo.value.amount)
-            if (tokenReserves > 0 && solReserves > 0 && !isNaN(solReserves) && !isNaN(tokenReserves)) {
-              const TOKEN_MUL = 1_000_000
-              const LAMPORTS = 1_000_000_000
-              const priceInSol = (solReserves * TOKEN_MUL) / (tokenReserves * LAMPORTS)
-              faction.price_sol = priceInSol
-              faction.market_cap_sol = (priceInSol * 1_000_000_000 * TOKEN_MUL) / TOKEN_MUL
+        Promise.allSettled(
+          ascended.map(async (faction) => {
+            try {
+              const { solVault, tokenVault } = getDexVaults(faction.mint)
+              const [solInfo, tokenInfo] = await Promise.all([
+                connection.getTokenAccountBalance(new PublicKey(solVault)),
+                connection.getTokenAccountBalance(new PublicKey(tokenVault)),
+              ])
+              const solReserves = Number(solInfo.value.amount)
+              const tokenReserves = Number(tokenInfo.value.amount)
+              if (
+                tokenReserves > 0 &&
+                solReserves > 0 &&
+                !isNaN(solReserves) &&
+                !isNaN(tokenReserves)
+              ) {
+                const TOKEN_MUL = 1_000_000
+                const LAMPORTS = 1_000_000_000
+                const priceInSol = (solReserves * TOKEN_MUL) / (tokenReserves * LAMPORTS)
+                faction.price_sol = priceInSol
+                faction.market_cap_sol = (priceInSol * 1_000_000_000 * TOKEN_MUL) / TOKEN_MUL
+              }
+            } catch {
+              /* skip */
             }
-          } catch { /* skip */ }
-        })).then(() => {
+          }),
+        ).then(() => {
           // Re-render with enriched mcap
-          setFactions(prev => {
+          setFactions((prev) => {
             const updated = [...prev]
             updated.sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
             return updated
@@ -79,7 +90,7 @@ export default function FactionsPage() {
       await Promise.all(
         factions.slice(0, 30).map(async (faction) => {
           try {
-            const result = await getMembers(connection, faction.mint, 50)
+            const result = await actions.getMembers(faction.mint, 50)
             for (const m of result.members) {
               // Skip bonding curve PDA (not a real agent)
               if (m.percentage > 50) continue
@@ -148,10 +159,14 @@ export default function FactionsPage() {
               </button>
             </div>
             {!loading && tab === 'factions' && (
-              <span className="text-xs" style={{ color: 'var(--muted)' }}>{total} total</span>
+              <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                {total} total
+              </span>
             )}
             {!agentsLoading && tab === 'agents' && agents.length > 0 && (
-              <span className="text-xs" style={{ color: 'var(--muted)' }}>{agents.length} agents</span>
+              <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                {agents.length} agents
+              </span>
             )}
           </div>
 
@@ -171,22 +186,20 @@ export default function FactionsPage() {
                 ))}
               </div>
             )
+          ) : agentsLoading ? (
+            <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>
+              Loading agents...
+            </p>
+          ) : agents.length === 0 ? (
+            <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>
+              No agents found
+            </p>
           ) : (
-            agentsLoading ? (
-              <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>
-                Loading agents...
-              </p>
-            ) : agents.length === 0 ? (
-              <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>
-                No agents found
-              </p>
-            ) : (
-              <div>
-                {agents.map((agent) => (
-                  <AgentRow key={agent.address} agent={agent} />
-                ))}
-              </div>
-            )
+            <div>
+              {agents.map((agent) => (
+                <AgentRow key={agent.address} agent={agent} />
+              ))}
+            </div>
           )}
         </div>
       </main>
@@ -198,17 +211,19 @@ function AgentRow({ agent }: { agent: AgentEntry }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div
-      className="border-b"
-      style={{ borderColor: 'var(--border)' }}
-    >
+    <div className="border-b" style={{ borderColor: 'var(--border)' }}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between cursor-pointer"
         style={{ padding: '0.5rem' }}
       >
         <div className="flex items-baseline gap-2">
-          <Link href={`/agent/${agent.address}`} className="font-mono text-xs hover:underline" style={{ color: 'var(--foreground)' }} onClick={(e) => e.stopPropagation()}>
+          <Link
+            href={`/agent/${agent.address}`}
+            className="font-mono text-xs hover:underline"
+            style={{ color: 'var(--foreground)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {shortenAddress(agent.address, 6)}
           </Link>
           <span className="text-xs" style={{ color: 'var(--muted)' }}>
@@ -229,8 +244,7 @@ function AgentRow({ agent }: { agent: AgentEntry }) {
               style={{ color: 'var(--muted)', padding: '0.15rem 0' }}
             >
               <span>
-                <span style={{ color: 'var(--foreground)' }}>{f.name}</span>
-                {' '}
+                <span style={{ color: 'var(--foreground)' }}>{f.name}</span>{' '}
                 <span className="font-mono">{f.symbol}</span>
               </span>
               <span>{f.percentage.toFixed(2)}%</span>

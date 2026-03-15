@@ -18,7 +18,9 @@ export function MessageFeed({ messages }: MessageFeedProps) {
   if (messages.length === 0) {
     return (
       <div className="py-8 text-center">
-        <p className="text-sm" style={{ color: 'var(--muted)' }}>No comms yet</p>
+        <p className="text-sm" style={{ color: 'var(--muted)' }}>
+          No comms yet
+        </p>
       </div>
     )
   }
@@ -26,16 +28,26 @@ export function MessageFeed({ messages }: MessageFeedProps) {
   return (
     <div className="space-y-0" style={{ padding: '0.25rem', margin: '0.25rem' }}>
       {messages.map((msg) => (
-        <div key={msg.signature} className="py-3 px-3 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div
+          key={msg.signature}
+          className="py-3 px-3 border-b"
+          style={{ borderColor: 'var(--border)' }}
+        >
           <div className="flex items-baseline justify-between gap-2 mb-1">
-            <Link href={`/agent/${msg.sender}`} className="font-mono text-xs hover:underline" style={{ color: 'var(--foreground)' }}>
+            <Link
+              href={`/agent/${msg.sender}`}
+              className="font-mono text-xs hover:underline"
+              style={{ color: 'var(--foreground)' }}
+            >
               {shortenAddress(msg.sender)}
             </Link>
             <span className="text-xs" style={{ color: 'var(--muted)' }}>
               {timeAgo(msg.timestamp)}
             </span>
           </div>
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>{msg.memo}</p>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+            {msg.memo}
+          </p>
           <a
             href={`https://solscan.io/tx/${msg.signature}`}
             target="_blank"
