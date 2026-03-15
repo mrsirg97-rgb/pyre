@@ -121,7 +121,7 @@ export function useBrowserAgent(): BrowserAgentHook {
         agentRef.current = browserAgent
         setAgent(browserAgent)
         setPersonality(browserAgent.personality)
-        log(`Agent online: ${browserAgent.sessionPublicKey.slice(0, 8)}... (${browserAgent.personality})`)
+        log(`Agent online: ${signer.publicKey.slice(0, 8)}... (${browserAgent.personality})`)
       } catch (err: any) {
         log(`Failed to create agent: ${err.message}`)
       }

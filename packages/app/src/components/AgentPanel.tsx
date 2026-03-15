@@ -6,27 +6,14 @@ import { useWallet } from '@solana/wallet-adapter-react'
 
 export function AgentPanel() {
   const wallet = useWallet()
-  const {
-    agent,
-    running,
-    personality,
-    logs,
-    lastResult,
-    modelStatus,
-    modelTier,
-    deviceCapabilities,
-    init,
-    start,
-    stop,
-    tickOnce,
-    setModelTier,
-  } = useBrowserAgent()
+  const { agent, personality, logs, lastResult, modelStatus, modelTier, deviceCapabilities, init, tickOnce, setModelTier } =
+    useBrowserAgent()
 
   if (!wallet.connected) {
     return (
-      <div className="border border-neutral-800 rounded-lg" style={{ padding: '0.5rem', margin: '0.25rem' }}>
+      <div className="rounded-lg" style={{ border: '1px solid var(--border)', padding: '0.5rem', margin: '0.25rem' }}>
         <h2 className="text-md font-bold mb-2">Browser Agent</h2>
-        <p className="text-neutral-400 text-sm">Connect your wallet to launch an autonomous agent.</p>
+        <p className="text-sm" style={{ color: 'var(--muted)' }}>Connect your wallet to launch an autonomous agent.</p>
       </div>
     )
   }
@@ -38,162 +25,128 @@ export function AgentPanel() {
   ]
 
   return (
-    <div
-      className="border border-neutral-800 rounded-lg space-y-4"
-      style={{ borderColor: 'var(--border)', padding: '0.5rem', margin: '0.25rem' }}
-    >
+    <div className="rounded-lg space-y-4" style={{ border: '1px solid var(--border)', padding: '0.5rem', margin: '0.25rem' }}>
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Browser Agent</h2>
         {personality && (
-          <span className="text-sm px-2 py-0.5 rounded bg-neutral-800 text-neutral-300">
+          <span className="text-sm px-2 py-0.5 rounded" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>
             {personality}
           </span>
         )}
       </div>
 
-      {/* Model Selection */}
       {!agent && (
         <div className="space-y-3">
-          <p className="text-xs text-neutral-400" style={{ marginBottom: '0.25rem' }}>
+          <p className="text-xs" style={{ color: 'var(--muted)', marginBottom: '0.25rem' }}>
             {deviceCapabilities
               ? `Recommended: ${deviceCapabilities.recommendedTier === 'rng' ? 'No Model' : deviceCapabilities.recommendedTier.toUpperCase()} (${deviceCapabilities.reason})`
               : 'Detecting device capabilities...'}
           </p>
-
           <div className="grid grid-cols-3 gap-2">
             {tiers.map((t) => {
-              const disabled = deviceCapabilities
-                ? isTierAboveRecommended(t.id, deviceCapabilities.recommendedTier)
-                : false
+              const disabled = deviceCapabilities ? isTierAboveRecommended(t.id, deviceCapabilities.recommendedTier) : false
+              const selected = modelTier === t.id
               return (
                 <button
                   key={t.id}
                   onClick={() => !disabled && setModelTier(t.id)}
                   disabled={disabled}
-                  className={`rounded border text-left text-sm ${
-                    disabled
-                      ? 'border-neutral-800 opacity-40 cursor-not-allowed'
-                      : modelTier === t.id
-                        ? 'border-orange-500 bg-orange-500/10'
-                        : 'border-neutral-700 hover:border-neutral-500'
-                  }`}
-                  style={{ padding: '0.25rem', marginBottom: '0.25rem' }}
+                  className="rounded text-left text-sm"
+                  style={{
+                    padding: '0.25rem',
+                    marginBottom: '0.25rem',
+                    border: selected ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    background: selected ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+                    opacity: disabled ? 0.4 : 1,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                  }}
                 >
                   <div className="font-medium">{t.label}</div>
-                  <div className="text-xs text-neutral-400 mt-1">{t.desc}</div>
+                  <div className="text-xs mt-1" style={{ color: 'var(--muted)' }}>{t.desc}</div>
                 </button>
               )
             })}
           </div>
-
-          <button
-            onClick={() => init()}
-            className="w-full py-2 rounded bg-orange-600 hover:bg-orange-500 font-medium"
-          >
+          <button onClick={() => init()} className="w-full py-2 rounded font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>
             Launch Agent
           </button>
         </div>
       )}
 
-      {/* Model Download Progress */}
       {modelStatus.status === 'downloading' && (
         <div className="space-y-1" style={{ marginBottom: '0.25rem' }}>
-          <div className="flex justify-between text-sm text-neutral-400">
+          <div className="flex justify-between text-sm" style={{ color: 'var(--muted)' }}>
             <span>Downloading model...</span>
             <span>{modelStatus.progress}%</span>
           </div>
-          <div className="w-full bg-neutral-800 rounded-full h-2">
-            <div
-              className="bg-orange-500 h-2 rounded-full transition-all"
-              style={{ width: `${modelStatus.progress}%` }}
-            />
+          <div className="w-full rounded-full h-2" style={{ background: 'var(--surface)' }}>
+            <div className="h-2 rounded-full transition-all" style={{ width: `${modelStatus.progress}%`, background: 'var(--accent)' }} />
           </div>
         </div>
       )}
 
       {modelStatus.status === 'loading' && (
-        <p className="text-sm text-neutral-400">Loading model into GPU...</p>
+        <p className="text-sm" style={{ color: 'var(--muted)' }}>Loading model into GPU...</p>
       )}
 
       {modelStatus.status === 'error' && (
-        <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded p-2">
+        <div
+          className="text-sm rounded p-2"
+          style={{ color: 'var(--danger)', background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)' }}
+        >
           <p>{modelStatus.error}</p>
-          <p className="text-xs text-neutral-500 mt-1">Agent will continue with random actions.</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Agent will continue with random actions.</p>
         </div>
       )}
 
-      {/* Agent Controls */}
       {agent && (
-        <div className="flex gap-2">
-          {!running ? (
-            <>
-              <button
-                onClick={() => start()}
-                className="flex-1 rounded bg-green-700 hover:bg-green-600 font-small"
-                style={{ padding: '0.25rem', marginBottom: '0.25rem' }}
-              >
-                Start Auto
-              </button>
-              <button
-                onClick={() => tickOnce()}
-                className="flex-1 py-2 rounded bg-neutral-700 hover:bg-neutral-600 font-small"
-                style={{ padding: '0.25rem', marginBottom: '0.25rem' }}
-              >
-                Tick Once
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={stop}
-              className="flex-1 py-2 rounded bg-red-700 hover:bg-red-600 font-small"
-              style={{ padding: '0.25rem', marginBottom: '0.25rem' }}
-            >
-              Stop
-            </button>
-          )}
-        </div>
+        <button
+          onClick={() => tickOnce()}
+          className="rounded-full text-xs font-mono"
+          style={{ padding: '0.2rem 1rem', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--foreground)', marginBottom: '0.5rem' }}
+        >
+          tick
+        </button>
       )}
 
-      {/* Last Action */}
       {lastResult && (
         <div
-          className={`rounded text-sm ${lastResult.success ? 'bg-green-900/20 border border-green-800' : 'bg-red-900/20 border border-red-800'}`}
-          style={{ padding: '0.25rem', marginBottom: '0.25rem' }}
+          className="rounded text-sm"
+          style={{
+            padding: '0.25rem',
+            marginBottom: '0.25rem',
+            background: lastResult.success ? 'color-mix(in srgb, var(--success) 10%, transparent)' : 'color-mix(in srgb, var(--danger) 10%, transparent)',
+            border: lastResult.success ? '1px solid color-mix(in srgb, var(--success) 30%, transparent)' : '1px solid color-mix(in srgb, var(--danger) 30%, transparent)',
+          }}
         >
           <div className="flex justify-between">
             <span className="font-mono">{lastResult.action.toUpperCase()}</span>
             <span>{lastResult.usedLLM ? 'LLM' : 'RNG'}</span>
           </div>
-          {lastResult.message && (
-            <p className="text-neutral-300 mt-1">&quot;{lastResult.message}&quot;</p>
-          )}
-          {lastResult.error && <p className="text-red-400 mt-1">{lastResult.error}</p>}
+          {lastResult.message && <p className="mt-1">&quot;{lastResult.message}&quot;</p>}
+          {lastResult.error && <p className="mt-1" style={{ color: 'var(--danger)' }}>{lastResult.error}</p>}
         </div>
       )}
 
-      {/* Agent Stats */}
       {agent && (
         <div className="grid grid-cols-3 gap-2 text-sm" style={{ marginBottom: '0.25rem' }}>
-          <div className="p-2 bg-neutral-900 rounded">
-            <div className="text-neutral-500">Actions</div>
+          <div className="p-2 rounded" style={{ background: 'var(--surface)' }}>
+            <div style={{ color: 'var(--muted)' }}>Actions</div>
             <div className="font-mono">{agent.getKit().state.tick}</div>
           </div>
-          <div className="p-2 bg-neutral-900 rounded">
-            <div className="text-neutral-500">Holdings</div>
+          <div className="p-2 rounded" style={{ background: 'var(--surface)' }}>
+            <div style={{ color: 'var(--muted)' }}>Holdings</div>
             <div className="font-mono">{agent.getKit().state.state?.holdings.size ?? 0}</div>
           </div>
-          <div className="p-2 bg-neutral-900 rounded">
-            <div className="text-neutral-500">Model</div>
-            <div className="font-mono">
-              {modelStatus.status === 'ready' ? modelTier.toUpperCase() : 'RNG'}
-            </div>
+          <div className="p-2 rounded" style={{ background: 'var(--surface)' }}>
+            <div style={{ color: 'var(--muted)' }}>Model</div>
+            <div className="font-mono">{modelStatus.status === 'ready' ? modelTier.toUpperCase() : 'RNG'}</div>
           </div>
         </div>
       )}
 
-      {/* Log */}
       {logs.length > 0 && (
-        <div className="max-h-48 overflow-y-auto bg-black/50 rounded p-3 font-mono text-xs text-neutral-400 space-y-0.5">
+        <div className="max-h-48 overflow-y-auto rounded p-3 font-mono text-xs space-y-0.5" style={{ background: 'var(--surface)', color: 'var(--muted)' }}>
           {logs.map((line, i) => (
             <div key={i}>{line}</div>
           ))}

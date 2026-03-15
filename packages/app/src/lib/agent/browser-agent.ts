@@ -1,4 +1,4 @@
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js'
+import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js'
 import { PyreKit } from 'pyre-world-kit'
 import type { SerializedGameState } from 'pyre-world-kit'
 import type { LLMAdapter, FactionInfo, Personality, AgentTickResult } from 'pyre-agent-kit'
@@ -9,7 +9,7 @@ import {
   weightsFromCounts,
   classifyPersonality,
 } from 'pyre-agent-kit'
-import { WalletSigner } from './wallet-signer'
+import { WalletSigner, walletSignAndSend } from './wallet-signer'
 
 export interface BrowserAgentConfig {
   connection: Connection
@@ -20,15 +20,11 @@ export interface BrowserAgentConfig {
   solRange?: [number, number]
   kitState?: SerializedGameState
   logger?: (msg: string) => void
-  /** SOL to fund the session keypair with (default: 0.5) */
-  sessionFundSol?: number
 }
 
 export interface BrowserAgent {
   readonly publicKey: string
   readonly personality: Personality
-  /** The session keypair's public key (the agent's on-chain identity) */
-  readonly sessionPublicKey: string
   tick(factions?: FactionInfo[]): Promise<AgentTickResult>
   evolve(): Promise<boolean>
   getKit(): PyreKit
@@ -41,88 +37,22 @@ function randRange(min: number, max: number) {
   return min + Math.random() * (max - min)
 }
 
-async function confirmTx(connection: Connection, sig: string): Promise<void> {
-  try {
-    await connection.confirmTransaction(sig, 'confirmed')
-  } catch {
-    const start = Date.now()
-    while (Date.now() - start < 60000) {
-      const status = await connection.getSignatureStatus(sig)
-      if (
-        status?.value?.confirmationStatus === 'confirmed' ||
-        status?.value?.confirmationStatus === 'finalized'
-      ) {
-        if (status.value.err)
-          throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`)
-        return
-      }
-      await new Promise((r) => setTimeout(r, 2000))
-    }
-    throw new Error(`Transaction confirmation timeout: ${sig}`)
-  }
-}
-
-async function keypairSignAndSend(
-  connection: Connection,
-  keypair: Keypair,
-  result: { transaction: Transaction; additionalTransactions?: Transaction[] },
-): Promise<string> {
-  const tx = result.transaction
-  tx.partialSign(keypair)
-  const sig = await connection.sendRawTransaction(tx.serialize(), {
-    skipPreflight: false,
-    preflightCommitment: 'confirmed',
-  })
-  await confirmTx(connection, sig)
-
-  if (result.additionalTransactions) {
-    for (const addlTx of result.additionalTransactions) {
-      addlTx.partialSign(keypair)
-      const addlSig = await connection.sendRawTransaction(addlTx.serialize())
-      await confirmTx(connection, addlSig)
-    }
-  }
-
-  return sig
-}
-
 export async function createBrowserAgent(config: BrowserAgentConfig): Promise<BrowserAgent> {
   const { connection, wallet, llm } = config
+  const publicKey = wallet.publicKey
   const logger = config.logger ?? ((msg: string) => console.log(msg))
-  const sessionFundSol = config.sessionFundSol ?? 0.5
 
-  // Generate session keypair — all ticks sign with this, no more Phantom popups
-  const sessionKeypair = Keypair.generate()
-  const sessionPubkey = sessionKeypair.publicKey.toBase58()
+  const kit = new PyreKit(connection, publicKey)
 
-  logger(`Funding session keypair (${sessionFundSol} SOL)...`)
-
-  // Fund session keypair from wallet (one Phantom signature)
-  const walletPubkey = new PublicKey(wallet.publicKey)
-  const fundTxReal = new Transaction().add(
-    SystemProgram.transfer({
-      fromPubkey: walletPubkey,
-      toPubkey: sessionKeypair.publicKey,
-      lamports: Math.floor(sessionFundSol * LAMPORTS_PER_SOL),
-    }),
-  )
-  fundTxReal.feePayer = walletPubkey
-  const { blockhash } = await connection.getLatestBlockhash()
-  fundTxReal.recentBlockhash = blockhash
-
-  const signedFundTx = await wallet.signTransaction(fundTxReal)
-  const fundSig = await connection.sendRawTransaction(signedFundTx.serialize())
-  await confirmTx(connection, fundSig)
-
-  logger(`Session funded: ${sessionPubkey.slice(0, 8)}...`)
-
-  // Initialize kit with session keypair's pubkey
-  const kit = new PyreKit(connection, sessionPubkey)
-
+  // Always init to resolve vault link, then hydrate saved state on top
+  await kit.state.init()
   if (config.kitState) {
+    // Preserve the vault creator resolved by init, overlay saved game state
+    const resolvedVaultCreator = kit.state.vaultCreator
     kit.state.hydrate(config.kitState)
-  } else {
-    await kit.state.init()
+    if (!kit.state.vaultCreator && resolvedVaultCreator) {
+      kit.state.state!.vaultCreator = resolvedVaultCreator
+    }
   }
 
   let personality: Personality = config.personality ?? assignPersonality()
@@ -161,10 +91,16 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
   } catch {}
 
   logger(
-    `[${sessionPubkey.slice(0, 8)}] browser agent initialized — ${personality}, tick ${kit.state.tick}, ${knownFactions.length} factions`,
+    `[${publicKey.slice(0, 8)}] browser agent initialized — ${personality}, tick ${kit.state.tick}, ${knownFactions.length} factions`,
   )
 
-  const stronghold = () => kit.state.vaultCreator ?? sessionPubkey
+  const vc = kit.state.vaultCreator
+  if (vc) {
+    logger(`[${publicKey.slice(0, 8)}] vault linked: ${vc.slice(0, 8)}...`)
+  } else {
+    logger(`[${publicKey.slice(0, 8)}] no vault found — actions requiring a stronghold will fail`)
+  }
+  const stronghold = () => kit.state.vaultCreator ?? publicKey
 
   async function tick(factions?: FactionInfo[]): Promise<AgentTickResult> {
     const activeFactions = factions ?? knownFactions
@@ -227,7 +163,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
         case 'join': {
           const { result, confirm } = await kit.exec('actions', 'join', {
             mint: faction.mint,
-            agent: sessionPubkey,
+            agent: publicKey,
             amount_sol: Math.floor(sol * LAMPORTS_PER_SOL),
             stronghold: stronghold(),
             ascended: faction.status === 'ascended',
@@ -246,7 +182,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           const f = activeFactions.find((ff) => ff.mint === mint)
           const { result, confirm } = await kit.exec('actions', 'defect', {
             mint,
-            agent: sessionPubkey,
+            agent: publicKey,
             amount_tokens: sellAmount,
             stronghold: stronghold(),
             ascended: f?.status === 'ascended',
@@ -262,7 +198,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           const target = pick(rallyEligible)
           const { result, confirm } = await kit.exec('actions', 'rally', {
             mint: target.mint,
-            agent: sessionPubkey,
+            agent: publicKey,
             stronghold: stronghold(),
           })
           execResult = result
@@ -275,7 +211,6 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           if (founded.length >= 2)
             return { action: 'launch', success: false, error: 'max factions founded', usedLLM: false }
 
-          // Generate name via LLM or use fallback
           let name = 'Pyre Faction'
           let symbol = 'PYRE'
           if (llm) {
@@ -289,7 +224,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           }
 
           const { result, confirm } = await kit.exec('actions', 'launch', {
-            founder: sessionPubkey,
+            founder: publicKey,
             name,
             symbol,
             metadata_uri: `https://pyre.gg/factions/${symbol.toLowerCase()}.json`,
@@ -310,7 +245,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             return { action: 'message', success: false, error: 'LLM returned null', usedLLM: true }
           const params: any = {
             mint: faction.mint,
-            agent: sessionPubkey,
+            agent: publicKey,
             message: msg.slice(0, 80),
             stronghold: stronghold(),
             ascended: faction.status === 'ascended',
@@ -339,7 +274,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             return { action: 'fud', success: false, error: 'LLM returned null', usedLLM: true }
           const { result, confirm } = await kit.exec('actions', 'fud', {
             mint: target.mint,
-            agent: sessionPubkey,
+            agent: publicKey,
             message: msg.slice(0, 80),
             stronghold: stronghold(),
             ascended: target.status === 'ascended',
@@ -357,7 +292,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           const target = pick(rivals)
           const { result, confirm } = await kit.exec('actions', 'join', {
             mint: target.mint,
-            agent: sessionPubkey,
+            agent: publicKey,
             amount_sol: Math.floor(sol * 1.5 * LAMPORTS_PER_SOL),
             stronghold: stronghold(),
             ascended: target.status === 'ascended',
@@ -374,7 +309,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           const target = pick(ascended)
           const { result, confirm } = await kit.exec('actions', 'tithe', {
             mint: target.mint,
-            payer: sessionPubkey,
+            payer: publicKey,
             harvest: true,
           })
           execResult = result
@@ -389,7 +324,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           const target = pick(ready)
           const { result, confirm } = await kit.exec('actions', 'ascend', {
             mint: target.mint,
-            payer: sessionPubkey,
+            payer: publicKey,
           })
           execResult = result
           execConfirm = confirm
@@ -397,10 +332,10 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           break
         }
         default: {
-          // war_loan, repay_loan, siege, raze — fall back to join for now
+          // war_loan, repay_loan, siege, raze — fall back to join
           const { result, confirm } = await kit.exec('actions', 'join', {
             mint: faction.mint,
-            agent: sessionPubkey,
+            agent: publicKey,
             amount_sol: Math.floor(sol * LAMPORTS_PER_SOL),
             stronghold: stronghold(),
             ascended: faction.status === 'ascended',
@@ -416,12 +351,12 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
       if (!execResult)
         return { action: action as any, success: false, error: 'no result', usedLLM: false }
 
-      // Sign with session keypair — no Phantom popup
-      await keypairSignAndSend(connection, sessionKeypair, execResult)
+      // Sign with wallet adapter
+      await walletSignAndSend(connection, wallet, execResult)
 
       if (execConfirm) await execConfirm()
 
-      logger(`[${sessionPubkey.slice(0, 8)}] ${description} — OK`)
+      logger(`[${publicKey.slice(0, 8)}] ${description} — OK`)
 
       return {
         action: action as any,
@@ -430,7 +365,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
         usedLLM: action === 'message' || action === 'fud',
       }
     } catch (err: any) {
-      logger(`[${sessionPubkey.slice(0, 8)}] ${action} ERROR: ${err.message?.slice(0, 80)}`)
+      logger(`[${publicKey.slice(0, 8)}] ${action} ERROR: ${err.message?.slice(0, 80)}`)
       return {
         action: action as any,
         faction: faction.mint,
@@ -468,8 +403,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
   }
 
   return {
-    publicKey: wallet.publicKey,
-    sessionPublicKey: sessionPubkey,
+    publicKey,
     personality,
     tick,
     evolve,
