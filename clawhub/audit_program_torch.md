@@ -1,6 +1,6 @@
 # Torch Market Security Audit Summary
 
-**Date:** February 27, 2026 | **Auditor:** Claude Opus 4.6 (Anthropic) | **Version:** V3.7.10 Production
+**Date:** February 27, 2026 | **Auditor:** Claude Opus 4.6 (Anthropic) | **Version:** V4.0.1 Production
 
 ---
 
@@ -10,7 +10,7 @@ Four audits covering the full stack:
 
 | Layer | Files | Lines | Report |
 |-------|-------|-------|--------|
-| On-chain program (V3.7.10) | 21 source files | ~6,800 | `audit.md` |
+| On-chain program (V4.0.1) | 21 source files | ~6,800 | `audit.md` |
 | Frontend & API | 37 files (17 API routes, 12 libs, 8 components) | -- | `SECURITY_AUDIT_FE_V2.4.1_PROD.md` |
 | Agent Kit plugin (V4.0) | 4 files | ~1,900 | `SECURITY_AUDIT_AGENTKIT_V4.0.md` |
 | Torch SDK (V2.0) | 9 files | ~2,800 | Included in Agent Kit V4.0 audit |
@@ -29,7 +29,7 @@ Program ID: `8hbUkonssSEEtkqzwM7ZcZrD9evacM92TcWSooVF4BeT`
 | High | 0 | -- |
 | Medium | 3 | Lending enabled by default (accepted); Token-2022 transfer fee on collateral (inherent, 0.04% new / 0.03% legacy); Epoch rewards race condition (accepted) |
 | Low | 7 | fund_vault_wsol decoupled accounting; Stranded WSOL lamports; Vault sol_balance drift; Sell no position check; Slot-based interest; Revival no virtual reserve update; Treasury lock ATA not Anchor-constrained (CPI validated, see V31 notes) |
-| Informational | 26 | Various carried findings + 3 new V3.7.1 + 2 new V3.7.2 + 2 new V3.7.3 + 2 new V3.7.5 (I-20: zero-burn migration design; I-21: AccountInfo stack pressure mitigation) + 1 new V3.7.6 (I-22: reserve floor zeroed, fee split rebalanced) + 1 new V3.7.7 (I-23: buyback removed, lending cap increased) + 1 new V3.7.9 (I-24: creator revenue streams, transfer fee bump) + 1 new (I-25: per-user borrow cap) + 1 new V3.7.10 (I-26: community token option) |
+| Informational | 27 | Various carried findings + 3 new V3.7.1 + 2 new V3.7.2 + 2 new V3.7.3 + 2 new V3.7.5 (I-20: zero-burn migration design; I-21: AccountInfo stack pressure mitigation) + 1 new V3.7.6 (I-22: reserve floor zeroed, fee split rebalanced) + 1 new V3.7.7 (I-23: buyback removed, lending cap increased) + 1 new V3.7.9 (I-24: creator revenue streams, transfer fee bump) + 1 new (I-25: per-user borrow cap) + 1 new V3.7.10 (I-26: community token option) + 1 new V4.0.1 (I-27: simplified tiers & reduced fees) |
 
 **Rating: EXCELLENT -- Ready for Mainnet**
 
@@ -567,6 +567,13 @@ The implementation repurposes the deprecated `Treasury.total_bought_back` field 
 - **Backward compatibility:** Existing tokens (pre-V35) are unaffected. The sentinel is only set at token creation time.
 
 No new accounts, no new instructions, no state struct changes. 48 Kani proofs all passing.
+
+**I-27 (Informational): V4.0 Simplified Tiers & Reduced Fees (Constants-Only)**
+
+Three constant changes: (1) Removed 50 SOL (Spark) tier from `VALID_BONDING_TARGETS` — existing Spark tokens continue to function, only new creation blocked. (2) Treasury SOL rate reduced from 20%→5% to 12.5%→4% (`TREASURY_SOL_MAX_BPS` 2000→1250, `TREASURY_SOL_MIN_BPS` 500→400). (3) Protocol fee reduced from 1% to 0.5% (`PROTOCOL_FEE_BPS` 100→50).
+
+**Impact:** Fee reduction benefits buyers (~10 SOL treasury on 100 SOL pool, ~20 SOL on 200 SOL pool). No new attack vectors — constants only. Existing Spark tokens retain all functionality via `initial_virtual_reserves()` match arm. `BONDING_TARGET_SPARK` constant preserved for backward compatibility.
+**Status:** Accepted — intentional economic rebalance. 48 Kani proofs all passing.
 
 ---
 

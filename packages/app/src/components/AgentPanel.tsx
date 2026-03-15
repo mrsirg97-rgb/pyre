@@ -1,6 +1,6 @@
 'use client'
 
-import { useBrowserAgent, MODEL_SIZES } from '@/lib/agent'
+import { useBrowserAgent, MODEL_SIZES, isTierAboveRecommended } from '@/lib/agent'
 import type { ModelTier } from '@/lib/agent'
 import { useWallet } from '@solana/wallet-adapter-react'
 
@@ -33,7 +33,7 @@ export function AgentPanel() {
 
   const tiers: { id: ModelTier; label: string; desc: string }[] = [
     { id: '3b', label: 'Qwen 3B', desc: `Full intelligence (${MODEL_SIZES['3b']})` },
-    { id: '1.5b', label: 'Qwen 1.5B', desc: `Lighter model (${MODEL_SIZES['1.5b']})` },
+    { id: '1b', label: 'Llama 1B', desc: `Mobile-friendly (${MODEL_SIZES['1b']})` },
     { id: 'rng', label: 'No Model', desc: 'Instant start, random actions, no messages' },
   ]
 
@@ -61,21 +61,29 @@ export function AgentPanel() {
           </p>
 
           <div className="grid grid-cols-3 gap-2">
-            {tiers.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setModelTier(t.id)}
-                className={`rounded border text-left text-sm ${
-                  modelTier === t.id
-                    ? 'border-orange-500 bg-orange-500/10'
-                    : 'border-neutral-700 hover:border-neutral-500'
-                }`}
-                style={{ padding: '0.25rem', marginBottom: '0.25rem' }}
-              >
-                <div className="font-medium">{t.label}</div>
-                <div className="text-xs text-neutral-400 mt-1">{t.desc}</div>
-              </button>
-            ))}
+            {tiers.map((t) => {
+              const disabled = deviceCapabilities
+                ? isTierAboveRecommended(t.id, deviceCapabilities.recommendedTier)
+                : false
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => !disabled && setModelTier(t.id)}
+                  disabled={disabled}
+                  className={`rounded border text-left text-sm ${
+                    disabled
+                      ? 'border-neutral-800 opacity-40 cursor-not-allowed'
+                      : modelTier === t.id
+                        ? 'border-orange-500 bg-orange-500/10'
+                        : 'border-neutral-700 hover:border-neutral-500'
+                  }`}
+                  style={{ padding: '0.25rem', marginBottom: '0.25rem' }}
+                >
+                  <div className="font-medium">{t.label}</div>
+                  <div className="text-xs text-neutral-400 mt-1">{t.desc}</div>
+                </button>
+              )
+            })}
           </div>
 
           <button

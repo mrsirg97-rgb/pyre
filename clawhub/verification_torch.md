@@ -15,7 +15,7 @@ This is **not** a security audit. It proves the arithmetic is correct, but does 
 torch_market's core arithmetic has been formally verified using [Kani](https://model-checking.github.io/kani/), a Rust model checker backed by the CBMC bounded model checker. Kani exhaustively proves properties hold for **all** valid inputs within constrained ranges -- not just sampled test cases.
 
 **Tool:** Kani Rust Verifier 0.67.0 / CBMC 6.8.0
-**Target:** `torch_market` v3.7.10
+**Target:** `torch_market` v4.0.1
 **Harnesses:** 48 proof harnesses, all passing
 **Source:** `programs/torch_market/src/kani_proofs.rs`
 
@@ -29,7 +29,7 @@ The proofs cover the **pure arithmetic layer** -- every fee calculation, bonding
 |---------|----------|-------------|
 | `verify_buy_fee_conservation` | `protocol_fee + treasury_fee + after_fees == sol_amount` | 0.001-200 SOL |
 | `verify_protocol_fee_split` | `dev_share + protocol_portion == protocol_fee_total` | 0.001-200 SOL |
-| `verify_treasury_rate_bounds` | `rate in [500, 2000]` (5-20%) flat across all tiers | 0-target SOL reserves |
+| `verify_treasury_rate_bounds` | `rate in [400, 1250]` (4-12.5%) flat across all tiers | 0-target SOL reserves |
 | `verify_treasury_rate_monotonic` | More reserves -> lower treasury rate | 0-target SOL (two symbolic) |
 | `verify_sol_distribution_conservation` | `curve + treasury + creator + dev + protocol == sol_amount` (zero SOL created or lost, V34 5-way sum) | 0.001-10 SOL per trade, 0-target SOL reserves |
 | `verify_curve_tokens_bounded_legacy` | `tokens_out < virtual_token_reserves` (can't mint from thin air) | Legacy pool state space (IVT=107.3T) |
@@ -60,7 +60,7 @@ The proofs cover the **pure arithmetic layer** -- every fee calculation, bonding
 | `verify_ltv_zero_debt` | Zero debt returns 0 LTV | All u64 collateral values |
 | `verify_interest_no_overflow` | Interest calculation doesn't overflow; interest <= principal | Up to 1000 SOL, 2%/epoch, 1 epoch |
 | `verify_liquidation_bonus_increases_seizure` | Liquidation bonus increases collateral seized | 100 SOL pool, up to 50 SOL debt |
-| `verify_per_user_borrow_cap_bounded` | Per-user cap no overflow, `<= max_lendable * 3`, zero collateral → zero cap, full supply → 3x cap | Concrete tier lendable caps (35/70/140 SOL), symbolic collateral up to TOTAL_SUPPLY |
+| `verify_per_user_borrow_cap_bounded` | Per-user cap no overflow, `<= max_lendable * 5`, zero collateral → zero cap, full supply → 5x cap | Concrete tier lendable caps (35/70/140 SOL), symbolic collateral up to TOTAL_SUPPLY |
 
 ### Protocol Rewards (Harnesses 19-20)
 
@@ -86,10 +86,10 @@ These harnesses verify the V26 permissionless migration: SOL wrapping conservati
 | Harness | Property | Input Range |
 |---------|----------|-------------|
 | `verify_sol_wrapping_conservation` | [V26] `bc_debited == wsol_credited`, total lamports conserved (bonding curve SOL → payer WSOL) | 0 to 200 SOL reserves, rent up to 10M lamports |
-| `verify_price_matched_pool_spark` | [V31] Pool ratio matches curve ratio (truncation error < 1 unit) | Spark tier (50 SOL), 3 representative token values |
+| `verify_price_matched_pool_spark` | [V31] Pool ratio matches curve ratio (truncation error < 1 unit) — legacy, SPARK removed from creation in V4.0 | Spark tier (50 SOL), 3 representative token values |
 | `verify_price_matched_pool_flame` | [V31] Pool ratio matches curve ratio (truncation error < 1 unit) | Flame tier (100 SOL), 3 representative token values |
 | `verify_price_matched_pool_torch` | [V31] Pool ratio matches curve ratio (truncation error < 1 unit) | Torch tier (200 SOL), 3 representative token values |
-| `verify_excess_token_burn_conservation` | [V31] `pool_tokens + burned_tokens == vault_total` (no tokens created or lost) | Spark tier, vault up to CURVE_SUPPLY |
+| `verify_excess_token_burn_conservation` | [V31] `pool_tokens + burned_tokens == vault_total` (no tokens created or lost) — legacy SPARK tier | Spark tier, vault up to CURVE_SUPPLY |
 
 ### V31 Zero-Burn Distribution (Harnesses 27-34)
 
@@ -97,11 +97,11 @@ These harnesses verify the V31 token distribution model where IVS = 3*bonding_ta
 
 | Harness | Property | Input Range |
 |---------|----------|-------------|
-| `verify_v31_full_supply_conservation_spark` | `wallets + vote_vault + pool + burned + treasury_lock == TOTAL_SUPPLY` | Spark tier (50 SOL), exact graduation state |
+| `verify_v31_full_supply_conservation_spark` | `wallets + vote_vault + pool + burned + treasury_lock == TOTAL_SUPPLY` — legacy SPARK | Spark tier (50 SOL), exact graduation state |
 | `verify_v31_full_supply_conservation_flame` | Same conservation for Flame tier | Flame tier (100 SOL), exact graduation state |
 | `verify_v31_full_supply_conservation_torch` | Same conservation for Torch tier | Torch tier (200 SOL), exact graduation state |
 | `verify_v31_pool_tokens_positive_and_bounded` | Pool tokens > 0 and <= real_token_reserves at graduation | All tiers, exact graduation state |
-| `verify_v31_zero_excess_burn_spark` | `excess_burned == 0` at graduation (zero-burn migration) | Spark tier, exact graduation state |
+| `verify_v31_zero_excess_burn_spark` | `excess_burned == 0` at graduation (zero-burn migration) — legacy SPARK | Spark tier, exact graduation state |
 | `verify_v31_zero_excess_burn_flame` | `excess_burned == 0` at graduation (zero-burn migration) | Flame tier, exact graduation state |
 | `verify_v31_zero_excess_burn_torch` | `excess_burned == 0` at graduation (zero-burn migration) | Torch tier, exact graduation state |
 
@@ -229,7 +229,7 @@ All 48 harnesses pass. Most complete in under 1 second; the slowest (`verify_tra
 | Constant | Value | Description |
 |----------|-------|-------------|
 | `TOTAL_SUPPLY` | 1,000,000,000,000,000 | 1 billion tokens (6 decimals) |
-| `BONDING_TARGET_SPARK` | 50,000,000,000 | 50 SOL bonding target (Spark tier) |
+| `BONDING_TARGET_SPARK` | 50,000,000,000 | 50 SOL bonding target (legacy — removed from creation in V4.0) |
 | `BONDING_TARGET_FLAME` | 100,000,000,000 | 100 SOL bonding target (Flame tier) |
 | `BONDING_TARGET_TORCH` | 200,000,000,000 | 200 SOL bonding target (Torch tier, default) |
 | `INITIAL_VIRTUAL_SOL` | 30,000,000,000 | 30 SOL initial virtual reserves (legacy) |
@@ -238,17 +238,17 @@ All 48 harnesses pass. Most complete in under 1 second; the slowest (`verify_tra
 | `TREASURY_LOCK_TOKENS` | 300,000,000,000,000 | 300M tokens locked in treasury (30% of supply) |
 | `CURVE_SUPPLY` | 700,000,000,000,000 | 700M tokens for curve + pool (70% of supply) |
 | V27 IVS | `3 * bonding_target / 8` | 18.75 SOL (Spark), 37.5 SOL (Flame), 75 SOL (Torch) |
-| `PROTOCOL_FEE_BPS` | 100 | 1% protocol fee |
+| `PROTOCOL_FEE_BPS` | 50 | [V4.0] 0.5% protocol fee (was 1%) |
 | `TREASURY_FEE_BPS` | 100 | 1% token treasury fee |
-| `TREASURY_SOL_MIN_BPS` | 500 | 5% min treasury SOL rate (flat, all tiers) |
-| `TREASURY_SOL_MAX_BPS` | 2000 | 20% max treasury SOL rate (flat, all tiers) |
+| `TREASURY_SOL_MIN_BPS` | 400 | [V4.0] 4% min treasury SOL rate (was 5%) |
+| `TREASURY_SOL_MAX_BPS` | 1250 | [V4.0] 12.5% max treasury SOL rate (was 20%) |
 | `DEV_WALLET_SHARE_BPS` | 1000 | [V32] 10% of protocol fee to dev (was 25%) |
 | `BURN_RATE_BPS` | 1000 | 10% token burn on buy |
 | `TRANSFER_FEE_BPS` | 4 | [V34] 0.04% Token-2022 transfer fee (was 3 bps, old tokens retain 3) |
 | `DEFAULT_INTEREST_RATE_BPS` | 200 | 2% lending interest per epoch |
 | `DEFAULT_LIQUIDATION_BONUS_BPS` | 1000 | 10% liquidation bonus |
-| `DEFAULT_LENDING_UTILIZATION_CAP_BPS` | 7000 | [V33] 70% max treasury SOL lendable (was 50%) |
-| `BORROW_SHARE_MULTIPLIER` | 3 | Per-user cap: max borrow = 3x collateral's share of lendable pool |
+| `DEFAULT_LENDING_UTILIZATION_CAP_BPS` | 8000 | [V4.0] 80% max treasury SOL lendable (was 70%) |
+| `BORROW_SHARE_MULTIPLIER` | 5 | [V4.0] Per-user cap: max borrow = 5x collateral's share of lendable pool (was 3x) |
 | `RATIO_PRECISION` | 1,000,000,000 | 1e9 ratio scale factor |
 | `DEFAULT_SELL_THRESHOLD_BPS` | 12,000 | 120% -- sell triggers at 20% above baseline |
 | `DEFAULT_SELL_PERCENT_BPS` | 1,500 | 15% of held tokens sold per call |

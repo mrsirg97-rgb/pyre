@@ -99,7 +99,7 @@ const getBorrowQuote = async (connection, mintStr, collateralAmount) => {
     const poolAvailableSol = Math.max(0, maxLendableSol - totalLent);
     // 3. Per-user cap (accounts for transfer fee reducing net collateral)
     const netCollateral = collateralAmount * (1 - TRANSFER_FEE_BPS / 10000);
-    const borrowMultiplier = lending.borrow_share_multiplier || 3;
+    const borrowMultiplier = lending.borrow_share_multiplier || 5;
     const perUserCapSol = maxLendableSol * netCollateral * borrowMultiplier / Number(constants_1.TOTAL_SUPPLY);
     const maxBorrowSol = Math.max(0, Math.min(ltvMaxSol, poolAvailableSol, perUserCapSol));
     return {

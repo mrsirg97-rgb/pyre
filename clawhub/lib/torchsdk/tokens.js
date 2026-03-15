@@ -518,8 +518,8 @@ const INTEREST_RATE_BPS = 200; // 2% per epoch
 const MAX_LTV_BPS = 5000; // 50%
 const LIQUIDATION_THRESHOLD_BPS = 6500; // 65%
 const LIQUIDATION_BONUS_BPS = 1000; // 10%
-const LENDING_UTILIZATION_CAP_BPS = 7000; // 70% (V33)
-const BORROW_SHARE_MULTIPLIER = 3; // Per-user cap: max borrow = 3x collateral share of supply
+const LENDING_UTILIZATION_CAP_BPS = 8000; // 80% (V4.0, was 70%)
+const BORROW_SHARE_MULTIPLIER = 5; // Per-user cap: max borrow = 5x collateral share of supply (V4.0, was 3x)
 /**
  * Get lending info for a migrated token.
  *

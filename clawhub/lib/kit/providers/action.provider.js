@@ -276,9 +276,7 @@ class ActionProvider {
             amount_sol: MICRO_BUY_LAMPORTS,
             message: params.message,
             vault: params.stronghold,
-            vote: params.first_buy
-                ? this.mapper.vote(Math.random() > 0.5 ? 'fortify' : 'scorched_earth')
-                : undefined,
+            vote: params.strategy ? this.mapper.vote(params.strategy) : undefined,
         });
         return this.mapper.buyResult(result);
     }

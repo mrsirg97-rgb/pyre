@@ -100,6 +100,9 @@ const DEFAULT_BLACKLIST = [
   'DkxahcwFnpSTSDpTSzaP8e8fhURXw8wYHes1GqEh9qpy',
   '7P6yWvgX1BdXnMvutt4FJbfhA8gtzwEFaYjfw1fV2zpy',
   '2iSsxTATxv1gu6P85fzMcnqidpiVhCokgUea4vkARFpy',
+  // wave 6 (devnet cleanup — torchsdk v4.0.1)
+  'N7L7myyBVT4Sw7PsKQNqEf2mcwJygbTELqJcD9TkRpy',
+  'BK9HTWwHvz4VSvr16pH2hTzszQmrEs58WEJMR3cucNpy',
 ]
 
 const BLACKLISTED_MINTS = new Set<string>(DEFAULT_BLACKLIST)

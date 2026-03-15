@@ -57,23 +57,28 @@ export const generateFactionIdentity = async (
   if (!llm) return null
 
   const existing = [...existingNames].slice(0, 15).join(', ')
-  const prompt = `You are naming a new faction in Pyre, a faction warfare game on Solana.
+  const prompt = `You are founding a new faction in Pyre, a faction warfare game on Solana. This is YOUR faction — give it a name with real identity and lore.
 
 Your personality: ${personality}
 
 Existing factions (DO NOT reuse these): ${existing || 'none yet'}
 
-Generate a faction name and ticker symbol. The name should be 2-3 words, evocative, and feel like a militant organization, secret society, or political movement. The ticker should be 3-5 uppercase letters that abbreviate or represent the name.
+Create a faction name (2-3 words) and ticker (3-5 uppercase letters). Be creative — factions don't have to be military. They can be cults, research labs, trade guilds, art movements, philosophical orders, space programs, underground networks, meme religions, or anything with a strong identity. The best factions have names people want to join.
+
+Draw from: mythology, science, subcultures, history, fiction, internet culture, philosophy, nature, cosmic horror, cyberpunk, folklore — anything that sparks curiosity. Avoid generic fantasy cliches (no "Shadow", "Dark", "Iron" unless it's clever).
 
 Respond with EXACTLY one line in this format:
 NAME | TICKER
 
 Examples:
-Obsidian Vanguard | OBSD
-Neon Syndicate | NEON
-Crimson Dawn | CRIM
-Void Collective | VOID
-Ash Republic | ASHR
+Serotonin Cartel | SERO
+Kuiper Logistics | KUIP
+The Akashic DAO | AKSH
+Moth Congregation | MOTH
+Bureau of Entropy | ENTR
+Velvet Tribunal | VLVT
+Solarpunk Militia | SLRP
+Deep State Diner | DINE
 
 Your response (one line only):`
 

@@ -93,15 +93,15 @@ const getProgram = (provider) => {
     return new anchor_1.Program(torch_market_json_1.default, provider);
 };
 exports.getProgram = getProgram;
-// [V25] Flat treasury SOL rate: 20% → 5% across all tiers (reverted from V24 tiered fees)
-const TREASURY_SOL_MAX_BPS = 2000; // 20% at start
-const TREASURY_SOL_MIN_BPS = 500; // 5% at completion
+// [V4.0] Flat treasury SOL rate: 12.5% → 4% across all tiers (was 20%→5%)
+const TREASURY_SOL_MAX_BPS = 1250; // 12.5% at start
+const TREASURY_SOL_MIN_BPS = 400; // 4% at completion
 // [V34] Creator SOL share: 0.2% → 1% during bonding (carved from treasury rate)
 const CREATOR_SOL_MIN_BPS = 20; // 0.2% at start
 const CREATOR_SOL_MAX_BPS = 100; // 1% at completion
 // Calculate tokens out for a given SOL amount (V2.3: dynamic treasury rate, V34: creator share)
 const calculateTokensOut = (solAmount, virtualSolReserves, virtualTokenReserves, realSolReserves = BigInt(0), // V2.3: needed for dynamic rate calculation
-protocolFeeBps = 100, // 1% protocol fee (90% protocol treasury, 10% dev)
+protocolFeeBps = 50, // [V4.0] 0.5% protocol fee (was 1%) (90% protocol treasury, 10% dev)
 treasuryFeeBps = 100, // 1% treasury fee
 bondingTarget = BigInt('200000000000')) => {
     // Calculate protocol fee (1%)

@@ -1,14 +1,14 @@
 import { Personality } from './types'
 
 // ─── Personality Weights ────────────────────────────────────────────
-// [join, defect, rally, launch, message, stronghold, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
+// [join, defect, rally, launch, message, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
 
 export const PERSONALITY_WEIGHTS: Record<Personality, number[]> = {
-  loyalist: [0.28, 0.06, 0.14, 0.02, 0.12, 0.06, 0.04, 0.04, 0.02, 0.05, 0.02, 0.1, 0.02, 0.03],
-  mercenary: [0.16, 0.18, 0.04, 0.02, 0.08, 0.04, 0.08, 0.04, 0.06, 0.03, 0.04, 0.03, 0.12, 0.08],
-  provocateur: [0.12, 0.08, 0.04, 0.06, 0.18, 0.05, 0.04, 0.03, 0.04, 0.03, 0.05, 0.04, 0.12, 0.12],
-  scout: [0.18, 0.1, 0.08, 0.02, 0.16, 0.04, 0.04, 0.03, 0.06, 0.04, 0.05, 0.04, 0.08, 0.08],
-  whale: [0.24, 0.14, 0.06, 0.02, 0.06, 0.06, 0.06, 0.04, 0.02, 0.04, 0.04, 0.04, 0.12, 0.06],
+  loyalist: [0.30, 0.06, 0.14, 0.02, 0.12, 0.04, 0.04, 0.02, 0.05, 0.02, 0.12, 0.04, 0.03],
+  mercenary: [0.18, 0.18, 0.04, 0.02, 0.08, 0.08, 0.04, 0.06, 0.03, 0.04, 0.05, 0.12, 0.08],
+  provocateur: [0.14, 0.08, 0.04, 0.06, 0.20, 0.04, 0.03, 0.04, 0.03, 0.05, 0.05, 0.12, 0.12],
+  scout: [0.20, 0.10, 0.08, 0.02, 0.18, 0.04, 0.03, 0.06, 0.04, 0.05, 0.04, 0.08, 0.08],
+  whale: [0.26, 0.14, 0.06, 0.02, 0.08, 0.06, 0.04, 0.02, 0.04, 0.04, 0.06, 0.12, 0.06],
 }
 
 // SOL spend ranges per personality

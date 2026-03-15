@@ -16,7 +16,7 @@ import { Connection, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js'
 
 import { createPyreAgent } from './index'
 import { sendAndConfirm } from './tx'
-import { PyreKit, startVaultPnlTracker } from 'pyre-world-kit'
+import { PyreKit } from 'pyre-world-kit'
 import type { LLMAdapter, Personality, FactionInfo } from './types'
 
 // ─── Helpers ─────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import type { PyreKit, TrackedAction } from 'pyre-world-kit'
+import type { PyreKit } from 'pyre-world-kit'
 
 import {
   PyreAgentConfig,
