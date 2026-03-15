@@ -79,6 +79,11 @@ export const chooseAction = (
     weights[12] = 0
   }
 
+  // Few factions available → strongly boost launch
+  const nonRazedFactions = knownFactions.filter((f) => f.status !== 'razed')
+  if (nonRazedFactions.length <= 2) weights[3] += 0.25
+  else if (nonRazedFactions.length <= 5) weights[3] += 0.10
+
   if (agent.infiltrated?.size > 0) weights[1] += 0.1
 
   // Bearish sentiment on held factions → boost defect
