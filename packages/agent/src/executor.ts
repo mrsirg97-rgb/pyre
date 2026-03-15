@@ -49,8 +49,10 @@ const handlers: Record<string, ActionHandler> = {
       stronghold: vc,
       ascended: faction.status === 'ascended',
     }
+    if (!kit.state.hasVoted(faction.mint)) {
+      params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
+    }
 
-    // First try without strategy vote
     let { result, confirm } = await kit.exec('actions', 'join', params)
     try {
       await sendAndConfirm(kit.connection, agent.keypair, result)
@@ -192,6 +194,9 @@ const handlers: Record<string, ActionHandler> = {
       message: decision.message,
       stronghold: vc,
       ascended: faction.status === 'ascended',
+    }
+    if (!kit.state.hasVoted(faction.mint)) {
+      params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
     }
 
     let { result, confirm } = await kit.exec('actions', 'message', params)
