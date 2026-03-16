@@ -35,6 +35,7 @@ export interface FactionInfo {
   name: string
   symbol: string
   status: 'rising' | 'ready' | 'ascended' | 'razed'
+  price_sol?: number
 }
 
 export interface FactionIntel {

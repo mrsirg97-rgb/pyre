@@ -37,6 +37,9 @@ exports.StateProvider = void 0;
 const web3_js_1 = require("@solana/web3.js");
 const vanity_1 = require("../vanity");
 const util_1 = require("../util");
+// Pre-warm imports — resolved once, cached as module-level promises
+const splTokenImport = Promise.resolve().then(() => __importStar(require('@solana/spl-token')));
+const torchsdkImport = Promise.resolve().then(() => __importStar(require('torchsdk')));
 const EMPTY_COUNTS = {
     join: 0,
     defect: 0,
@@ -60,6 +63,10 @@ class StateProvider {
     _state = null;
     checkpointConfig = null;
     ticksSinceCheckpoint = 0;
+    // Lazy vault — undefined = not resolved, null = resolved to nothing
+    _vaultCreator = undefined;
+    _stronghold = undefined;
+    _vaultPromise = null;
     constructor(connection, registry, publicKey) {
         this.connection = connection;
         this.registry = registry;
@@ -68,90 +75,108 @@ class StateProvider {
     get state() {
         return this._state;
     }
-    get vaultCreator() {
-        return this._state?.vaultCreator ?? null;
-    }
     get initialized() {
         return this._state?.initialized ?? false;
     }
     get tick() {
         return this._state?.tick ?? 0;
     }
-    /** Configure auto-checkpoint behavior */
     setCheckpointConfig(config) {
         this.checkpointConfig = config;
     }
+    async resolveVault() {
+        if (this._vaultCreator !== undefined)
+            return;
+        if (!this._vaultPromise) {
+            this._vaultPromise = (async () => {
+                const { getVaultForWallet } = await torchsdkImport;
+                try {
+                    const vault = await getVaultForWallet(this.connection, this.publicKey);
+                    if (vault) {
+                        this._vaultCreator = vault.creator;
+                        this._stronghold = {
+                            address: vault.address,
+                            creator: vault.creator,
+                            authority: vault.authority,
+                            sol_balance: vault.sol_balance,
+                            total_deposited: vault.total_deposited,
+                            total_withdrawn: vault.total_withdrawn,
+                            total_spent: vault.total_spent,
+                            total_received: vault.total_received,
+                            linked_agents: vault.linked_wallets,
+                            created_at: vault.created_at,
+                        };
+                    }
+                    else {
+                        this._vaultCreator = null;
+                        this._stronghold = null;
+                    }
+                }
+                catch {
+                    this._vaultCreator = null;
+                    this._stronghold = null;
+                }
+                this._vaultPromise = null;
+            })();
+        }
+        return this._vaultPromise;
+    }
+    async getVaultCreator() {
+        await this.resolveVault();
+        return this._vaultCreator ?? null;
+    }
+    async getStronghold() {
+        await this.resolveVault();
+        return this._stronghold ?? null;
+    }
     async init() {
-        if (this._state?.initialized)
-            return this._state;
-        const state = {
-            publicKey: this.publicKey,
-            vaultCreator: null,
-            stronghold: null,
-            tick: 0,
-            actionCounts: { ...EMPTY_COUNTS },
-            holdings: new Map(),
-            activeLoans: new Set(),
-            founded: [],
-            rallied: new Set(),
-            voted: new Set(),
-            sentiment: new Map(),
-            recentHistory: [],
-            personalitySummary: null,
-            totalSolSpent: 0,
-            totalSolReceived: 0,
-            initialized: false,
-        };
-        this._state = state;
-        // resolve vault link
-        const { getVaultForWallet } = await Promise.resolve().then(() => __importStar(require('torchsdk')));
-        try {
-            const vault = await getVaultForWallet(this.connection, this.publicKey);
-            if (vault) {
-                state.vaultCreator = vault.creator;
-                state.stronghold = {
-                    address: vault.address,
-                    creator: vault.creator,
-                    authority: vault.authority,
-                    sol_balance: vault.sol_balance,
-                    total_deposited: vault.total_deposited,
-                    total_withdrawn: vault.total_withdrawn,
-                    total_spent: vault.total_spent,
-                    total_received: vault.total_received,
-                    linked_agents: vault.linked_wallets,
-                    created_at: vault.created_at,
-                };
+        if (!this._state?.initialized) {
+            const state = {
+                publicKey: this.publicKey,
+                tick: 0,
+                actionCounts: { ...EMPTY_COUNTS },
+                activeLoans: new Set(),
+                founded: [],
+                rallied: new Set(),
+                voted: new Set(),
+                sentiment: new Map(),
+                recentHistory: [],
+                personalitySummary: null,
+                totalSolSpent: 0,
+                totalSolReceived: 0,
+                initialized: false,
+            };
+            // Fire vault resolution in background — don't block init
+            this.resolveVault();
+            try {
+                const profile = await this.registry.getProfile(this.publicKey);
+                if (profile) {
+                    state.personalitySummary = profile.personality_summary || null;
+                    state.totalSolSpent = profile.total_sol_spent;
+                    state.totalSolReceived = profile.total_sol_received;
+                    state.actionCounts.join = Math.max(state.actionCounts.join, profile.joins);
+                    state.actionCounts.defect = Math.max(state.actionCounts.defect, profile.defects);
+                    state.actionCounts.rally = Math.max(state.actionCounts.rally, profile.rallies);
+                    state.actionCounts.launch = Math.max(state.actionCounts.launch, profile.launches);
+                    state.actionCounts.message = Math.max(state.actionCounts.message, profile.messages);
+                    state.actionCounts.reinforce = Math.max(state.actionCounts.reinforce, profile.reinforces);
+                    state.actionCounts.fud = Math.max(state.actionCounts.fud, profile.fuds);
+                    state.actionCounts.infiltrate = Math.max(state.actionCounts.infiltrate, profile.infiltrates);
+                    state.actionCounts.war_loan = Math.max(state.actionCounts.war_loan, profile.war_loans);
+                    state.actionCounts.repay_loan = Math.max(state.actionCounts.repay_loan, profile.repay_loans);
+                    state.actionCounts.siege = Math.max(state.actionCounts.siege, profile.sieges);
+                    state.actionCounts.ascend = Math.max(state.actionCounts.ascend, profile.ascends);
+                    state.actionCounts.raze = Math.max(state.actionCounts.raze, profile.razes);
+                    state.actionCounts.tithe = Math.max(state.actionCounts.tithe, profile.tithes);
+                    const totalFromCheckpoint = Object.values(state.actionCounts).reduce((a, b) => a + b, 0);
+                    state.tick = totalFromCheckpoint;
+                }
             }
+            catch { }
+            state.initialized = true;
+            this._state = state;
         }
-        catch { }
-        try {
-            const profile = await this.registry.getProfile(this.publicKey);
-            if (profile) {
-                state.personalitySummary = profile.personality_summary || null;
-                state.totalSolSpent = profile.total_sol_spent;
-                state.totalSolReceived = profile.total_sol_received;
-                state.actionCounts.join = Math.max(state.actionCounts.join, profile.joins);
-                state.actionCounts.defect = Math.max(state.actionCounts.defect, profile.defects);
-                state.actionCounts.rally = Math.max(state.actionCounts.rally, profile.rallies);
-                state.actionCounts.launch = Math.max(state.actionCounts.launch, profile.launches);
-                state.actionCounts.message = Math.max(state.actionCounts.message, profile.messages);
-                state.actionCounts.reinforce = Math.max(state.actionCounts.reinforce, profile.reinforces);
-                state.actionCounts.fud = Math.max(state.actionCounts.fud, profile.fuds);
-                state.actionCounts.infiltrate = Math.max(state.actionCounts.infiltrate, profile.infiltrates);
-                state.actionCounts.war_loan = Math.max(state.actionCounts.war_loan, profile.war_loans);
-                state.actionCounts.repay_loan = Math.max(state.actionCounts.repay_loan, profile.repay_loans);
-                state.actionCounts.siege = Math.max(state.actionCounts.siege, profile.sieges);
-                state.actionCounts.ascend = Math.max(state.actionCounts.ascend, profile.ascends);
-                state.actionCounts.raze = Math.max(state.actionCounts.raze, profile.razes);
-                state.actionCounts.tithe = Math.max(state.actionCounts.tithe, profile.tithes);
-                const totalFromCheckpoint = Object.values(state.actionCounts).reduce((a, b) => a + b, 0);
-                state.tick = totalFromCheckpoint;
-            }
-        }
-        catch { }
-        await this.refreshHoldings();
-        state.initialized = true;
-        return state;
+        return this._state;
     }
     async record(action, mint, description) {
         if (!this._state)
@@ -171,7 +196,6 @@ class StateProvider {
                 this._state.recentHistory = this._state.recentHistory.slice(-20);
             }
         }
-        await this.refreshHoldings();
         if (this.checkpointConfig && this.ticksSinceCheckpoint >= this.checkpointConfig.interval) {
             this.ticksSinceCheckpoint = 0;
             this.onCheckpointDue?.();
@@ -182,15 +206,15 @@ class StateProvider {
             return;
         const current = this._state.sentiment.get(mint) ?? 0;
         const SENTIMENT_DELTAS = {
-            join: 1,
-            reinforce: 1.5,
-            defect: -2,
-            rally: 3,
-            infiltrate: -5,
-            message: 0.5,
-            fud: -1.5,
-            war_loan: 1,
-            launch: 3,
+            join: 0.1,
+            reinforce: 0.15,
+            defect: -0.2,
+            rally: 0.3,
+            infiltrate: -0.5,
+            message: 0.05,
+            fud: -0.15,
+            war_loan: 0.1,
+            launch: 0.3,
         };
         const delta = SENTIMENT_DELTAS[action] ?? 0;
         if (delta !== 0) {
@@ -198,42 +222,37 @@ class StateProvider {
         }
     }
     onCheckpointDue = null;
-    async refreshHoldings() {
-        if (!this._state)
-            return;
-        const { TOKEN_2022_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require('@solana/spl-token')));
+    async getHoldings() {
+        const { TOKEN_2022_PROGRAM_ID } = await splTokenImport;
         const walletPk = new web3_js_1.PublicKey(this.publicKey);
-        let walletValues = [];
-        try {
-            const walletAccounts = await this.connection.getParsedTokenAccountsByOwner(walletPk, {
+        // Parallel scan: wallet + vault
+        const stronghold = await this.getStronghold();
+        const scanWallet = this.connection
+            .getParsedTokenAccountsByOwner(walletPk, { programId: TOKEN_2022_PROGRAM_ID })
+            .then((r) => r.value)
+            .catch(() => []);
+        const scanVault = stronghold
+            ? this.connection
+                .getParsedTokenAccountsByOwner(new web3_js_1.PublicKey(stronghold.address), {
                 programId: TOKEN_2022_PROGRAM_ID,
-            });
-            walletValues = walletAccounts.value;
-        }
-        catch { }
-        let vaultValues = [];
-        if (this._state.stronghold) {
-            try {
-                const vaultPk = new web3_js_1.PublicKey(this._state.stronghold.address);
-                const vaultAccounts = await this.connection.getParsedTokenAccountsByOwner(vaultPk, {
-                    programId: TOKEN_2022_PROGRAM_ID,
-                });
-                vaultValues = vaultAccounts.value;
-            }
-            catch { }
-        }
-        const newHoldings = new Map();
+            })
+                .then((r) => r.value)
+                .catch(() => [])
+            : Promise.resolve([]);
+        const [walletValues, vaultValues] = await Promise.all([scanWallet, scanVault]);
+        const holdings = new Map();
         for (const a of [...walletValues, ...vaultValues]) {
             const mint = a.account.data.parsed.info.mint;
             const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0);
             if (balance > 0 && (0, vanity_1.isPyreMint)(mint) && !(0, util_1.isBlacklistedMint)(mint)) {
-                newHoldings.set(mint, (newHoldings.get(mint) ?? 0) + balance);
+                holdings.set(mint, (holdings.get(mint) ?? 0) + balance);
             }
         }
-        this._state.holdings.clear();
-        for (const [mint, balance] of newHoldings) {
-            this._state.holdings.set(mint, balance);
-        }
+        return holdings;
+    }
+    async getBalance(mint) {
+        const holdings = await this.getHoldings();
+        return holdings.get(mint) ?? 0;
     }
     getSentiment(mint) {
         return this._state?.sentiment.get(mint) ?? 0;
@@ -243,9 +262,6 @@ class StateProvider {
     }
     get history() {
         return this._state?.recentHistory ?? [];
-    }
-    getBalance(mint) {
-        return this._state?.holdings.get(mint) ?? 0;
     }
     hasVoted(mint) {
         return this._state?.voted.has(mint) ?? false;
@@ -260,8 +276,8 @@ class StateProvider {
         this._state?.rallied.add(mint);
     }
     serialize() {
-        if (!this._state) {
-            return {
+        return !this._state
+            ? {
                 publicKey: this.publicKey,
                 vaultCreator: null,
                 tick: 0,
@@ -276,33 +292,32 @@ class StateProvider {
                 personalitySummary: null,
                 totalSolSpent: 0,
                 totalSolReceived: 0,
+            }
+            : {
+                publicKey: this._state.publicKey,
+                vaultCreator: this._vaultCreator ?? null,
+                tick: this._state.tick,
+                actionCounts: { ...this._state.actionCounts },
+                holdings: {},
+                activeLoans: Array.from(this._state.activeLoans),
+                founded: [...this._state.founded],
+                rallied: Array.from(this._state.rallied),
+                voted: Array.from(this._state.voted),
+                sentiment: Object.fromEntries(this._state.sentiment),
+                recentHistory: this._state.recentHistory.slice(-20),
+                personalitySummary: this._state.personalitySummary,
+                totalSolSpent: this._state.totalSolSpent,
+                totalSolReceived: this._state.totalSolReceived,
             };
-        }
-        return {
-            publicKey: this._state.publicKey,
-            vaultCreator: this._state.vaultCreator,
-            tick: this._state.tick,
-            actionCounts: { ...this._state.actionCounts },
-            holdings: Object.fromEntries(this._state.holdings),
-            activeLoans: Array.from(this._state.activeLoans),
-            founded: [...this._state.founded],
-            rallied: Array.from(this._state.rallied),
-            voted: Array.from(this._state.voted),
-            sentiment: Object.fromEntries(this._state.sentiment),
-            recentHistory: this._state.recentHistory.slice(-20),
-            personalitySummary: this._state.personalitySummary,
-            totalSolSpent: this._state.totalSolSpent,
-            totalSolReceived: this._state.totalSolReceived,
-        };
     }
     hydrate(saved) {
+        if (saved.vaultCreator) {
+            this._vaultCreator = saved.vaultCreator;
+        }
         this._state = {
             publicKey: saved.publicKey,
-            vaultCreator: saved.vaultCreator,
-            stronghold: null, // will be resolved on next refreshHoldings or init
             tick: saved.tick,
             actionCounts: { ...EMPTY_COUNTS, ...saved.actionCounts },
-            holdings: new Map(Object.entries(saved.holdings)),
             activeLoans: new Set(saved.activeLoans),
             founded: [...saved.founded],
             rallied: new Set(saved.rallied),

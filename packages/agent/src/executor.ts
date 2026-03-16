@@ -27,13 +27,14 @@ type ActionHandler = (
   llm?: LLMAdapter,
 ) => Promise<string | null>
 
-const vaultCreator = (kit: PyreKit) => kit.state.vaultCreator ?? kit.state.state!.publicKey
+const vaultCreator = async (kit: PyreKit) =>
+  (await kit.state.getVaultCreator()) ?? kit.state.state!.publicKey
 
 const handlers: Record<string, ActionHandler> = {
   async join(kit, agent, factions, decision, log) {
     const faction = findFaction(factions, decision.faction)
     if (!faction) return null
-    const vc = vaultCreator(kit)
+    const vc = await vaultCreator(kit)
     if (!vc) return null
 
     const sol =
@@ -78,10 +79,10 @@ const handlers: Record<string, ActionHandler> = {
   async defect(kit, agent, factions, decision) {
     const faction = findFaction(factions, decision.faction)
     if (!faction) return null
-    const vc = vaultCreator(kit)
+    const vc = await vaultCreator(kit)
     if (!vc) return null
 
-    const balance = kit.state.getBalance(faction.mint)
+    const balance = await kit.state.getBalance(faction.mint)
     if (balance <= 0) return null
 
     const isInfiltrated = agent.infiltrated.has(faction.mint)
@@ -120,7 +121,7 @@ const handlers: Record<string, ActionHandler> = {
       }
     }
 
-    if (kit.state.getBalance(faction.mint) <= 0) agent.infiltrated.delete(faction.mint)
+    if ((await kit.state.getBalance(faction.mint)) <= 0) agent.infiltrated.delete(faction.mint)
 
     const prefix = isInfiltrated ? 'dumped (infiltration complete)' : 'defected from'
     agent.lastAction = `defected ${faction.symbol}`
@@ -185,7 +186,7 @@ const handlers: Record<string, ActionHandler> = {
   async message(kit, agent, factions, decision) {
     const faction = findFaction(factions, decision.faction)
     if (!faction || !decision.message) return null
-    const vc = vaultCreator(kit)
+    const vc = await vaultCreator(kit)
     if (!vc) return null
 
     const params: any = {
@@ -223,10 +224,10 @@ const handlers: Record<string, ActionHandler> = {
   async fud(kit, agent, factions, decision) {
     const faction = findFaction(factions, decision.faction)
     if (!faction || !decision.message) return null
-    const vc = vaultCreator(kit)
+    const vc = await vaultCreator(kit)
     if (!vc) return null
 
-    if (kit.state.getBalance(faction.mint) <= 0) return null
+    if ((await kit.state.getBalance(faction.mint)) <= 0) return null
 
     const params = {
       mint: faction.mint,
@@ -251,7 +252,7 @@ const handlers: Record<string, ActionHandler> = {
       }
     }
 
-    if (kit.state.getBalance(faction.mint) <= 0) {
+    if ((await kit.state.getBalance(faction.mint)) <= 0) {
       agent.infiltrated.delete(faction.mint)
       agent.lastAction = `defected ${faction.symbol}`
       return `fud cleared position in ${faction.symbol} → defected: "${decision.message}"`
@@ -264,7 +265,7 @@ const handlers: Record<string, ActionHandler> = {
   async infiltrate(kit, agent, factions, decision) {
     const faction = findFaction(factions, decision.faction)
     if (!faction) return null
-    const vc = vaultCreator(kit)
+    const vc = await vaultCreator(kit)
     if (!vc) return null
 
     const sol =
@@ -296,7 +297,7 @@ const handlers: Record<string, ActionHandler> = {
     const faction = findFaction(factions, decision.faction)
     if (!faction) return null
 
-    const balance = kit.state.getBalance(faction.mint)
+    const balance = await kit.state.getBalance(faction.mint)
     if (balance <= 0) return null
 
     const collateral = Math.max(1, Math.floor(balance * (0.9 + Math.random() * 0.09)))

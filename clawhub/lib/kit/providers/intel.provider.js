@@ -44,28 +44,28 @@ class IntelProvider {
         this.connection = connection;
         this.actionProvider = actionProvider;
     }
-    async getAgentFactions(wallet, factionLimit = 50) {
+    async getAgentFactions(wallet) {
         const { TOKEN_2022_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require('@solana/spl-token')));
         const walletPk = new web3_js_1.PublicKey(wallet);
-        // Scan wallet token accounts
-        const walletAccounts = await this.connection.getParsedTokenAccountsByOwner(walletPk, {
-            programId: TOKEN_2022_PROGRAM_ID,
-        });
-        // Scan vault token accounts if a vault exists
-        let vaultAccounts = { context: walletAccounts.context, value: [] };
-        try {
-            const vault = await this.actionProvider.getStrongholdForAgent(wallet);
-            if (!vault)
-                throw new Error('no vault');
-            const vaultPk = new web3_js_1.PublicKey(vault.address);
-            vaultAccounts = await this.connection.getParsedTokenAccountsByOwner(vaultPk, {
+        // Parallel scan: wallet + vault
+        const vaultPromise = this.actionProvider.getStrongholdForAgent(wallet).catch(() => undefined);
+        const scanWallet = this.connection
+            .getParsedTokenAccountsByOwner(walletPk, { programId: TOKEN_2022_PROGRAM_ID })
+            .then((r) => r.value)
+            .catch(() => []);
+        const vault = await vaultPromise;
+        const scanVault = vault
+            ? this.connection
+                .getParsedTokenAccountsByOwner(new web3_js_1.PublicKey(vault.address), {
                 programId: TOKEN_2022_PROGRAM_ID,
-            });
-        }
-        catch { }
-        // Merge balances from both sources (wallet + vault)
+            })
+                .then((r) => r.value)
+                .catch(() => [])
+            : Promise.resolve([]);
+        const [walletValues, vaultValues] = await Promise.all([scanWallet, scanVault]);
+        // Merge balances from both sources
         const balanceMap = new Map();
-        for (const a of [...walletAccounts.value, ...vaultAccounts.value]) {
+        for (const a of [...walletValues, ...vaultValues]) {
             const mint = a.account.data.parsed.info.mint;
             const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0);
             if (balance > 0 && (0, vanity_1.isPyreMint)(mint) && !(0, util_1.isBlacklistedMint)(mint)) {
@@ -74,27 +74,150 @@ class IntelProvider {
         }
         if (balanceMap.size === 0)
             return [];
-        // Fetch faction metadata for held mints
-        const allFactions = await this.actionProvider.getFactions({ limit: factionLimit });
-        const factionMap = new Map(allFactions.factions.map((t) => [t.mint, t]));
+        // Per-mint faction lookups (parallel)
         const positions = [];
-        for (const [mint, balance] of balanceMap) {
-            const faction = factionMap.get(mint);
-            if (!faction)
-                continue;
-            // balance / 1B total supply
-            const percentage = (balance / 1_000_000_000) * 100;
-            positions.push({
-                mint,
-                name: faction.name,
-                symbol: faction.symbol,
-                balance,
-                percentage,
-                value_sol: balance * faction.price_sol,
-            });
-        }
+        await Promise.all([...balanceMap.entries()].map(async ([mint, balance]) => {
+            try {
+                const faction = await this.actionProvider.getFaction(mint);
+                const percentage = (balance / 1_000_000_000) * 100;
+                positions.push({
+                    mint,
+                    name: faction.name,
+                    symbol: faction.symbol,
+                    balance,
+                    percentage,
+                    value_sol: balance * faction.price_sol,
+                });
+            }
+            catch { }
+        }));
         positions.sort((a, b) => b.value_sol - a.value_sol);
         return positions;
+    }
+    async getRisingFactions(limit = 50) {
+        return this.actionProvider.getFactions({ limit, status: 'rising' });
+    }
+    async getAscendedFactions(limit = 50) {
+        return this.actionProvider.getFactions({ limit, status: 'ascended' });
+    }
+    async getNearbyFactions(wallet, { depth = 1, limit = 50 } = {}) {
+        const { TOKEN_2022_PROGRAM_ID } = await Promise.resolve().then(() => __importStar(require('@solana/spl-token')));
+        // Resolve wallet → vault (tokens live in vaults, not wallets)
+        let seedAddress = wallet;
+        try {
+            const vault = await this.actionProvider.getStrongholdForAgent(wallet);
+            if (vault)
+                seedAddress = vault.address;
+        }
+        catch { }
+        const discoveredMints = new Set();
+        const factionCache = new Map();
+        const visitedAddresses = new Set([wallet, seedAddress]);
+        /** Scan an address (wallet or vault) for Pyre token holdings */
+        const scanHoldings = async (address) => {
+            const mints = [];
+            try {
+                const accounts = await this.connection.getParsedTokenAccountsByOwner(new web3_js_1.PublicKey(address), { programId: TOKEN_2022_PROGRAM_ID });
+                for (const a of accounts.value) {
+                    const mint = a.account.data.parsed.info.mint;
+                    const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0);
+                    if (balance > 0 && (0, vanity_1.isPyreMint)(mint) && !(0, util_1.isBlacklistedMint)(mint)) {
+                        mints.push(mint);
+                    }
+                }
+            }
+            catch { }
+            return mints;
+        };
+        /** Look up faction metadata, skip if already cached */
+        const resolveFaction = async (mint) => {
+            if (factionCache.has(mint))
+                return;
+            try {
+                const detail = await this.actionProvider.getFaction(mint);
+                factionCache.set(mint, {
+                    mint: detail.mint,
+                    name: detail.name,
+                    symbol: detail.symbol,
+                    status: detail.status,
+                    market_cap_sol: detail.market_cap_sol,
+                    price_sol: detail.price_sol,
+                    members: detail.members ?? 0,
+                    progress_percent: detail.progress_percent,
+                    created_at: detail.created_at,
+                    last_activity_at: detail.last_activity_at,
+                });
+            }
+            catch { }
+        };
+        // Seed: scan own vault for held factions
+        const seedMints = await scanHoldings(seedAddress);
+        for (const m of seedMints)
+            discoveredMints.add(m);
+        if (discoveredMints.size === 0) {
+            const fallback = await this.actionProvider.getFactions({ limit, sort: 'newest' });
+            return { ...fallback, allies: [] };
+        }
+        // BFS across the social graph via comms — senders are wallet addresses
+        const COMMS_PER_FACTION = 20;
+        const MAX_WALLETS_PER_HOP = 20;
+        const discoveredAllies = [];
+        let frontierMints = new Set(discoveredMints);
+        for (let d = 0; d < depth; d++) {
+            // 1. Get recent comms senders from frontier factions → next frontier wallets
+            const nextFrontier = new Set();
+            await Promise.all([...frontierMints].slice(0, 10).map(async (mint) => {
+                try {
+                    const { comms } = await this.actionProvider.getComms(mint, { limit: COMMS_PER_FACTION });
+                    for (const c of comms) {
+                        if (!visitedAddresses.has(c.sender)) {
+                            nextFrontier.add(c.sender);
+                            visitedAddresses.add(c.sender);
+                            discoveredAllies.push(c.sender);
+                        }
+                    }
+                }
+                catch { }
+            }));
+            if (nextFrontier.size === 0)
+                break;
+            // 2. Resolve wallets → vaults, scan for holdings → discover new mints
+            const newMints = new Set();
+            await Promise.all([...nextFrontier].slice(0, MAX_WALLETS_PER_HOP).map(async (walletAddr) => {
+                // Resolve to vault — tokens live there
+                let scanAddr = walletAddr;
+                try {
+                    const v = await this.actionProvider.getStrongholdForAgent(walletAddr);
+                    if (v)
+                        scanAddr = v.address;
+                }
+                catch { }
+                const mints = await scanHoldings(scanAddr);
+                for (const mint of mints) {
+                    if (!discoveredMints.has(mint)) {
+                        newMints.add(mint);
+                        discoveredMints.add(mint);
+                    }
+                }
+            }));
+            // New mints become the frontier for the next depth level
+            frontierMints = newMints;
+            if (frontierMints.size === 0)
+                break;
+        }
+        // Resolve faction metadata per mint (parallel, cached)
+        await Promise.all([...discoveredMints].map(resolveFaction));
+        const nearbyFactions = [...discoveredMints]
+            .map((mint) => factionCache.get(mint))
+            .filter((f) => f != null)
+            .slice(0, limit);
+        return {
+            factions: nearbyFactions,
+            allies: discoveredAllies,
+            total: nearbyFactions.length,
+            limit,
+            offset: 0,
+        };
     }
     async getAgentProfile(wallet) {
         const vault = await this.actionProvider.getStrongholdForAgent(wallet);

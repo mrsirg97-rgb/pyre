@@ -335,6 +335,62 @@ async function swarm() {
         nextTick: Date.now() + randRange(0, max), // stagger initial ticks
       })
 
+      // Wire up on-chain checkpointing
+      const CHECKPOINT_EVERY = 20
+      kit.setCheckpointConfig({ interval: CHECKPOINT_EVERY })
+      kit.onCheckpointDue = async () => {
+        try {
+          const gameState = kit.state.state!
+          const counts = gameState.actionCounts
+          let summary = personality as string
+
+          // Try to generate a personality bio via LLM
+          if (LLM_ENABLED && llmAvailable) {
+            try {
+              const topActions = Object.entries(counts)
+                .filter(([, v]) => v > 0)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 4)
+                .map(([n, v]) => `${n}:${v}`)
+                .join(', ')
+              const bioPrompt = `Write a 1-2 sentence first-person bio for an autonomous agent in a faction warfare game. Write as if the agent is introducing themselves. Use "I" and "my". Do NOT invent a name. Do NOT mention specific faction names or tickers — keep it general about who you are and how you play.\n\nPersonality archetype: ${personality}\nTop actions: ${topActions}\n\nBio (max 200 chars, no quotes, first person "I am...", do NOT use a name, do NOT reference specific factions):`
+              const bio = await ollamaGenerate(bioPrompt)
+              if (bio) {
+                const buf = Buffer.from(bio.replace(/^["']+|["']+$/g, ''), 'utf8')
+                summary = buf.length <= 256 ? bio.replace(/^["']+|["']+$/g, '') : buf.subarray(0, 256).toString('utf8').replace(/\uFFFD$/, '')
+              }
+            } catch {}
+          }
+
+          const cpResult = await kit.registry.checkpoint({
+            signer: pubkey,
+            creator: pubkey,
+            joins: counts.join,
+            defects: counts.defect,
+            rallies: counts.rally,
+            launches: counts.launch,
+            messages: counts.message,
+            fuds: counts.fud,
+            infiltrates: counts.infiltrate,
+            reinforces: counts.reinforce,
+            war_loans: counts.war_loan,
+            repay_loans: counts.repay_loan,
+            sieges: counts.siege,
+            ascends: counts.ascend,
+            razes: counts.raze,
+            tithes: counts.tithe,
+            personality_summary: summary,
+            total_sol_spent: gameState.totalSolSpent,
+            total_sol_received: gameState.totalSolReceived,
+          })
+          await sendAndConfirm(kit.connection, kp, cpResult)
+          const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
+          log(pubkey.slice(0, 8), `checkpointed (tick ${kit.state.tick}, P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(3)} SOL)`)
+        } catch (e: any) {
+          log(pubkey.slice(0, 8), `checkpoint failed: ${e.message?.slice(0, 60)}`)
+        }
+      }
+
       log(pubkey.slice(0, 8), `${personality} — tick ${kit.state.tick}`)
     } catch (err: any) {
       log(pubkey.slice(0, 8), `init failed: ${err.message?.slice(0, 60)}`)

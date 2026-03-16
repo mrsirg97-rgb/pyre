@@ -74,11 +74,12 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     lastAction: prior?.lastAction ?? 'none',
   }
 
-  // Initialize kit state (resolves vault, loads holdings + registry checkpoint)
+  // Initialize kit state (loads registry checkpoint)
   if (!kit.state.initialized) {
     const gameState = await kit.state.init()
+    const vc = await kit.state.getVaultCreator()
     logger(
-      `[${publicKey.slice(0, 8)}] state initialized — vault: ${gameState.vaultCreator?.slice(0, 8) ?? 'none'}, tick: ${gameState.tick}`,
+      `[${publicKey.slice(0, 8)}] state initialized — vault: ${vc?.slice(0, 8) ?? 'none'}, tick: ${gameState.tick}`,
     )
 
     // Restore personality from on-chain checkpoint if available
@@ -162,11 +163,13 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     // Fallback: weighted random
     if (!decision) {
       const gameState = kit.state.state!
+      const holdings = await kit.state.getHoldings()
+      const hasStronghold = (await kit.state.getVaultCreator()) !== null
       const canRally = activeFactions.some((f) => !gameState.rallied.has(f.mint))
       const compatState = {
         ...state,
-        holdings: gameState.holdings,
-        hasStronghold: gameState.vaultCreator !== null,
+        holdings,
+        hasStronghold,
         activeLoans: gameState.activeLoans,
         sentiment: gameState.sentiment,
         voted: gameState.voted,
@@ -190,7 +193,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
       } else if (action === 'message' || action === 'fud') {
         return { action, success: false, error: 'no LLM for message', usedLLM: false }
       } else if (action === 'defect') {
-        const held = [...gameState.holdings.entries()].filter(([, b]) => b > 0)
+        const held = [...holdings.entries()].filter(([, b]) => b > 0)
         if (held.length === 0)
           return { action, success: false, error: 'no holdings', usedLLM: false }
         const infiltratedHeld = held.filter(([m]) => state.infiltrated.has(m))
@@ -202,7 +205,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
           return { action, success: false, error: 'nothing to rally', usedLLM: false }
         decision.faction = pick(eligible).mint
       } else if (action === 'war_loan') {
-        const held = [...gameState.holdings.entries()].filter(([, b]) => b > 0)
+        const held = [...holdings.entries()].filter(([, b]) => b > 0)
         const heldAscended = held.filter(
           ([mint]) => activeFactions.find((f) => f.mint === mint)?.status === 'ascended',
         )
@@ -238,7 +241,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
         const bearish = activeFactions.filter((f) => kit.state.getSentiment(f.mint) < -2)
         decision.faction = (bearish.length > 0 ? pick(bearish) : pick(activeFactions)).mint
       } else if (action === 'infiltrate') {
-        const heldMints = [...gameState.holdings.keys()]
+        const heldMints = [...holdings.keys()]
         const rivals = activeFactions.filter((f) => !heldMints.includes(f.mint))
         if (rivals.length === 0)
           return { action, success: false, error: 'no rival factions', usedLLM: false }

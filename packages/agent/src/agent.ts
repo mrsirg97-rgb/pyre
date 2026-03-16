@@ -7,37 +7,66 @@ import { fetchFactionIntel, generateDynamicExamples } from './faction'
 // Store scout results to show on the next turn
 export const pendingScoutResults = new Map<string, string[]>()
 
+export interface FactionContext {
+  rising: FactionInfo[]
+  ascended: FactionInfo[]
+  nearby: FactionInfo[]
+  all: FactionInfo[] // deduplicated union for symbol resolution
+}
+
 export const buildAgentPrompt = (
   kit: PyreKit,
   agent: AgentState,
-  factions: FactionInfo[],
+  factionCtx: FactionContext,
   intelSnippet: string,
   recentMessages: string[],
   solRange?: [number, number],
+  holdings?: Map<string, number>,
 ): string => {
   const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
   const gameState = kit.state.state!
-  const holdingsEntries = [...gameState.holdings.entries()]
+  const factions = factionCtx.all
+  const holdingsEntries = [...(holdings ?? new Map()).entries()]
   const symbolCounts = new Map<string, number>()
   for (const [mint] of holdingsEntries) {
     const f = factions.find((ff) => ff.mint === mint)
     if (f) symbolCounts.set(f.symbol, (symbolCounts.get(f.symbol) ?? 0) + 1)
   }
 
-  const factionList = factions
-    .slice(0, 10)
-    .map((f) => f.symbol)
-    .join(', ')
+  const risingList = factionCtx.rising.slice(0, 5).map((f) => f.symbol).join(', ') || 'none'
+  const ascendedList = factionCtx.ascended.slice(0, 5).map((f) => f.symbol).join(', ') || 'none'
+  const nearbyList = factionCtx.nearby.slice(0, 10).map((f) => f.symbol).join(', ') || 'none'
+  const factionList = factions.slice(0, 15).map((f) => f.symbol).join(', ')
+  // Compute per-position value and approximate cost basis
+  let totalHoldingsValue = 0
+  const positionValues: { label: string; valueSol: number; mint: string }[] = []
+  for (const [mint, bal] of holdingsEntries) {
+    const f = factions.find((ff) => ff.mint === mint)
+    if (!f) continue
+    const label =
+      (symbolCounts.get(f.symbol) ?? 0) > 1 ? `${f.symbol}(${mint.slice(0, 6)})` : f.symbol
+    const valueSol = bal * (f.price_sol ?? 0)
+    totalHoldingsValue += valueSol
+    positionValues.push({ label, valueSol, mint })
+  }
+
+  // Approximate cost basis: distribute net SOL invested across positions by token balance ratio
+  const netInvested = (gameState.totalSolSpent - gameState.totalSolReceived) / 1e9
+  const totalTokens = holdingsEntries.reduce((sum, [, bal]) => sum + bal, 0)
   const holdingsList =
-    holdingsEntries
-      .map(([mint, bal]) => {
-        const f = factions.find((ff) => ff.mint === mint)
-        if (!f) return `${mint.slice(0, 8)}: ${bal} tokens`
-        const label =
-          (symbolCounts.get(f.symbol) ?? 0) > 1 ? `${f.symbol}(${mint.slice(0, 6)})` : f.symbol
-        return `${label}: ${bal} tokens`
+    positionValues
+      .map(({ label, valueSol, mint }) => {
+        const bal = holdings?.get(mint) ?? 0
+        if (totalTokens > 0 && netInvested > 0) {
+          const estCost = netInvested * (bal / totalTokens)
+          const positionPnl = valueSol - estCost
+          return `${label}: ${valueSol.toFixed(4)} SOL (${positionPnl >= 0 ? '+' : ''}${positionPnl.toFixed(4)})`
+        }
+        return `${label}: ${valueSol.toFixed(4)} SOL`
       })
       .join(', ') || 'none'
+  const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
+  const unrealizedPnl = totalHoldingsValue + pnl
   const sentimentList =
     [...kit.state.sentimentMap]
       .map(([mint, score]) => {
@@ -130,7 +159,7 @@ ACTIONS (pick exactly one — actions with "message" let you talk in comms at th
 - TITHE SYMBOL — harvest fees into the faction war chest. Enables larger war loans (ascended only, no message).
 - ASCEND SYMBOL — promote a ready faction to ascended. Unlocks lending (no message).
 - RAZE SYMBOL — reclaim an inactive rising faction (no message).
-- LAUNCH "name" — create a new faction. High risk, high reward (no message).
+- LAUNCH "name" — create a new faction (no message).
 
 WHO YOU ARE:
 You are "${agent.publicKey.slice(0, 8)}" - this is your abbreviated wallet address
@@ -140,10 +169,11 @@ ${memoryBlock}
 
 YOUR STATS:
 Holdings: ${holdingsList}
+Portfolio Value: ${totalHoldingsValue.toFixed(4)} SOL
+P&L (realized): ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
+P&L (with holdings): ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(4)} SOL
 Sentiment: ${sentimentList}
-Spend Limit: min ${minSol} | max ${maxSol}
-Total Sol Spent: ${gameState.totalSolSpent}
-Total Sol Received: ${gameState.totalSolReceived}
+Spend per action: min ${minSol} | max ${maxSol} SOL
 Active loans: ${
     gameState.activeLoans.size > 0
       ? [...gameState.activeLoans]
@@ -154,10 +184,23 @@ Active loans: ${
           .join(', ')
       : 'none'
   }
+Founded: ${
+    gameState.founded.length > 0
+      ? gameState.founded
+          .map((m) => {
+            const f = factions.find((ff) => ff.mint === m)
+            return f?.symbol ?? m.slice(0, 8)
+          })
+          .join(', ')
+      : 'none'
+  }
 Allies: ${allyList} | Rivals: ${rivalList}
 
-GLOBAL STATS:
-Active factions: ${factionList}
+FACTIONS:
+Rising (bonding curve): ${risingList}
+Ascended (on DEX): ${ascendedList}
+Nearby (your social graph): ${nearbyList}
+All known: ${factionList}
 Intel preview: ${intelSnippet}
 
 EXAMPLES:
@@ -165,7 +208,7 @@ ${generateDynamicExamples(factions, agent, kit)}
 ${doNotRepeat}
 
 VOICE:
-- Always speak in first person ("I", "my", "me"). Never refer to yourself in third person.
+- Always speak in first person ("I", "my", "me"). Never refer to yourself (or your wallet address) in third person.
 - Match your message to your action — bullish on JOIN, trash talk on DEFECT.
 - Be specific: reference real agents, real numbers, real moves. Generic is boring.
 - Vary your tone — questions, statements, jokes, call-outs. Sound human, not robotic.
@@ -176,9 +219,14 @@ STRATEGY:
 - MESSAGE and FUD are your most powerful tools — they cost almost nothing (micro buy/sell) but move sentiment. Use them constantly to hype, coordinate, trash talk, and reply to other agents. FUD requires holding the faction.
 - Prefer actions that trade AND talk (JOIN, DEFECT, REINFORCE, INFILTRATE).
 - If you already hold a faction, REINFORCE or MESSAGE it — don't JOIN the same symbol again.
-- LAUNCH creates a brand new faction with a unique name — be creative. Pick a name that stands out (cults, labs, cartels, movements, councils, syndicates — anything with personality).
-- If there are few active factions, seriously consider LAUNCH. The world needs more factions.
-- Always track your SOL spent vs received. Receive more than you spend.${factions.length <= 3 ? '\n- ⚠ VERY FEW FACTIONS ACTIVE. You should strongly consider LAUNCH to create a new one.' : ''}
+- If you FOUNDED a faction, promote it aggressively. JOIN it first, then MESSAGE and REINFORCE to build momentum. Your faction's success is your success — founders who abandon their factions lose credibility.
+- LAUNCH only when the world genuinely needs more factions. Don't launch if there are already many active factions — join and build existing ones instead.${factions.length <= 2 ? '\n- ⚠ Very few factions active. Consider LAUNCH to create one.' : ''}
+- Track your P&L. If your realized P&L is negative, be conservative — smaller positions, safer factions. If positive, you can afford to be aggressive.
+- Take profits on holdings that have grown significantly in value. DEFECT partially from positions worth much more than you paid — locking in gains is how you win long-term.
+- Don't hold losing positions forever. If a faction is dying (bearish sentiment, no activity), cut your losses early with DEFECT.
+- Spread risk — don't put everything into one faction. Diversify across 2-4 factions so one bad faction doesn't wipe you out.
+- WAR_LOAN is leverage — high reward but you WILL be liquidated (SIEGE) if the faction drops. Only borrow against your strongest, most stable positions.
+- This is real SOL. Every action costs money. Don't trade just to trade — have a reason.
 
 FORMAT: ACTION SYMBOL "message" (or ACTION SYMBOL if no message). One line only.
 
@@ -191,17 +239,18 @@ Your response:`
 function resolveFaction(
   symbolLower: string | undefined,
   factions: FactionInfo[],
+  holdings: Map<string, number>,
   kit: PyreKit,
   action: string,
 ): FactionInfo | undefined {
+  const gameState = kit.state.state!
   if (!symbolLower) return undefined
   const matches = factions.filter((f) => f.symbol.toLowerCase() === symbolLower)
   if (matches.length === 0) return undefined
   if (matches.length === 1) return matches[0]
 
-  const gameState = kit.state.state!
-  const held = matches.filter((f) => gameState.holdings.has(f.mint))
-  const notHeld = matches.filter((f) => !gameState.holdings.has(f.mint))
+  const held = matches.filter((f) => holdings.has(f.mint))
+  const notHeld = matches.filter((f) => !holdings.has(f.mint))
 
   if (
     action === 'defect' ||
@@ -235,6 +284,7 @@ function parseLLMDecision(
   factions: FactionInfo[],
   kit: PyreKit,
   agent: AgentState,
+  holdings: Map<string, number>,
   solRange?: [number, number],
 ): LLMDecision | null {
   const lines = raw.split('\n').filter((l) => l.trim().length > 0)
@@ -305,7 +355,7 @@ function parseLLMDecision(
       /^(JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|INFILTRATE|FUD)\s*(?:"([^"]+)"|(\S+))?(?:\s+"([^"]*)")?/i,
     )
     if (match) {
-      const result = parseLLMMatch(match, factions, kit, agent, line, solRange)
+      const result = parseLLMMatch(match, factions, kit, agent, holdings, line, solRange)
       if (result?._rejected) {
         lastRejection = result._rejected
         continue
@@ -318,6 +368,7 @@ function parseLLMDecision(
     const bareFaction = resolveFaction(
       factions.find((f) => bareUpper.startsWith(f.symbol.toUpperCase()))?.symbol.toLowerCase(),
       factions,
+      holdings,
       kit,
       'message',
     )
@@ -344,6 +395,7 @@ function parseLLMMatch(
   factions: FactionInfo[],
   kit: PyreKit,
   agent: AgentState,
+  holdings: Map<string, number>,
   line: string,
   solRange?: [number, number],
 ): LLMDecision | null {
@@ -370,7 +422,7 @@ function parseLLMMatch(
 
   const cleanTarget = target?.replace(/^[<\[]+|[>\]]+$/g, '')
   const targetLower = cleanTarget?.toLowerCase()
-  let faction = resolveFaction(targetLower, factions, kit, action)
+  let faction = resolveFaction(targetLower, factions, holdings, kit, action)
   if (!faction && targetLower && targetLower.length >= 2) {
     const prefixMatches = factions.filter(
       (f) =>
@@ -378,7 +430,13 @@ function parseLLMMatch(
         targetLower.startsWith(f.symbol.toLowerCase()),
     )
     if (prefixMatches.length > 0)
-      faction = resolveFaction(prefixMatches[0].symbol.toLowerCase(), factions, kit, action)
+      faction = resolveFaction(
+        prefixMatches[0].symbol.toLowerCase(),
+        factions,
+        holdings,
+        kit,
+        action,
+      )
     if (!faction) {
       const stripped = targetLower.replace(/[aeiou]/g, '')
       const vowelMatch = factions.find(
@@ -392,7 +450,7 @@ function parseLLMMatch(
   const sym = faction?.symbol ?? target ?? '?'
   if (action === 'defect' && !faction)
     return { _rejected: `defect rejected: unknown faction "${sym}"` } as any
-  if (action === 'defect' && faction && !gameState.holdings.has(faction.mint))
+  if (action === 'defect' && faction && !holdings.has(faction.mint))
     return { _rejected: `defect rejected: no holdings in ${sym}` } as any
   if (action === 'rally' && !faction)
     return { _rejected: `rally rejected: unknown faction "${sym}"` } as any
@@ -404,7 +462,7 @@ function parseLLMMatch(
     return { _rejected: `message rejected: no message text for ${sym}` } as any
   if (action === 'war_loan' && !faction)
     return { _rejected: `war_loan rejected: unknown faction "${sym}"` } as any
-  if (action === 'war_loan' && faction && !gameState.holdings.has(faction.mint))
+  if (action === 'war_loan' && faction && !holdings.has(faction.mint))
     return { _rejected: `war_loan rejected: no holdings in ${sym}` } as any
   if (action === 'war_loan' && faction && faction.status !== 'ascended')
     return { _rejected: `war_loan rejected: ${sym} not ascended` } as any
@@ -416,7 +474,7 @@ function parseLLMMatch(
     return { _rejected: `${action} rejected: unknown faction "${sym}"` } as any
   if (action === 'infiltrate' && !faction)
     return { _rejected: `infiltrate rejected: unknown faction "${sym}"` } as any
-  if (action === 'fud' && faction && !gameState.holdings.has(faction.mint)) {
+  if (action === 'fud' && faction && !holdings.has(faction.mint)) {
     return { action: 'message', faction: faction.mint, message, reasoning: line }
   }
   if (action === 'fud' && !faction)
@@ -437,11 +495,9 @@ export async function llmDecide(
   log: (msg: string) => void,
   solRange?: [number, number],
 ): Promise<LLMDecision | null> {
-  const gameState = kit.state.state!
-
-  // Refresh holdings from kit state
-  await kit.state.refreshHoldings()
-  const holdingSummary = [...gameState.holdings.entries()]
+  // Fetch holdings fresh from chain
+  const holdings = await kit.state.getHoldings()
+  const holdingSummary = [...holdings.entries()]
     .map(([m, b]) => {
       const f = factions.find((ff) => ff.mint === m)
       return `${f?.symbol ?? m.slice(0, 8)}:${b}`
@@ -449,28 +505,45 @@ export async function llmDecide(
     .join(', ')
   log(`[${agent.publicKey.slice(0, 8)}] holdings: ${holdingSummary || 'none'}`)
 
-  let leaderboardSnippet = ''
-  try {
-    const lb = await kit.intel.getFactionLeaderboard({ limit: 5 })
-    if (lb.length > 0) {
-      leaderboardSnippet =
-        'LEADERBOARD:\n' +
-        lb
-          .map(
-            (f, i) =>
-              `  ${i + 1}. [${f.symbol}] ${f.name} — power: ${f.score.toFixed(1)}, members: ${f.members}`,
-          )
-          .join('\n')
+  // Fetch faction context: rising, ascended, nearby (parallel)
+  const [risingResult, ascendedResult, nearbyResult] = await Promise.all([
+    kit.intel.getRisingFactions(5).catch(() => ({ factions: [] })),
+    kit.intel.getAscendedFactions(5).catch(() => ({ factions: [] })),
+    kit.intel.getNearbyFactions(agent.publicKey, { depth: 1, limit: 10 }).catch(() => ({
+      factions: [],
+      allies: [] as string[],
+    })),
+  ])
+
+  // Update allies from social graph discovery
+  if ('allies' in nearbyResult) {
+    for (const ally of nearbyResult.allies) {
+      if (ally !== agent.publicKey) agent.allies.add(ally)
     }
-  } catch {
-    leaderboardSnippet = '(leaderboard unavailable)'
+  }
+
+  // Deduplicate into a single faction list for symbol resolution
+  const seenMints = new Set<string>()
+  const allFactions: FactionInfo[] = []
+  for (const f of [...factions, ...risingResult.factions, ...ascendedResult.factions, ...nearbyResult.factions]) {
+    if (!seenMints.has(f.mint)) {
+      seenMints.add(f.mint)
+      allFactions.push(f)
+    }
+  }
+
+  const factionCtx: FactionContext = {
+    rising: risingResult.factions as FactionInfo[],
+    ascended: ascendedResult.factions as FactionInfo[],
+    nearby: nearbyResult.factions as FactionInfo[],
+    all: allFactions,
   }
 
   let intelSnippet = ''
   try {
-    const heldMints = [...gameState.holdings.keys()]
-    const heldFactions = factions.filter((f) => heldMints.includes(f.mint))
-    const otherFactions = factions.filter((f) => !heldMints.includes(f.mint))
+    const heldMints = [...holdings.keys()]
+    const heldFactions = allFactions.filter((f) => heldMints.includes(f.mint))
+    const otherFactions = allFactions.filter((f) => !heldMints.includes(f.mint))
     const toScout = [
       ...heldFactions.slice(0, 2),
       ...(otherFactions.length > 0 ? [pick(otherFactions)] : []),
@@ -496,25 +569,6 @@ export async function llmDecide(
         return `  [${intel.symbol}] ${memberInfo} | recent comms: ${commsInfo}`
       })
       intelSnippet = 'FACTION INTEL:\n' + lines.join('\n')
-
-      // Update allies/rivals based on comms
-      for (const intel of intels) {
-        const faction = toScout.find((f) => f.symbol === intel.symbol)
-        if (!faction) continue
-        for (const c of intel.recentComms) {
-          if (c.sender === agent.publicKey) continue
-          const text = c.memo.toLowerCase()
-          const positive = /strong|rally|bull|pump|rising|hold|loyal|power|growing|moon/
-          const negative = /weak|dump|bear|dead|fail|raze|crash|abandon|scam|rug/
-          if (heldMints.includes(faction.mint)) {
-            if (positive.test(text)) agent.allies.add(c.sender)
-            if (negative.test(text)) {
-              agent.rivals.add(c.sender)
-              agent.allies.delete(c.sender)
-            }
-          }
-        }
-      }
     }
   } catch {}
 
@@ -526,14 +580,14 @@ export async function llmDecide(
     pendingScoutResults.delete(agent.publicKey)
   }
 
-  gameState.totalSolSpent
   const prompt = buildAgentPrompt(
     kit,
     agent,
-    factions,
+    factionCtx,
     intelSnippet + scoutSnippet,
     recentMessages,
     solRange,
+    holdings,
   )
 
   const raw = await llm.generate(prompt)
@@ -542,7 +596,7 @@ export async function llmDecide(
     return null
   }
 
-  const result = parseLLMDecision(raw, factions, kit, agent, solRange)
+  const result = parseLLMDecision(raw, allFactions, kit, agent, holdings, solRange)
   if (!result) {
     log(`[${agent.publicKey.slice(0, 8)}] LLM parse fail: "${raw.slice(0, 100)}"`)
     return null

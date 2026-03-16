@@ -3,29 +3,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RegistryProvider = exports.REGISTRY_PROGRAM_ID = void 0;
-exports.getAgentProfilePda = getAgentProfilePda;
-exports.getAgentWalletLinkPda = getAgentWalletLinkPda;
+exports.RegistryProvider = exports.getAgentWalletLinkPda = exports.getAgentProfilePda = exports.REGISTRY_PROGRAM_ID = void 0;
 const web3_js_1 = require("@solana/web3.js");
 const anchor_1 = require("@coral-xyz/anchor");
 const pyre_world_json_1 = __importDefault(require("../pyre_world.json"));
 exports.REGISTRY_PROGRAM_ID = new web3_js_1.PublicKey(pyre_world_json_1.default.address);
 const AGENT_SEED = 'pyre_agent';
 const AGENT_WALLET_SEED = 'pyre_agent_wallet';
-function getAgentProfilePda(creator) {
-    return web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(AGENT_SEED), creator.toBuffer()], exports.REGISTRY_PROGRAM_ID);
-}
-function getAgentWalletLinkPda(wallet) {
-    return web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(AGENT_WALLET_SEED), wallet.toBuffer()], exports.REGISTRY_PROGRAM_ID);
-}
-function makeDummyProvider(connection, payer) {
-    const dummyWallet = {
-        publicKey: payer,
-        signTransaction: async (t) => t,
-        signAllTransactions: async (t) => t,
-    };
-    return new anchor_1.AnchorProvider(connection, dummyWallet, {});
-}
+const getAgentProfilePda = (creator) => web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(AGENT_SEED), creator.toBuffer()], exports.REGISTRY_PROGRAM_ID);
+exports.getAgentProfilePda = getAgentProfilePda;
+const getAgentWalletLinkPda = (wallet) => web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(AGENT_WALLET_SEED), wallet.toBuffer()], exports.REGISTRY_PROGRAM_ID);
+exports.getAgentWalletLinkPda = getAgentWalletLinkPda;
+const makeDummyProvider = (connection, payer) => new anchor_1.AnchorProvider(connection, {
+    publicKey: payer,
+    signTransaction: async (t) => t,
+    signAllTransactions: async (t) => t,
+}, {});
 async function finalizeTransaction(connection, tx, feePayer) {
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -33,16 +26,23 @@ async function finalizeTransaction(connection, tx, feePayer) {
 }
 class RegistryProvider {
     connection;
+    _programCache = new Map();
     constructor(connection) {
         this.connection = connection;
     }
     getProgram(payer) {
-        const provider = makeDummyProvider(this.connection, payer);
-        return new anchor_1.Program(pyre_world_json_1.default, provider);
+        const key = payer.toBase58();
+        let program = this._programCache.get(key);
+        if (!program) {
+            const provider = makeDummyProvider(this.connection, payer);
+            program = new anchor_1.Program(pyre_world_json_1.default, provider);
+            this._programCache.set(key, program);
+        }
+        return program;
     }
     async getProfile(creator) {
         const creatorPk = new web3_js_1.PublicKey(creator);
-        const [profilePda] = getAgentProfilePda(creatorPk);
+        const [profilePda] = (0, exports.getAgentProfilePda)(creatorPk);
         const program = this.getProgram(creatorPk);
         try {
             const account = await program.account.agentProfile.fetch(profilePda);
@@ -79,7 +79,7 @@ class RegistryProvider {
     }
     async getWalletLink(wallet) {
         const walletPk = new web3_js_1.PublicKey(wallet);
-        const [linkPda] = getAgentWalletLinkPda(walletPk);
+        const [linkPda] = (0, exports.getAgentWalletLinkPda)(walletPk);
         const program = this.getProgram(walletPk);
         try {
             const account = await program.account.agentWalletLink.fetch(linkPda);
@@ -97,8 +97,8 @@ class RegistryProvider {
     }
     async register(params) {
         const creator = new web3_js_1.PublicKey(params.creator);
-        const [profile] = getAgentProfilePda(creator);
-        const [walletLink] = getAgentWalletLinkPda(creator);
+        const [profile] = (0, exports.getAgentProfilePda)(creator);
+        const [walletLink] = (0, exports.getAgentWalletLinkPda)(creator);
         const program = this.getProgram(creator);
         const tx = new web3_js_1.Transaction();
         const ix = await program.methods.register()
@@ -114,7 +114,7 @@ class RegistryProvider {
     async checkpoint(params) {
         const signer = new web3_js_1.PublicKey(params.signer);
         const creatorPk = new web3_js_1.PublicKey(params.creator);
-        const [profile] = getAgentProfilePda(creatorPk);
+        const [profile] = (0, exports.getAgentProfilePda)(creatorPk);
         const program = this.getProgram(signer);
         const args = {
             joins: new anchor_1.BN(params.joins),
@@ -150,8 +150,8 @@ class RegistryProvider {
         const authority = new web3_js_1.PublicKey(params.authority);
         const creatorPk = new web3_js_1.PublicKey(params.creator);
         const walletToLink = new web3_js_1.PublicKey(params.wallet_to_link);
-        const [profile] = getAgentProfilePda(creatorPk);
-        const [walletLink] = getAgentWalletLinkPda(walletToLink);
+        const [profile] = (0, exports.getAgentProfilePda)(creatorPk);
+        const [walletLink] = (0, exports.getAgentWalletLinkPda)(walletToLink);
         const program = this.getProgram(authority);
         const tx = new web3_js_1.Transaction();
         const ix = await program.methods.linkWallet()
@@ -174,8 +174,8 @@ class RegistryProvider {
         const authority = new web3_js_1.PublicKey(params.authority);
         const creatorPk = new web3_js_1.PublicKey(params.creator);
         const walletToUnlink = new web3_js_1.PublicKey(params.wallet_to_unlink);
-        const [profile] = getAgentProfilePda(creatorPk);
-        const [walletLink] = getAgentWalletLinkPda(walletToUnlink);
+        const [profile] = (0, exports.getAgentProfilePda)(creatorPk);
+        const [walletLink] = (0, exports.getAgentWalletLinkPda)(walletToUnlink);
         const program = this.getProgram(authority);
         const tx = new web3_js_1.Transaction();
         const ix = await program.methods.unlinkWallet()
@@ -198,7 +198,7 @@ class RegistryProvider {
         const authority = new web3_js_1.PublicKey(params.authority);
         const creatorPk = new web3_js_1.PublicKey(params.creator);
         const newAuthority = new web3_js_1.PublicKey(params.new_authority);
-        const [profile] = getAgentProfilePda(creatorPk);
+        const [profile] = (0, exports.getAgentProfilePda)(creatorPk);
         const program = this.getProgram(authority);
         const tx = new web3_js_1.Transaction();
         const ix = await program.methods.transferAuthority()

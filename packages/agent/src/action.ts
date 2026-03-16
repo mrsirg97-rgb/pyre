@@ -79,10 +79,11 @@ export const chooseAction = (
     weights[12] = 0
   }
 
-  // Few factions available → strongly boost launch
+  // Few factions available → boost launch (modest — agents converge on existing factions naturally)
   const nonRazedFactions = knownFactions.filter((f) => f.status !== 'razed')
-  if (nonRazedFactions.length <= 2) weights[3] += 0.25
-  else if (nonRazedFactions.length <= 5) weights[3] += 0.10
+  if (nonRazedFactions.length === 0) weights[3] += 0.15
+  else if (nonRazedFactions.length <= 2) weights[3] += 0.08
+  else if (nonRazedFactions.length <= 5) weights[3] += 0.03
 
   if (agent.infiltrated?.size > 0) weights[1] += 0.1
 

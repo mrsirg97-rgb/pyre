@@ -34,22 +34,19 @@ const getTreasuryTokenAccount = (mint, treasury) => (0, spl_token_1.getAssociate
 const getTreasuryLockPda = (mint) => web3_js_1.PublicKey.findProgramAddressSync([Buffer.from(TREASURY_LOCK_SEED), mint.toBuffer()], torchsdk_1.PROGRAM_ID);
 exports.getTreasuryLockPda = getTreasuryLockPda;
 const getTreasuryLockTokenAccount = (mint, treasuryLock) => (0, spl_token_1.getAssociatedTokenAddressSync)(mint, treasuryLock, true, TOKEN_2022_PROGRAM_ID);
-const makeDummyProvider = (connection, payer) => {
-    const dummyWallet = {
-        publicKey: payer,
-        signTransaction: async (t) => t,
-        signAllTransactions: async (t) => t,
-    };
-    return new anchor_1.AnchorProvider(connection, dummyWallet, {});
-};
+const makeDummyProvider = (connection, payer) => new anchor_1.AnchorProvider(connection, {
+    publicKey: payer,
+    signTransaction: async (t) => t,
+    signAllTransactions: async (t) => t,
+}, {});
 const finalizeTransaction = async (connection, tx, feePayer) => {
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
     tx.feePayer = feePayer;
 };
 // ── Vanity grinder ──
-const PYRE_SUFFIX = 'py';
-/** Grind for a keypair whose base58 address ends with "py" */
+const PYRE_SUFFIX = 'pw';
+/** Grind for a keypair whose base58 address ends with "pw" (pyreworld) */
 const grindPyreMint = (maxAttempts = 500_000) => {
     for (let i = 0; i < maxAttempts; i++) {
         const kp = web3_js_1.Keypair.generate();
@@ -61,7 +58,7 @@ const grindPyreMint = (maxAttempts = 500_000) => {
     return web3_js_1.Keypair.generate();
 };
 exports.grindPyreMint = grindPyreMint;
-/** Check if a mint address is a pyre faction (ends with "py") */
+/** Check if a mint address is a pyre faction (ends with "pw") */
 const isPyreMint = (mint) => mint.endsWith(PYRE_SUFFIX);
 exports.isPyreMint = isPyreMint;
 // ── Build create transaction with pyre vanity address ──
