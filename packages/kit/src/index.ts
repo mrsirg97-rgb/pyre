@@ -130,6 +130,7 @@ export type {
   Member,
   // List results
   FactionListResult,
+  NearbyResult,
   MembersResult,
   CommsResult,
   AllWarLoansResult,

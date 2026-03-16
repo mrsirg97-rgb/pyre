@@ -74,7 +74,6 @@ import {
   RepayWarLoanParams,
   RequestWarLoanParams,
   SiegeParams,
-  Strategy,
   Stronghold,
   TitheParams,
   WarChest,
@@ -301,7 +300,7 @@ export class ActionProvider implements Action {
   }
 
   async fud(params: FudFactionParams): Promise<TransactionResult> {
-    const MICRO_SELL_TOKENS = 100
+    const MICRO_SELL_TOKENS = 10 * 1_000_000 // 10 tokens in raw units (6 decimals)
     if (params.ascended) {
       const quote = await getSellQuote(this.connection, params.mint, MICRO_SELL_TOKENS)
       const minOut = Math.max(1, Math.floor(quote.output_sol * (1 - 500 / 10_000)))

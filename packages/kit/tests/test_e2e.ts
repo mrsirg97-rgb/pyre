@@ -157,7 +157,7 @@ async function main() {
 
   assert(kit.state.tick === 1, `tick incremented to 1: ${kit.state.tick}`)
   assert(kit.state.state!.actionCounts.launch === 1, `launch count = 1`)
-  assert(kit.state.getSentiment(mint) === 3, `launch sentiment = +3: ${kit.state.getSentiment(mint)}`)
+  assert(kit.state.getSentiment(mint) === 0.3, `launch sentiment = +0.3: ${kit.state.getSentiment(mint)}`)
   assert(kit.state.history.length === 1, `history has 1 entry`)
 
   // ═══════════════════════════════════════════════════════════════════
@@ -199,8 +199,9 @@ async function main() {
   // State assertions
   assert(kit.state.tick === 2, `tick = 2: ${kit.state.tick}`)
   assert(kit.state.state!.actionCounts.join === 1, `join count = 1`)
-  assert(kit.state.getSentiment(mint) === 4, `sentiment after launch(+3) + join(+1) = 4: ${kit.state.getSentiment(mint)}`)
-  assert(kit.state.getBalance(mint) > 0, `state holdings updated: ${kit.state.getBalance(mint)}`)
+  assert(kit.state.getSentiment(mint) === 0.4, `sentiment after launch(+0.3) + join(+0.1) = 0.4: ${kit.state.getSentiment(mint)}`)
+  const holdingsAfterJoin = await kit.state.getBalance(mint)
+  assert(holdingsAfterJoin > 0, `state holdings updated: ${holdingsAfterJoin}`)
 
   // ═══════════════════════════════════════════════════════════════════
   // TEST: VAULT SELL (defect) + SENTIMENT
@@ -242,7 +243,7 @@ async function main() {
 
   // State assertions
   assert(kit.state.tick === 3, `tick = 3: ${kit.state.tick}`)
-  assert(kit.state.getSentiment(mint) === sentimentBeforeDefect - 2, `defect drops sentiment by 2: ${sentimentBeforeDefect} → ${kit.state.getSentiment(mint)}`)
+  assert(kit.state.getSentiment(mint) === sentimentBeforeDefect - 0.2, `defect drops sentiment by 0.2: ${sentimentBeforeDefect} → ${kit.state.getSentiment(mint)}`)
 
   // ═══════════════════════════════════════════════════════════════════
   // TEST: FUD + SENTIMENT
@@ -265,12 +266,12 @@ async function main() {
   const fudTokenDelta = fudTokensBefore - fudTokensAfter
 
   console.log(`  POST — tokens: ${fudTokensAfter}, sentiment: ${kit.state.getSentiment(mint)}`)
-  console.log(`  TOKEN DELTA: ${fudTokenDelta} (expect ~100)`)
+  console.log(`  TOKEN DELTA: ${fudTokenDelta} (expect ~10M raw = 10 tokens)`)
 
   assert(fudTokenDelta > 0, `FUD sold tokens: ${fudTokenDelta}`)
-  assert(fudTokenDelta <= 100, `FUD micro amount: ${fudTokenDelta}`)
+  assert(fudTokenDelta <= 10_000_000, `FUD micro amount (10 tokens raw): ${fudTokenDelta}`)
   assert(kit.state.tick === 4, `tick = 4: ${kit.state.tick}`)
-  assert(kit.state.getSentiment(mint) === sentimentBeforeFud - 1.5, `fud drops sentiment by 1.5: ${kit.state.getSentiment(mint)}`)
+  assert(kit.state.getSentiment(mint) === sentimentBeforeFud - 0.15, `fud drops sentiment by 0.15: ${kit.state.getSentiment(mint)}`)
 
   // ═══════════════════════════════════════════════════════════════════
   // TEST: MESSAGE + STATE
@@ -287,7 +288,7 @@ async function main() {
   await kit.state.record('message', mint, 'said in BTEST — "We are strong!"')
 
   assert(kit.state.tick === 5, `tick = 5: ${kit.state.tick}`)
-  assert(kit.state.getSentiment(mint) === sentimentBeforeMsg + 0.5, `message bumps sentiment by 0.5: ${kit.state.getSentiment(mint)}`)
+  assert(kit.state.getSentiment(mint) === sentimentBeforeMsg + 0.05, `message bumps sentiment by 0.05: ${kit.state.getSentiment(mint)}`)
 
   // ═══════════════════════════════════════════════════════════════════
   // TEST: AGENT 2 JOIN + SEPARATE STATE
@@ -305,7 +306,7 @@ async function main() {
 
   assert(kit2.state.tick === 1, `agent 2 tick = 1: ${kit2.state.tick}`)
   assert(kit.state.tick === 5, `agent 1 tick unchanged: ${kit.state.tick}`)
-  assert(kit2.state.getSentiment(mint) === 1, `agent 2 sentiment = +1 (join): ${kit2.state.getSentiment(mint)}`)
+  assert(kit2.state.getSentiment(mint) === 0.1, `agent 2 sentiment = +0.1 (join): ${kit2.state.getSentiment(mint)}`)
 
   // ═══════════════════════════════════════════════════════════════════
   // TEST: RALLY + STATE
@@ -324,7 +325,7 @@ async function main() {
   const detail2 = await kit.actions.getFaction(mint)
   assert(detail2.rallies > detail1.rallies, `rallies increased: ${detail1.rallies} → ${detail2.rallies}`)
   assert(kit2.state.tick === 2, `agent 2 tick = 2: ${kit2.state.tick}`)
-  assert(kit2.state.getSentiment(mint) === 4, `agent 2 sentiment after join(+1) + rally(+3) = 4: ${kit2.state.getSentiment(mint)}`)
+  assert(kit2.state.getSentiment(mint) === 0.4, `agent 2 sentiment after join(+0.1) + rally(+0.3) = 0.4: ${kit2.state.getSentiment(mint)}`)
   assert(kit2.state.hasRallied(mint), `agent 2 marked as rallied`)
 
   // ═══════════════════════════════════════════════════════════════════
@@ -346,28 +347,6 @@ async function main() {
   assert(kitRestored.state.history.length === kit.state.history.length, `hydrated history length matches: ${kitRestored.state.history.length}`)
 
   // ═══════════════════════════════════════════════════════════════════
-  // TEST: SCOUT
-  // ═══════════════════════════════════════════════════════════════════
-
-  console.log('\n═══ TEST: Scout ═══')
-  // Scout agent 1 from agent 2's perspective
-  const scoutResult = await kit2.actions.scout(agent.publicKey)
-  console.log(`  ${scoutResult}`)
-  assert(typeof scoutResult === 'string', `scout returns string`)
-  assert(scoutResult.includes(agent.publicKey.slice(0, 8)), `scout result contains target address: ${agent.publicKey.slice(0, 8)}`)
-
-  // Scout a nonexistent address
-  const fakeAddress = 'FakeAddress1111111111111111111111111111111111'
-  const scoutFake = await kit2.actions.scout(fakeAddress)
-  console.log(`  ${scoutFake}`)
-  assert(scoutFake.includes('no pyre identity') || scoutFake.includes('lookup failed'), `scout handles unknown agent`)
-
-  // Scout via exec (read-only — no tick increment)
-  const { result: scoutExecResult } = await kit2.exec('actions', 'scout', agent.publicKey)
-  console.log(`  exec scout: ${scoutExecResult}`)
-  assert(kit2.state.tick === 2, `agent 2 tick unchanged after scout (read-only): ${kit2.state.tick}`)
-
-  // ═══════════════════════════════════════════════════════════════════
   // TEST: MEMBERS
   // ═══════════════════════════════════════════════════════════════════
 
@@ -381,6 +360,149 @@ async function main() {
     assert(members.total_members > 0, `has members: ${members.total_members}`)
   } catch (err: any) {
     console.log(`  Skipped — RPC error: ${err.message?.slice(0, 80)}`)
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TEST: CHECKPOINT (register + checkpoint + verify)
+  // ═══════════════════════════════════════════════════════════════════
+
+  console.log('\n═══ TEST: Checkpoint ═══')
+
+  // Register agent 1 on pyre_world
+  const regResult = await kit.registry.register({ creator: agent.publicKey })
+  await sendAndConfirm(connection, agent, regResult)
+  console.log(`  Registered agent 1`)
+
+  // Verify fresh profile — all counts should be 0
+  const profileBefore = await kit.registry.getProfile(agent.publicKey)
+  assert(profileBefore !== undefined, `profile exists after register`)
+  assert(profileBefore!.joins === 0, `initial joins = 0`)
+  assert(profileBefore!.messages === 0, `initial messages = 0`)
+
+  // Checkpoint with current action counts from state
+  const counts = kit.state.state!.actionCounts
+  const cpResult = await kit.registry.checkpoint({
+    signer: agent.publicKey,
+    creator: agent.publicKey,
+    joins: counts.join,
+    defects: counts.defect,
+    rallies: counts.rally,
+    launches: counts.launch,
+    messages: counts.message,
+    fuds: counts.fud,
+    infiltrates: counts.infiltrate,
+    reinforces: counts.reinforce,
+    war_loans: counts.war_loan,
+    repay_loans: counts.repay_loan,
+    sieges: counts.siege,
+    ascends: counts.ascend,
+    razes: counts.raze,
+    tithes: counts.tithe,
+    personality_summary: 'test agent — loyal and steadfast',
+    total_sol_spent: kit.state.state!.totalSolSpent,
+    total_sol_received: kit.state.state!.totalSolReceived,
+  })
+  await sendAndConfirm(connection, agent, cpResult)
+  console.log(`  Checkpointed agent 1 (tick ${kit.state.tick})`)
+
+  // Verify checkpoint wrote correct counts
+  const profileAfter = await kit.registry.getProfile(agent.publicKey)
+  assert(profileAfter !== undefined, `profile still exists`)
+  assert(profileAfter!.joins === counts.join, `checkpoint joins match: ${profileAfter!.joins} === ${counts.join}`)
+  assert(profileAfter!.defects === counts.defect, `checkpoint defects match: ${profileAfter!.defects} === ${counts.defect}`)
+  assert(profileAfter!.launches === counts.launch, `checkpoint launches match: ${profileAfter!.launches} === ${counts.launch}`)
+  assert(profileAfter!.messages === counts.message, `checkpoint messages match: ${profileAfter!.messages} === ${counts.message}`)
+  assert(profileAfter!.fuds === counts.fud, `checkpoint fuds match: ${profileAfter!.fuds} === ${counts.fud}`)
+  assert(profileAfter!.personality_summary === 'test agent — loyal and steadfast', `checkpoint personality matches`)
+  assert(profileAfter!.last_checkpoint > 0, `last_checkpoint timestamp set: ${profileAfter!.last_checkpoint}`)
+  console.log(`  Profile verified — ${Object.values(counts).reduce((a, b) => a + b, 0)} total actions checkpointed`)
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TEST: SCOUT (after checkpoint — agent 1 now has a pyre identity)
+  // ═══════════════════════════════════════════════════════════════════
+
+  console.log('\n═══ TEST: Scout ═══')
+  // Scout agent 1 from agent 2's perspective — should find real profile data
+  const scoutResult = await kit2.actions.scout(agent.publicKey)
+  console.log(`  ${scoutResult}`)
+  assert(typeof scoutResult === 'string', `scout returns string`)
+  assert(scoutResult.includes(agent.publicKey.slice(0, 8)), `scout result contains target address: ${agent.publicKey.slice(0, 8)}`)
+  assert(scoutResult.includes('loyal and steadfast'), `scout shows personality from checkpoint`)
+  assert(scoutResult.includes('actions'), `scout shows action counts`)
+
+  // Scout a nonexistent address
+  const fakeAddress = 'FakeAddress1111111111111111111111111111111111'
+  const scoutFake = await kit2.actions.scout(fakeAddress)
+  console.log(`  ${scoutFake}`)
+  assert(scoutFake.includes('no pyre identity') || scoutFake.includes('lookup failed'), `scout handles unknown agent`)
+
+  // Scout via exec (read-only — no tick increment)
+  const { result: scoutExecResult } = await kit2.exec('actions', 'scout', agent.publicKey)
+  console.log(`  exec scout: ${scoutExecResult}`)
+  assert(kit2.state.tick === 2, `agent 2 tick unchanged after scout (read-only): ${kit2.state.tick}`)
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TEST: FACTION DISCOVERY (rising, ascended, nearby)
+  // ═══════════════════════════════════════════════════════════════════
+
+  console.log('\n═══ TEST: Faction discovery ═══')
+
+  // Agent 3 launches a second faction
+  const agent3 = createEphemeralAgent()
+  const kit3 = new PyreKit(connection, agent3.publicKey)
+
+  const airdrop3 = await connection.requestAirdrop(agent3.keypair.publicKey, 10 * LAMPORTS_PER_SOL)
+  await connection.confirmTransaction(airdrop3, 'confirmed')
+
+  const vault3 = await kit3.actions.createStronghold({ creator: agent3.publicKey })
+  await sendAndConfirm(connection, agent3, vault3)
+  const fund3 = await kit3.actions.fundStronghold({
+    depositor: agent3.publicKey, stronghold_creator: agent3.publicKey, amount_sol: 5 * LAMPORTS_PER_SOL,
+  })
+  await sendAndConfirm(connection, agent3, fund3)
+  await kit3.state.init()
+
+  const launch2 = await kit3.actions.launch({
+    founder: agent3.publicKey, name: 'Nearby Test Faction', symbol: 'NEAR',
+    metadata_uri: 'https://pyre.gg/test2.json', community_faction: true,
+  })
+  await sendAndConfirm(connection, agent3, launch2)
+  const mint2 = launch2.mint.toBase58()
+  console.log(`  Faction 2: ${mint2} (NEAR)`)
+
+  // Agent 2 joins faction 2 — creating a social link between BTEST and NEAR
+  const join2Near = await kit2.actions.join({
+    mint: mint2, agent: agent2.publicKey, amount_sol: Math.floor(0.3 * LAMPORTS_PER_SOL),
+    strategy: 'fortify', stronghold: agent2.publicKey,
+  })
+  await sendAndConfirm(connection, agent2, join2Near)
+  console.log(`  Agent 2 joined NEAR — bridge between BTEST and NEAR`)
+
+  // Test getRisingFactions
+  const rising = await kit.intel.getRisingFactions()
+  console.log(`  Rising factions: ${rising.factions.length}`)
+  assert(rising.factions.length >= 2, `at least 2 rising factions: ${rising.factions.length}`)
+
+  // Test getAscendedFactions (none expected on fresh fork with new factions)
+  const ascended = await kit.intel.getAscendedFactions()
+  console.log(`  Ascended factions: ${ascended.factions.length}`)
+
+  // Test getNearbyFactions — agent 1 holds BTEST, agent 2 also holds BTEST + NEAR
+  // BFS uses getComms to find neighbors, which requires getSignaturesForAddress.
+  // Surfpool doesn't support this reliably — test the seed scan only.
+  const nearby = await kit.intel.getNearbyFactions(agent.publicKey)
+  const nearbyMints = nearby.factions.map((f) => f.mint)
+  console.log(`  Nearby factions for agent 1: ${nearby.factions.length} (${nearby.factions.map((f) => f.symbol).join(', ')})`)
+  assert(nearbyMints.includes(mint), `nearby includes own faction BTEST`)
+
+  // NOTE: Social graph discovery (finding NEAR through agent 2) requires
+  // getComms which depends on getSignaturesForAddress — not available on surfpool.
+  // This is tested on devnet/mainnet where comms resolution works.
+  if (nearbyMints.includes(mint2)) {
+    console.log(`  ✓ nearby discovered NEAR through social graph`)
+    passed++
+  } else {
+    console.log(`  ⊘ nearby did not discover NEAR (surfpool limitation — getComms unavailable)`)
   }
 
   // ═══════════════════════════════════════════════════════════════════

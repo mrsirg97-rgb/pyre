@@ -19,28 +19,28 @@ export const REGISTRY_PROGRAM_ID = new PublicKey(idl.address)
 const AGENT_SEED = 'pyre_agent'
 const AGENT_WALLET_SEED = 'pyre_agent_wallet'
 
-export function getAgentProfilePda(creator: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
+export const getAgentProfilePda = (creator: PublicKey): [PublicKey, number] =>
+  PublicKey.findProgramAddressSync(
     [Buffer.from(AGENT_SEED), creator.toBuffer()],
     REGISTRY_PROGRAM_ID,
   )
-}
 
-export function getAgentWalletLinkPda(wallet: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
+export const getAgentWalletLinkPda = (wallet: PublicKey): [PublicKey, number] =>
+  PublicKey.findProgramAddressSync(
     [Buffer.from(AGENT_WALLET_SEED), wallet.toBuffer()],
     REGISTRY_PROGRAM_ID,
   )
-}
 
-function makeDummyProvider(connection: Connection, payer: PublicKey): AnchorProvider {
-  const dummyWallet = {
-    publicKey: payer,
-    signTransaction: async (t: Transaction) => t,
-    signAllTransactions: async (t: Transaction[]) => t,
-  }
-  return new AnchorProvider(connection, dummyWallet as unknown as Wallet, {})
-}
+const makeDummyProvider = (connection: Connection, payer: PublicKey): AnchorProvider =>
+  new AnchorProvider(
+    connection,
+    {
+      publicKey: payer,
+      signTransaction: async (t: Transaction) => t,
+      signAllTransactions: async (t: Transaction[]) => t,
+    } as unknown as Wallet,
+    {},
+  )
 
 async function finalizeTransaction(
   connection: Connection,
@@ -53,18 +53,25 @@ async function finalizeTransaction(
 }
 
 export class RegistryProvider implements Registry {
+  private _programCache = new Map<string, Program>()
+
   constructor(private connection: Connection) {}
 
   private getProgram(payer: PublicKey): Program {
-    const provider = makeDummyProvider(this.connection, payer)
-    return new Program(idl as any, provider)
+    const key = payer.toBase58()
+    let program = this._programCache.get(key)
+    if (!program) {
+      const provider = makeDummyProvider(this.connection, payer)
+      program = new Program(idl as any, provider)
+      this._programCache.set(key, program)
+    }
+    return program
   }
 
   async getProfile(creator: string): Promise<RegistryProfile | undefined> {
     const creatorPk = new PublicKey(creator)
     const [profilePda] = getAgentProfilePda(creatorPk)
     const program = this.getProgram(creatorPk)
-
     try {
       const account = await (program.account as any).agentProfile.fetch(profilePda)
       return {
@@ -130,7 +137,6 @@ export class RegistryProvider implements Registry {
 
     tx.add(ix)
     await finalizeTransaction(this.connection, tx, creator)
-
     return {
       transaction: tx,
       message: `Register agent profile [${profile.toBase58()}]`,
@@ -170,7 +176,6 @@ export class RegistryProvider implements Registry {
 
     tx.add(ix)
     await finalizeTransaction(this.connection, tx, signer)
-
     return {
       transaction: tx,
       message: `Checkpoint agent [${profile.toBase58()}]`,
@@ -198,7 +203,6 @@ export class RegistryProvider implements Registry {
 
     tx.add(ix)
     await finalizeTransaction(this.connection, tx, authority)
-
     return {
       transaction: tx,
       message: `Link wallet ${walletToLink.toBase58()} to agent [${profile.toBase58()}]`,
@@ -226,7 +230,6 @@ export class RegistryProvider implements Registry {
 
     tx.add(ix)
     await finalizeTransaction(this.connection, tx, authority)
-
     return {
       transaction: tx,
       message: `Unlink wallet ${walletToUnlink.toBase58()} from agent [${profile.toBase58()}]`,
@@ -247,7 +250,6 @@ export class RegistryProvider implements Registry {
 
     tx.add(ix)
     await finalizeTransaction(this.connection, tx, authority)
-
     return {
       transaction: tx,
       message: `Transfer agent authority to ${newAuthority.toBase58()}`,

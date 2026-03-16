@@ -21,16 +21,10 @@ export type TrackedAction =
 export interface AgentGameState {
   /** Agent wallet public key */
   publicKey: string
-  /** Vault creator key (resolved from on-chain vault link) */
-  vaultCreator: string | null
-  /** Vault info (null if no vault found) */
-  stronghold: Stronghold | null
   /** Monotonic tick counter — increments on each successful action */
   tick: number
   /** Cumulative action counts keyed by action type */
   actionCounts: Record<TrackedAction, number>
-  /** Token holdings: mint → balance (wallet + vault combined) */
-  holdings: Map<string, number>
   /** Mints with active war loans */
   activeLoans: Set<string>
   /** Mints this agent founded */
@@ -86,9 +80,6 @@ export interface State {
   /** Current game state (null before init) */
   readonly state: AgentGameState | null
 
-  /** Vault creator key (shorthand for state.vaultCreator) */
-  readonly vaultCreator: string | null
-
   /** Whether state has been initialized */
   readonly initialized: boolean
 
@@ -97,20 +88,28 @@ export interface State {
 
   /**
    * Initialize state from chain.
-   * Resolves vault link, loads holdings, loads action counts from registry checkpoint.
-   * Must be called before any action. Returns the resolved state.
+   * Loads action counts from registry checkpoint.
+   * Vault and holdings are resolved lazily on first access.
    */
   init(): Promise<AgentGameState>
 
   /**
    * Record a successful action — increments tick, updates action counts,
-   * updates sentiment, appends to history, refreshes holdings.
-   * Called by ActionProvider after tx confirmation.
+   * updates sentiment, appends to history.
    */
   record(action: TrackedAction, mint?: string, description?: string): Promise<void>
 
-  /** Refresh holdings from on-chain (wallet + vault token accounts) */
-  refreshHoldings(): Promise<void>
+  /** Get vault creator key (lazy — resolves on first call, cached after) */
+  getVaultCreator(): Promise<string | null>
+
+  /** Get stronghold info (lazy — resolves on first call, cached after) */
+  getStronghold(): Promise<Stronghold | null>
+
+  /** Get token holdings fresh from chain (wallet + vault) */
+  getHoldings(): Promise<Map<string, number>>
+
+  /** Get token balance for a specific mint (fresh from chain) */
+  getBalance(mint: string): Promise<number>
 
   /** Get sentiment score for a faction (-10 to +10) */
   getSentiment(mint: string): number
@@ -120,9 +119,6 @@ export interface State {
 
   /** Get recent action history (for LLM memory block) */
   readonly history: readonly string[]
-
-  /** Get token balance for a specific mint */
-  getBalance(mint: string): number
 
   /** Check if agent has voted on a faction */
   hasVoted(mint: string): boolean

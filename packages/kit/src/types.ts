@@ -402,6 +402,12 @@ export interface FactionPower {
   status: FactionStatus
 }
 
+/** Result from getNearbyFactions — factions + discovered agents in the social graph */
+export interface NearbyResult extends FactionListResult {
+  /** Wallet addresses discovered as co-holders (natural allies) */
+  allies: string[]
+}
+
 export interface AllianceCluster {
   factions: string[]
   shared_members: number

@@ -42,23 +42,25 @@ export const getBondingCurvePda = (mint: PublicKey): [PublicKey, number] =>
 export const getTokenTreasuryPda = (mint: PublicKey): [PublicKey, number] =>
   PublicKey.findProgramAddressSync([Buffer.from(TREASURY_SEED), mint.toBuffer()], PROGRAM_ID)
 
-const getTreasuryTokenAccount = (mint: PublicKey, treasury: PublicKey): PublicKey =>
+const getTreasuryTokenAccount = (mint: PublicKey, treasury: PublicKey) =>
   getAssociatedTokenAddressSync(mint, treasury, true, TOKEN_2022_PROGRAM_ID)
 
 export const getTreasuryLockPda = (mint: PublicKey): [PublicKey, number] =>
   PublicKey.findProgramAddressSync([Buffer.from(TREASURY_LOCK_SEED), mint.toBuffer()], PROGRAM_ID)
 
-const getTreasuryLockTokenAccount = (mint: PublicKey, treasuryLock: PublicKey): PublicKey =>
+const getTreasuryLockTokenAccount = (mint: PublicKey, treasuryLock: PublicKey) =>
   getAssociatedTokenAddressSync(mint, treasuryLock, true, TOKEN_2022_PROGRAM_ID)
 
-const makeDummyProvider = (connection: Connection, payer: PublicKey): AnchorProvider => {
-  const dummyWallet = {
-    publicKey: payer,
-    signTransaction: async (t: Transaction) => t,
-    signAllTransactions: async (t: Transaction[]) => t,
-  }
-  return new AnchorProvider(connection, dummyWallet as unknown as Wallet, {})
-}
+const makeDummyProvider = (connection: Connection, payer: PublicKey) =>
+  new AnchorProvider(
+    connection,
+    {
+      publicKey: payer,
+      signTransaction: async (t: Transaction) => t,
+      signAllTransactions: async (t: Transaction[]) => t,
+    } as unknown as Wallet,
+    {},
+  )
 
 const finalizeTransaction = async (
   connection: Connection,
@@ -72,9 +74,9 @@ const finalizeTransaction = async (
 
 // ── Vanity grinder ──
 
-const PYRE_SUFFIX = 'py'
+const PYRE_SUFFIX = 'pw'
 
-/** Grind for a keypair whose base58 address ends with "py" */
+/** Grind for a keypair whose base58 address ends with "pw" (pyreworld) */
 export const grindPyreMint = (maxAttempts: number = 500_000): Keypair => {
   for (let i = 0; i < maxAttempts; i++) {
     const kp = Keypair.generate()
@@ -86,7 +88,7 @@ export const grindPyreMint = (maxAttempts: number = 500_000): Keypair => {
   return Keypair.generate()
 }
 
-/** Check if a mint address is a pyre faction (ends with "py") */
+/** Check if a mint address is a pyre faction (ends with "pw") */
 export const isPyreMint = (mint: string): boolean => mint.endsWith(PYRE_SUFFIX)
 
 // ── Build create transaction with pyre vanity address ──
