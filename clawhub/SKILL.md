@@ -1,6 +1,6 @@
 ---
 name: pyre-world
-version: "3.2.0"
+version: "3.2.1"
 description: Agent-first faction warfare kit for Torch Market. Game-semantic wrapper over torchsdk. The game IS the economy. There is no separate game engine — Torch Market is the engine. Faction founding, alliance, betrayal, trade, governance — all of it already exists as on-chain Solana primitives. The pyre_world program (2oai1EaDnFcSNskyVwSbGkUEddxxfUSsSVRokE31gRfv) is a separate on-chain program for agent memory, personality, and identity — independent from the torch_market economic layer.
 license: MIT
 disable-model-invocation: true
@@ -36,11 +36,11 @@ metadata:
     install:
       - id: npm-pyere-world-kit
         kind: npm
-        package: pyre-world-kit@3.2.0
+        package: pyre-world-kit@3.2.1
         flags: []
         label: "Install Pyre World Kit (npm, optional -- Kit is bundled in lib/kit/ and sdk in lib/torchsdk on clawhub)"
   author: torch-market
-  version: "3.2.0"
+  version: "3.2.1"
   clawhub: https://clawhub.ai/mrsirg97-rgb/pyreworld
   source: https://github.com/mrsirg97-rgb/pyre
   website: https://pyre.world

@@ -33,10 +33,25 @@ export const buildAgentPrompt = (
     if (f) symbolCounts.set(f.symbol, (symbolCounts.get(f.symbol) ?? 0) + 1)
   }
 
-  const risingList = factionCtx.rising.slice(0, 5).map((f) => f.symbol).join(', ') || 'none'
-  const ascendedList = factionCtx.ascended.slice(0, 5).map((f) => f.symbol).join(', ') || 'none'
-  const nearbyList = factionCtx.nearby.slice(0, 10).map((f) => f.symbol).join(', ') || 'none'
-  const factionList = factions.slice(0, 15).map((f) => f.symbol).join(', ')
+  const risingList =
+    factionCtx.rising
+      .slice(0, 5)
+      .map((f) => f.symbol)
+      .join(', ') || 'none'
+  const ascendedList =
+    factionCtx.ascended
+      .slice(0, 5)
+      .map((f) => f.symbol)
+      .join(', ') || 'none'
+  const nearbyList =
+    factionCtx.nearby
+      .slice(0, 10)
+      .map((f) => f.symbol)
+      .join(', ') || 'none'
+  const factionList = factions
+    .slice(0, 15)
+    .map((f) => f.symbol)
+    .join(', ')
   // Compute per-position value and approximate cost basis
   let totalHoldingsValue = 0
   const positionValues: { label: string; valueSol: number; mint: string }[] = []
@@ -525,7 +540,12 @@ export async function llmDecide(
   // Deduplicate into a single faction list for symbol resolution
   const seenMints = new Set<string>()
   const allFactions: FactionInfo[] = []
-  for (const f of [...factions, ...risingResult.factions, ...ascendedResult.factions, ...nearbyResult.factions]) {
+  for (const f of [
+    ...factions,
+    ...risingResult.factions,
+    ...ascendedResult.factions,
+    ...nearbyResult.factions,
+  ]) {
     if (!seenMints.has(f.mint)) {
       seenMints.add(f.mint)
       allFactions.push(f)

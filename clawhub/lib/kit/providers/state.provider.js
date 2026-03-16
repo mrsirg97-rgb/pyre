@@ -196,6 +196,10 @@ class StateProvider {
                 this._state.recentHistory = this._state.recentHistory.slice(-20);
             }
         }
+        // Sync P&L from vault every 10 ticks
+        if (this._state.tick % 10 === 0) {
+            this.syncPnl();
+        }
         if (this.checkpointConfig && this.ticksSinceCheckpoint >= this.checkpointConfig.interval) {
             this.ticksSinceCheckpoint = 0;
             this.onCheckpointDue?.();
@@ -222,6 +226,20 @@ class StateProvider {
         }
     }
     onCheckpointDue = null;
+    /** Sync totalSolSpent/Received from on-chain vault data (fresh read) */
+    async syncPnl() {
+        if (!this._state)
+            return;
+        try {
+            const { getVaultForWallet } = await torchsdkImport;
+            const vault = await getVaultForWallet(this.connection, this.publicKey);
+            if (vault) {
+                this._state.totalSolSpent = Math.round(vault.total_spent * 1e9);
+                this._state.totalSolReceived = Math.round(vault.total_received * 1e9);
+            }
+        }
+        catch { }
+    }
     async getHoldings() {
         const { TOKEN_2022_PROGRAM_ID } = await splTokenImport;
         const walletPk = new web3_js_1.PublicKey(this.publicKey);

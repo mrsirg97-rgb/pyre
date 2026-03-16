@@ -24,6 +24,8 @@ export declare class StateProvider implements State {
     record(action: TrackedAction, mint?: string, description?: string): Promise<void>;
     private updateSentiment;
     onCheckpointDue: (() => void) | null;
+    /** Sync totalSolSpent/Received from on-chain vault data (fresh read) */
+    private syncPnl;
     getHoldings(): Promise<Map<string, number>>;
     getBalance(mint: string): Promise<number>;
     getSentiment(mint: string): number;

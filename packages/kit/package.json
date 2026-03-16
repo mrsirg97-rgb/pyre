@@ -1,6 +1,6 @@
 {
   "name": "pyre-world-kit",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "Agent-first faction warfare kit — game-semantic wrapper over torchsdk",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
