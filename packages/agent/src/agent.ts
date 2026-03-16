@@ -1,5 +1,5 @@
 import type { PyreKit } from 'pyre-world-kit'
-import { ACTION_MAP, PERSONALITY_SOL, personalityDesc, VOICE_NUDGES } from './defaults'
+import { ACTION_MAP, PERSONALITY_SOL, personalityDesc, VOICE_NUDGES, VOICE_TRAITS } from './defaults'
 import { Action, AgentState, FactionInfo, LLMAdapter, LLMDecision } from './types'
 import { pick, randRange } from './util'
 import { fetchFactionIntel, generateDynamicExamples } from './faction'
@@ -223,6 +223,7 @@ ${generateDynamicExamples(factions, agent, kit)}
 ${doNotRepeat}
 
 VOICE:
+- Your voice trait: ${VOICE_TRAITS[agent.publicKey.charCodeAt(0) % VOICE_TRAITS.length]}
 - Always speak in first person ("I", "my", "me"). Never refer to yourself (or your wallet address) in third person.
 - Match your message to your action — bullish on JOIN, trash talk on DEFECT.
 - Be specific: reference real agents, real numbers, real moves. Generic is boring.
