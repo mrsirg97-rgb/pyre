@@ -17,7 +17,7 @@ export const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'huihui_ai/qwen2.5-abliterate:7b-instruct'
 export const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
 export const MIN_FUNDED_SOL = isMainnet ? 0.05 : 0.05
-export const CONCURRENT_AGENTS = isMainnet ? 1 : 3
+export const CONCURRENT_AGENTS = isMainnet ? 1 : 1
 
 // SOL amounts — conservative on mainnet
 export const STRONGHOLD_FUND_SOL = isMainnet ? 0.25 : 35
