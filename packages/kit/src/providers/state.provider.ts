@@ -262,7 +262,7 @@ export class StateProvider implements State {
     const holdings = new Map<string, number>()
     for (const a of [...walletValues, ...vaultValues]) {
       const mint = a.account.data.parsed.info.mint as string
-      const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0)
+      const balance = Number(a.account.data.parsed.info.tokenAmount.amount ?? 0)
       if (balance > 0 && isPyreMint(mint) && !isBlacklistedMint(mint)) {
         holdings.set(mint, (holdings.get(mint) ?? 0) + balance)
       }

@@ -49,11 +49,13 @@ export class IntelProvider implements Intel {
 
     const [walletValues, vaultValues] = await Promise.all([scanWallet, scanVault])
 
-    // Merge balances from both sources
+    // Merge raw balances from both sources
+    const TOKEN_MULTIPLIER = 1_000_000
+    const TOTAL_SUPPLY_RAW = 1_000_000_000 * TOKEN_MULTIPLIER
     const balanceMap = new Map<string, number>()
     for (const a of [...walletValues, ...vaultValues]) {
       const mint = a.account.data.parsed.info.mint as string
-      const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0)
+      const balance = Number(a.account.data.parsed.info.tokenAmount.amount ?? 0)
       if (balance > 0 && isPyreMint(mint) && !isBlacklistedMint(mint)) {
         balanceMap.set(mint, (balanceMap.get(mint) ?? 0) + balance)
       }
@@ -64,17 +66,18 @@ export class IntelProvider implements Intel {
     // Per-mint faction lookups (parallel)
     const positions: AgentFactionPosition[] = []
     await Promise.all(
-      [...balanceMap.entries()].map(async ([mint, balance]) => {
+      [...balanceMap.entries()].map(async ([mint, rawBalance]) => {
         try {
           const faction = await this.actionProvider.getFaction(mint)
-          const percentage = (balance / 1_000_000_000) * 100
+          const uiBalance = rawBalance / TOKEN_MULTIPLIER
+          const percentage = (rawBalance / TOTAL_SUPPLY_RAW) * 100
           positions.push({
             mint,
             name: faction.name,
             symbol: faction.symbol,
-            balance,
+            balance: uiBalance,
             percentage,
-            value_sol: balance * faction.price_sol,
+            value_sol: uiBalance * faction.price_sol,
           })
         } catch {}
       }),
@@ -119,7 +122,7 @@ export class IntelProvider implements Intel {
         )
         for (const a of accounts.value) {
           const mint = a.account.data.parsed.info.mint as string
-          const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0)
+          const balance = Number(a.account.data.parsed.info.tokenAmount.amount ?? 0)
           if (balance > 0 && isPyreMint(mint) && !isBlacklistedMint(mint)) {
             mints.push(mint)
           }

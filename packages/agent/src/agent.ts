@@ -53,6 +53,7 @@ export const buildAgentPrompt = (
     .map((f) => f.symbol)
     .join(', ')
   // Compute per-position value and approximate cost basis
+  const TOKEN_MULTIPLIER = 1_000_000
   let totalHoldingsValue = 0
   const positionValues: { label: string; valueSol: number; mint: string }[] = []
   for (const [mint, bal] of holdingsEntries) {
@@ -60,7 +61,8 @@ export const buildAgentPrompt = (
     if (!f) continue
     const label =
       (symbolCounts.get(f.symbol) ?? 0) > 1 ? `${f.symbol}(${mint.slice(0, 6)})` : f.symbol
-    const valueSol = bal * (f.price_sol ?? 0)
+    const uiBalance = bal / TOKEN_MULTIPLIER
+    const valueSol = uiBalance * (f.price_sol ?? 0)
     totalHoldingsValue += valueSol
     positionValues.push({ label, valueSol, mint })
   }
