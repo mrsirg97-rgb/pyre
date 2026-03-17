@@ -374,26 +374,30 @@ async function swarm() {
             } catch {}
           }
 
+          // Read on-chain profile and take max to avoid CounterNotMonotonic
+          const profile = await kit.registry.getProfile(pubkey)
+          const mx = (local: number, chain: number) => Math.max(local, chain)
+
           const cpResult = await kit.registry.checkpoint({
             signer: pubkey,
             creator: pubkey,
-            joins: counts.join,
-            defects: counts.defect,
-            rallies: counts.rally,
-            launches: counts.launch,
-            messages: counts.message,
-            fuds: counts.fud,
-            infiltrates: counts.infiltrate,
-            reinforces: counts.reinforce,
-            war_loans: counts.war_loan,
-            repay_loans: counts.repay_loan,
-            sieges: counts.siege,
-            ascends: counts.ascend,
-            razes: counts.raze,
-            tithes: counts.tithe,
+            joins: mx(counts.join, profile?.joins ?? 0),
+            defects: mx(counts.defect, profile?.defects ?? 0),
+            rallies: mx(counts.rally, profile?.rallies ?? 0),
+            launches: mx(counts.launch, profile?.launches ?? 0),
+            messages: mx(counts.message, profile?.messages ?? 0),
+            fuds: mx(counts.fud, profile?.fuds ?? 0),
+            infiltrates: mx(counts.infiltrate, profile?.infiltrates ?? 0),
+            reinforces: mx(counts.reinforce, profile?.reinforces ?? 0),
+            war_loans: mx(counts.war_loan, profile?.war_loans ?? 0),
+            repay_loans: mx(counts.repay_loan, profile?.repay_loans ?? 0),
+            sieges: mx(counts.siege, profile?.sieges ?? 0),
+            ascends: mx(counts.ascend, profile?.ascends ?? 0),
+            razes: mx(counts.raze, profile?.razes ?? 0),
+            tithes: mx(counts.tithe, profile?.tithes ?? 0),
             personality_summary: summary,
-            total_sol_spent: gameState.totalSolSpent,
-            total_sol_received: gameState.totalSolReceived,
+            total_sol_spent: mx(gameState.totalSolSpent, profile?.total_sol_spent ?? 0),
+            total_sol_received: mx(gameState.totalSolReceived, profile?.total_sol_received ?? 0),
           })
           await sendAndConfirm(kit.connection, kp, cpResult)
           const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
