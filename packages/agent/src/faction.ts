@@ -152,6 +152,7 @@ export const generateDynamicExamples = (
   const actionExamples = [
     `JOIN ${s1} "early is everything, I'm in"`,
     `JOIN ${s1} "@${addr} let's ride this together"`,
+    `REINFORCE ${s1} "let's build this together @${addr}"`,
     `DEFECT ${s1} "${members} members bailing, writing on the wall"`,
     `DEFECT ${s1} "@${addr} dumped ${pct}%, not sticking around for the rest"`,
     `INFILTRATE ${s2} "underpriced, nobody's paying attention yet"`,
@@ -162,6 +163,7 @@ export const generateDynamicExamples = (
     `SCOUT @${addr}`,
     `TITHE ${s1}`,
     `ASCEND ${s1}`,
+    `ASCEND ${s2}`
   ]
 
   const msgShuffled = messageExamples.sort(() => Math.random() - 0.5).slice(0, 2)

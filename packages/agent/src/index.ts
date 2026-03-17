@@ -35,7 +35,6 @@ export {
   PERSONALITY_SOL,
   PERSONALITY_WEIGHTS,
   personalityDesc,
-  VOICE_NUDGES,
 } from './defaults'
 export { classifyPersonality, weightsFromCounts, actionIndex } from './chain'
 export { generateFactionIdentity } from './faction'
