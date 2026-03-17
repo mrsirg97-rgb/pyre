@@ -4,6 +4,7 @@ import type { SerializedGameState } from 'pyre-world-kit'
 import type { LLMAdapter, FactionInfo, Personality, AgentTickResult, AgentState } from 'pyre-agent-kit'
 import {
   assignPersonality,
+  llmDecide,
   PERSONALITY_SOL,
   PERSONALITY_WEIGHTS,
   weightsFromCounts,
@@ -52,6 +53,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
 
   let personality: Personality = config.personality ?? assignPersonality()
   let solRange = config.solRange ?? PERSONALITY_SOL[personality]
+  const recentMessages: string[] = []
   const memoBuffer: string[] = []
   const driftScores: Record<Personality, number> = {
     loyalist: 0,
@@ -71,22 +73,18 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     }
   }
 
-  // Discover factions
-  const knownFactions: FactionInfo[] = []
-  try {
+  async function discoverFactions(): Promise<FactionInfo[]> {
     const result = await kit.actions.getFactions({ limit: 50, sort: 'newest' })
-    for (const t of result.factions) {
-      knownFactions.push({
-        mint: t.mint,
-        name: t.name,
-        symbol: t.symbol,
-        status: t.status as FactionInfo['status'],
-      })
-    }
-  } catch {}
+    return result.factions.map((t) => ({
+      mint: t.mint,
+      name: t.name,
+      symbol: t.symbol,
+      status: t.status as FactionInfo['status'],
+    }))
+  }
 
   logger(
-    `[${publicKey.slice(0, 8)}] browser agent initialized — ${personality}, tick ${kit.state.tick}, ${knownFactions.length} factions`,
+    `[${publicKey.slice(0, 8)}] browser agent initialized — ${personality}, tick ${kit.state.tick}`,
   )
 
   const vc = await kit.state.getVaultCreator()
@@ -109,7 +107,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
   }
 
   async function tick(factions?: FactionInfo[]): Promise<AgentTickResult> {
-    const activeFactions = factions ?? knownFactions
+    const activeFactions = factions ?? await discoverFactions()
     if (activeFactions.length === 0) {
       return { action: 'join', success: false, error: 'no factions', usedLLM: false }
     }
@@ -123,62 +121,18 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
 
     if (llm && activeFactions.length > 0) {
       try {
-        const holdings = await kit.state.getHoldings()
-        const TOKEN_MUL = 1_000_000
-        const holdingsStr = [...holdings.entries()]
-          .map(([m, b]) => {
-            const f = activeFactions.find((ff) => ff.mint === m)
-            return f ? `${f.symbol}: ${(b / TOKEN_MUL).toFixed(0)} tokens` : null
-          })
-          .filter(Boolean)
-          .join(', ') || 'none'
-
-        const symbols = activeFactions.slice(0, 15).map((f) => f.symbol).join(', ')
-        const heldSymbols = [...holdings.keys()]
-          .map((m) => activeFactions.find((f) => f.mint === m)?.symbol)
-          .filter(Boolean)
-          .join(', ')
-
-        const prompt = `You are a ${personality} agent in Pyre, a faction warfare game on Solana. One decision per turn.
-
-Factions: ${symbols}
-Your holdings: ${holdingsStr}
-Held factions: ${heldSymbols || 'none'}
-
-Actions:
-- JOIN SYMBOL "message" — buy in
-- DEFECT SYMBOL "message" — sell (requires holding)
-- MESSAGE SYMBOL "message" — talk in comms
-- FUD SYMBOL "message" — trash talk + micro sell (requires holding)
-- RALLY SYMBOL — support (no message)
-- INFILTRATE SYMBOL "message" — secretly join rival
-- LAUNCH "name" — create new faction
-
-Rules: one line only. SYMBOL must be from the list above. Message under 80 chars.
-Example: JOIN ${activeFactions[0]?.symbol || 'IRON'} "early is everything"
-
-Your move:`
-
-        const raw = await llm.generate(prompt)
-        if (raw) {
-          // Scan all lines for an action pattern — small models wrap output in prose
-          const actionPattern = /(JOIN|DEFECT|MESSAGE|FUD|RALLY|INFILTRATE|LAUNCH)\s+(?:"([^"]+)"|(\S+))(?:\s+"([^"]*)")?/i
-          const match = raw.match(actionPattern)
-          if (match) {
-            action = match[1].toLowerCase()
-            const target = match[2] || match[3]
-            message = match[4]?.trim() || undefined
-
-            if (action === 'launch') {
-              message = target // for launch, target is the name
-            } else {
-              const f = activeFactions.find(
-                (ff) => ff.symbol.toLowerCase() === target?.toLowerCase(),
-              )
-              if (f) faction = f
-            }
-            usedLLM = true
+        const decision = await llmDecide(
+          kit, agentState, activeFactions, recentMessages, llm, logger, solRange, { compact: true },
+        )
+        if (decision) {
+          action = decision.action
+          sol = decision.sol ?? sol
+          message = decision.message
+          if (decision.faction) {
+            const f = activeFactions.find((ff) => ff.mint === decision.faction)
+            if (f) faction = f
           }
+          usedLLM = true
         }
       } catch (e: any) {
         logger(`[${publicKey.slice(0, 8)}] LLM error: ${e.message?.slice(0, 80)}`)
@@ -511,6 +465,12 @@ Your move:`
       if (execConfirm) await execConfirm()
 
       logger(`[${publicKey.slice(0, 8)}] ${description} — OK`)
+
+      // Track recent messages to prevent repetition
+      if (message) {
+        recentMessages.push(message.replace(/^<+/, '').replace(/>+\s*$/, '').toLowerCase())
+        if (recentMessages.length > 30) recentMessages.shift()
+      }
 
       return {
         action: action as any,

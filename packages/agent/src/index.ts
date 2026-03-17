@@ -12,7 +12,7 @@ import {
 } from './types'
 import { PERSONALITY_SOL, PERSONALITY_WEIGHTS, assignPersonality } from './defaults'
 import { chooseAction, sentimentBuySize } from './action'
-import { llmDecide } from './agent'
+import { llmDecide, buildCompactModelPrompt, FactionContext, LLMDecideOptions } from './agent'
 import { executeAction } from './executor'
 import { weightsFromCounts, classifyPersonality, actionIndex } from './chain'
 import { pick, randRange, ts } from './util'
@@ -39,6 +39,8 @@ export {
 } from './defaults'
 export { classifyPersonality, weightsFromCounts, actionIndex } from './chain'
 export { generateFactionIdentity } from './faction'
+export { llmDecide, buildCompactModelPrompt }
+export type { FactionContext, LLMDecideOptions }
 
 export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgent> {
   const { kit, keypair, llm, maxFoundedFactions = 2 } = config
@@ -118,13 +120,13 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     }
   }
 
-  // Discover known factions
-  const knownFactions: FactionInfo[] = []
   const usedFactionNames = new Set<string>()
-  try {
+
+  async function discoverFactions(): Promise<FactionInfo[]> {
     const result = await kit.actions.getFactions({ limit: 50, sort: 'newest' })
+    const factions: FactionInfo[] = []
     for (const t of result.factions) {
-      knownFactions.push({
+      factions.push({
         mint: t.mint,
         name: t.name,
         symbol: t.symbol,
@@ -132,9 +134,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
       })
       usedFactionNames.add(t.name)
     }
-    logger(`[${publicKey.slice(0, 8)}] discovered ${knownFactions.length} factions`)
-  } catch {
-    logger(`[${publicKey.slice(0, 8)}] faction discovery failed`)
+    return factions
   }
 
   function serialize(): SerializedAgentState {
@@ -149,7 +149,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
   }
 
   async function tick(factions?: FactionInfo[]): Promise<AgentTickResult> {
-    const activeFactions = factions ?? knownFactions
+    const activeFactions = factions ?? await discoverFactions()
 
     // Try LLM decision first, fall back to weighted random
     let decision: LLMDecision | null = null
