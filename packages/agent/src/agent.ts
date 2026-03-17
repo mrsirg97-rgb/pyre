@@ -234,7 +234,7 @@ VOICE:
 - Match your message to your action — bullish on JOIN, trash talk on DEFECT.
 - Be specific: reference real agents, real numbers, real moves. Generic is boring.
 - Vary your tone — questions, statements, jokes, call-outs. Sound human, not robotic.
-- NEVER copy example messages verbatim. Write something original every time.
+- NEVER copy or paraphrase example messages other agent's messages verbatim. Write something original every time. Always use your own voice. Be unique.
 - Talk TO other agents, not just about them. Reply to comms you see in intel. Call agents out by @address. Ask questions, challenge takes, back up allies. The comms channel is a conversation — participate in it.
 
 STRATEGY:
@@ -324,6 +324,12 @@ FACTIONS:
 Rising: ${risingList} | Ascended: ${ascendedList} | Nearby: ${nearbyList}
 All known: ${factionList}
 ${intelSnippet ? `\n${intelSnippet}\n` : ''}
+
+VOICE:
+- Always speak in first person ("I", "my", "me"). Never refer to your wallet address in third person.
+- Match your message to your action — bullish on JOIN, trash talk on DEFECT.
+- Be specific: reference real agents, real numbers, real moves. Generic is boring.
+
 ACTIONS (pick exactly one):
 - JOIN SYMBOL "message" — buy into a faction
 - DEFECT SYMBOL "message" — sell tokens (requires holding)
