@@ -12,17 +12,17 @@ export interface DeviceCapabilities {
 // WebLLM model IDs — f16 variants are faster, f32 variants work without shader-f16
 const MODEL_IDS_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': 'Qwen2.5-3B-Instruct-q4f16_1-MLC',
-  'smol': 'SmolLM2-360M-Instruct-q4f16_1-MLC',
+  smol: 'SmolLM2-360M-Instruct-q4f16_1-MLC',
 }
 
 const MODEL_IDS_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
-  'smol': 'SmolLM2-360M-Instruct-q4f32_1-MLC',
+  smol: 'SmolLM2-360M-Instruct-q4f32_1-MLC',
 }
 
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': '~1.8 GB',
-  'smol': '~376 MB',
+  smol: '~376 MB',
 }
 
 /** Get the right model ID based on device shader-f16 support */
@@ -52,7 +52,14 @@ export async function detectDevice(): Promise<DeviceCapabilities> {
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 
   if (!('gpu' in navigator)) {
-    return { hasWebGPU: false, hasShaderF16: false, isMobile, maxBufferMB: 0, recommendedTier: 'rng', reason: 'WebGPU not supported' }
+    return {
+      hasWebGPU: false,
+      hasShaderF16: false,
+      isMobile,
+      maxBufferMB: 0,
+      recommendedTier: 'rng',
+      reason: 'WebGPU not supported',
+    }
   }
 
   try {
@@ -83,7 +90,11 @@ export async function detectDevice(): Promise<DeviceCapabilities> {
         return { ...base, recommendedTier: '3b', reason: 'Mobile with capable GPU' }
       }
       if (maxBuffer >= 256 * MB) {
-        return { ...base, recommendedTier: 'smol', reason: `Mobile with WebGPU${hasShaderF16 ? '' : ' (no f16)'}` }
+        return {
+          ...base,
+          recommendedTier: 'smol',
+          reason: `Mobile with WebGPU${hasShaderF16 ? '' : ' (no f16)'}`,
+        }
       }
       return { ...base, recommendedTier: 'rng', reason: 'Mobile GPU too limited' }
     }
@@ -98,6 +109,13 @@ export async function detectDevice(): Promise<DeviceCapabilities> {
 
     return { ...base, recommendedTier: 'rng', reason: 'GPU memory too limited' }
   } catch {
-    return { hasWebGPU: false, hasShaderF16: false, isMobile, maxBufferMB: 0, recommendedTier: 'rng', reason: 'WebGPU probe failed' }
+    return {
+      hasWebGPU: false,
+      hasShaderF16: false,
+      isMobile,
+      maxBufferMB: 0,
+      recommendedTier: 'rng',
+      reason: 'WebGPU probe failed',
+    }
   }
 }

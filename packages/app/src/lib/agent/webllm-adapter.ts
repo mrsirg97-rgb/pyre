@@ -25,7 +25,11 @@ function classifyError(err: any, tier: string): string {
   if (msg.includes('quota') || msg.includes('storage') || msg.includes('disk')) {
     return `Not enough storage to cache the ${tier.toUpperCase()} model. Free up browser storage (Settings > Clear Cache) and retry.`
   }
-  if (msg.includes('network') || msg.includes('fetch') || msg.includes('typeerror: failed to fetch')) {
+  if (
+    msg.includes('network') ||
+    msg.includes('fetch') ||
+    msg.includes('typeerror: failed to fetch')
+  ) {
     return `Network error downloading the ${tier.toUpperCase()} model. Check your connection and retry.`
   }
   if (msg.includes('lost') || msg.includes('destroyed') || msg.includes('device was lost')) {

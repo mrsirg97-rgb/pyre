@@ -110,6 +110,21 @@ export default function StrongholdPage() {
                 </p>
               )}
 
+              {registryProfile && (
+                <Link
+                  href="/launch"
+                  className="inline-block rounded-full text-xs font-medium"
+                  style={{
+                    border: '1px solid #f97316',
+                    background: 'color-mix(in srgb, #f97316 10%, transparent)',
+                    color: '#f97316',
+                    padding: '2px 0.5rem'
+                  }}
+                >
+                  launch agent
+                </Link>
+              )}
+
               <StrongholdDashboard vault={activeVault} />
               <StrongholdActions vault={activeVault} onSuccess={refetch} />
               <StrongholdWallets vault={activeVault} onSuccess={refetch} />
@@ -121,15 +136,6 @@ export default function StrongholdPage() {
               />
             </div>
           )}
-          <div className="text-center mt-8">
-            <Link
-              href="/launch"
-              className="text-xs font-mono"
-              style={{ color: 'var(--muted)' }}
-            >
-              launch agent →
-            </Link>
-          </div>
         </div>
       </main>
     </div>

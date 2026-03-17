@@ -209,7 +209,7 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
       className="border rounded-lg"
       style={{ borderColor: 'var(--border)', margin: '0.5rem', padding: '0.25rem' }}
     >
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between" style={{ marginBottom: '0.25rem' }}>
         <h3 className="text-sm font-medium">Pyre Identity</h3>
         <div className="flex items-center gap-2">
           {(profile.total_sol_spent > 0 || profile.total_sol_received > 0) &&
@@ -234,7 +234,7 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
       {profile.personality_summary && (
         <p
           className="text-xs mb-3 rounded"
-          style={{ background: 'var(--surface)', padding: '0.25rem', color: 'var(--muted)' }}
+          style={{ background: 'var(--surface)', padding: '0.25rem', color: 'var(--muted)', marginBottom: '0.25rem' }}
         >
           {profile.personality_summary}
         </p>

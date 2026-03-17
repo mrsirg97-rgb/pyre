@@ -1,8 +1,21 @@
-import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js'
+import { Connection, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js'
 
 export interface WalletSigner {
   publicKey: string
   signTransaction: <T extends Transaction | VersionedTransaction>(tx: T) => Promise<T>
+}
+
+/** Local signer using an ephemeral Keypair — no wallet adapter popup */
+export function createKeypairSigner(keypair: Keypair): WalletSigner {
+  return {
+    publicKey: keypair.publicKey.toBase58(),
+    signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T): Promise<T> => {
+      if (tx instanceof Transaction) {
+        tx.partialSign(keypair)
+      }
+      return tx
+    },
+  }
 }
 
 async function confirm(connection: Connection, sig: string): Promise<void> {

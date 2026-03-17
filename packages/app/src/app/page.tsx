@@ -150,36 +150,34 @@ export default function StagePage() {
                   break
                 }
 
-                // 2. Vault-routed: signer delta is 0, check the vault's token account
-                // Find any non-signer, non-BC account with a token delta for this mint
+                // 2. Vault-routed: check any non-signer, non-BC account with a token delta
                 let vaultTokenDelta = 0
                 let vaultOwner: string | null = null
-                if (traderTokenDelta === 0) {
-                  for (const postBal of post) {
-                    if (postBal.mint !== faction.mint) continue
-                    if (postBal.owner === trader || postBal.owner === bcAddress) continue
-                    const preBal = pre.find((p) => p.accountIndex === postBal.accountIndex)
-                    const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
-                    const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
-                    const delta = postAmt - preAmt
-                    if (delta !== 0) {
-                      vaultTokenDelta = delta
-                      vaultOwner = postBal.owner ?? null
-                      break
-                    }
+                for (const postBal of post) {
+                  if (postBal.mint !== faction.mint) continue
+                  if (postBal.owner === trader || postBal.owner === bcAddress) continue
+                  const preBal = pre.find((p) => p.accountIndex === postBal.accountIndex)
+                  const preAmt = Number(preBal?.uiTokenAmount?.amount || '0')
+                  const postAmt = Number(postBal.uiTokenAmount?.amount || '0')
+                  const delta = postAmt - preAmt
+                  if (delta !== 0) {
+                    vaultTokenDelta = delta
+                    vaultOwner = postBal.owner ?? null
+                    break
                   }
                 }
 
-                // 3. Vault-routed SOL: if BC sol delta is ~0 but vault had token delta,
-                //    find SOL received/sent by the vault account
-                if (absSol < 0.001 && vaultOwner) {
+                // 3. Vault-routed SOL: check vault account's SOL change
+                //    For buys, vault SOL decreases. For sells, vault SOL increases.
+                if (vaultOwner) {
                   const vaultIndex = accountKeys.findIndex(
                     (k) => k.pubkey.toString() === vaultOwner,
                   )
                   if (vaultIndex !== -1) {
                     const vaultSolDelta =
-                      tx.meta.postBalances[vaultIndex] - tx.meta.preBalances[vaultIndex]
-                    absSol = Math.abs(vaultSolDelta) / 1_000_000_000
+                      Math.abs(tx.meta.postBalances[vaultIndex] - tx.meta.preBalances[vaultIndex]) /
+                      1_000_000_000
+                    if (vaultSolDelta > absSol) absSol = vaultSolDelta
                   }
                 }
 
@@ -297,16 +295,16 @@ export default function StagePage() {
                     ) / 1_000_000_000
                 }
 
-                // Vault-routed SOL: if pool sol delta is ~0 but vault had token delta,
-                // check the vault account's SOL change
-                if (absSol < 0.001 && vaultOwner) {
+                // Vault-routed SOL: check vault account's SOL change
+                if (vaultOwner) {
                   const vaultIndex = accountKeys.findIndex(
                     (k) => k.pubkey.toString() === vaultOwner,
                   )
                   if (vaultIndex !== -1) {
                     const vaultSolDelta =
-                      tx.meta.postBalances[vaultIndex] - tx.meta.preBalances[vaultIndex]
-                    absSol = Math.abs(vaultSolDelta) / 1_000_000_000
+                      Math.abs(tx.meta.postBalances[vaultIndex] - tx.meta.preBalances[vaultIndex]) /
+                      1_000_000_000
+                    if (vaultSolDelta > absSol) absSol = vaultSolDelta
                   }
                 }
 
@@ -351,29 +349,36 @@ export default function StagePage() {
         }
         const merged = Array.from(bySignature.values())
 
-        // Reclassify micro-trades with memos:
-        // - buys with memo + no meaningful SOL → "said in" (messaged)
-        // - sells with memo + no meaningful SOL → "argued in" (argued)
-        // - rallied with memo → vault-routed message/fud that couldn't be classified
+        // Reclassify micro-trades:
+        // - micro buys with memo → "said in" (messaged)
+        // - micro sells → "argued in" (argued) — FUD is always a micro sell
+        // - micro trades with no memo and no SOL → filter out (dust/noise)
+        const filtered: ActionEntry[] = []
         for (const e of merged) {
-          if (e.memo && e.amount_sol === null && !e.hadTokenDelta) {
+          const isMicroTrade = e.amount_sol === null || e.amount_sol <= 0.002
+          if (isMicroTrade) {
             if (e.action === 'defected') {
-              e.action = 'argued'
+              if (e.memo) {
+                e.action = 'argued'
+              } else {
+                continue // dust sell with no memo — skip
+              }
             } else if (
-              e.action === 'joined' ||
-              e.action === 'reinforced' ||
-              e.action === 'rallied'
+              e.memo &&
+              (e.action === 'joined' || e.action === 'reinforced' || e.action === 'rallied')
             ) {
               e.action = 'messaged'
             }
           }
+          filtered.push(e)
         }
+        const entries2 = filtered
 
         // Distinguish "joined" vs "reinforced": sort oldest-first,
         // track agent+faction pairs — first buy = joined, later buys = reinforced
-        merged.sort((a, b) => a.timestamp - b.timestamp)
+        filtered.sort((a, b) => a.timestamp - b.timestamp)
         const seen = new Set<string>()
-        for (const e of merged) {
+        for (const e of filtered) {
           if (e.action === 'joined') {
             const key = `${e.agent}:${e.faction_mint}`
             if (seen.has(key)) {
@@ -384,8 +389,8 @@ export default function StagePage() {
           }
         }
 
-        merged.sort((a, b) => b.timestamp - a.timestamp)
-        setActions(merged)
+        filtered.sort((a, b) => b.timestamp - a.timestamp)
+        setActions(filtered)
       } catch {
         // ignore
       } finally {

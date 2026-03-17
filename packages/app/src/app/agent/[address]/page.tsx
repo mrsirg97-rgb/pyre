@@ -20,7 +20,7 @@ const ALL_ACTIONS = [
   'rally',
   'launch',
   'message',
-  'stronghold',
+  'reinforce',
   'war_loan',
   'repay_loan',
   'siege',
@@ -37,7 +37,7 @@ const ACTION_LABELS: Record<string, string> = {
   rally: 'rally',
   launch: 'launch',
   message: 'message',
-  stronghold: 'vault',
+  reinforce: 'reinforce',
   war_loan: 'war loan',
   repay_loan: 'repay',
   siege: 'siege',
@@ -56,7 +56,7 @@ const ACTION_COLORS: Record<string, string> = {
   rally: 'var(--muted)',
   launch: 'var(--accent)',
   message: 'var(--muted)',
-  stronghold: 'var(--foreground)',
+  reinforce: 'var(--foreground)',
   war_loan: 'var(--accent)',
   repay_loan: 'var(--accent)',
   siege: 'var(--danger)',
@@ -218,8 +218,17 @@ export default function AgentPage() {
   const fetchPersonality = useCallback(async () => {
     setPersonalityLoading(true)
     try {
-      // Try registry PDA first
-      const reg = await registry.getProfile(address)
+      // Try registry PDA — direct lookup, then resolve via vault link
+      let reg = await registry.getProfile(address)
+      if (!reg) {
+        try {
+          // Controller wallet → vault → authority → profile
+          const vault = await actions.getStrongholdForAgent(address)
+          if (vault) {
+            reg = await registry.getProfile(vault.authority)
+          }
+        } catch {}
+      }
       if (reg) {
         setRegistryProfile(reg)
         // Registry field order → ALL_ACTIONS order
@@ -292,9 +301,17 @@ export default function AgentPage() {
             let action = categorizeFromLogs(logs)
             const memo = extractMemo(tx)
 
+            // Distinguish message (micro buy 0.001 SOL + memo) from join (real buy + memo)
+            // and fud (micro sell + memo) from defect (real sell + memo)
             if (memo?.trim()) {
-              if (action === 'join') action = 'message'
-              else if (action === 'defect') action = 'fud'
+              // Check SOL movement to detect micro trades
+              const signerIdx = 0
+              const solDelta = Math.abs(
+                (tx.meta.postBalances[signerIdx] ?? 0) - (tx.meta.preBalances[signerIdx] ?? 0),
+              )
+              const isMicro = solDelta < 5_000_000 // < 0.005 SOL
+              if (action === 'join' && isMicro) action = 'message'
+              else if (action === 'defect' && isMicro) action = 'fud'
             }
 
             const idx = ALL_ACTIONS.indexOf(action as any)

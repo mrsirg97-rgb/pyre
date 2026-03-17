@@ -17,27 +17,36 @@ interface AgentEntry {
 }
 
 export default function FactionsPage() {
-  const { actions, connection } = usePyreKit()
+  const { actions, intel, connection } = usePyreKit()
   const [tab, setTab] = useState<'factions' | 'agents'>('factions')
-  const [factions, setFactions] = useState<FactionSummary[]>([])
-  const [total, setTotal] = useState(0)
+  const [risingFactions, setRisingFactions] = useState<FactionSummary[]>([])
+  const [ascendedFactions, setAscendedFactions] = useState<FactionSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [agents, setAgents] = useState<AgentEntry[]>([])
   const [agentsLoading, setAgentsLoading] = useState(false)
 
+  const allFactions = [...ascendedFactions, ...risingFactions]
+  const total = allFactions.length
+
   const fetchFactions = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await actions.getFactions({ limit: 100, sort: 'newest' })
-      const pyreFactions = result.factions.filter(
-        (t) => isPyreMint(t.mint) && !isBlacklistedMint(t.mint),
-      )
-      pyreFactions.sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
-      setFactions(pyreFactions)
-      setTotal(pyreFactions.length)
+      const [risingResult, ascendedResult] = await Promise.all([
+        intel.getRisingFactions(50),
+        intel.getAscendedFactions(50),
+      ])
+
+      const rising = risingResult.factions
+        .filter((t) => !isBlacklistedMint(t.mint))
+        .sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
+      setRisingFactions(rising)
+
+      const ascended = ascendedResult.factions
+        .filter((t) => !isBlacklistedMint(t.mint))
+        .sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
+      setAscendedFactions(ascended)
 
       // Enrich ascended factions with live pool mcap (non-blocking)
-      const ascended = pyreFactions.filter((f) => f.status === 'ascended')
       if (ascended.length > 0) {
         Promise.allSettled(
           ascended.map(async (faction) => {
@@ -66,8 +75,7 @@ export default function FactionsPage() {
             }
           }),
         ).then(() => {
-          // Re-render with enriched mcap
-          setFactions((prev) => {
+          setAscendedFactions((prev) => {
             const updated = [...prev]
             updated.sort((a, b) => (b.market_cap_sol || 0) - (a.market_cap_sol || 0))
             return updated
@@ -82,6 +90,7 @@ export default function FactionsPage() {
   }, [connection])
 
   const fetchAgents = useCallback(async () => {
+    const factions = allFactions
     if (factions.length === 0) return
     setAgentsLoading(true)
     try {
@@ -124,17 +133,17 @@ export default function FactionsPage() {
     } finally {
       setAgentsLoading(false)
     }
-  }, [connection, factions])
+  }, [connection, allFactions])
 
   useEffect(() => {
     fetchFactions()
   }, [fetchFactions])
 
   useEffect(() => {
-    if (tab === 'agents' && agents.length === 0 && factions.length > 0) {
+    if (tab === 'agents' && agents.length === 0 && allFactions.length > 0) {
       fetchAgents()
     }
-  }, [tab, agents.length, factions.length, fetchAgents])
+  }, [tab, agents.length, allFactions.length, fetchAgents])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -175,15 +184,42 @@ export default function FactionsPage() {
               <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>
                 Loading...
               </p>
-            ) : factions.length === 0 ? (
+            ) : allFactions.length === 0 ? (
               <p className="text-sm py-8 text-center" style={{ color: 'var(--muted)' }}>
                 No factions yet
               </p>
             ) : (
               <div>
-                {factions.map((f) => (
-                  <FactionCard key={f.mint} faction={f} />
-                ))}
+                {ascendedFactions.length > 0 && (
+                  <>
+                    <h2
+                      className="text-xs font-medium mb-2"
+                      style={{ color: 'var(--muted)', padding: '0.25rem' }}
+                    >
+                      ascended ({ascendedFactions.length})
+                    </h2>
+                    {ascendedFactions.map((f) => (
+                      <FactionCard key={f.mint} faction={f} />
+                    ))}
+                  </>
+                )}
+                {risingFactions.length > 0 && (
+                  <>
+                    <h2
+                      className="text-xs font-medium mb-2"
+                      style={{
+                        color: 'var(--muted)',
+                        padding: '0.25rem',
+                        marginTop: ascendedFactions.length > 0 ? '1rem' : 0,
+                      }}
+                    >
+                      rising ({risingFactions.length})
+                    </h2>
+                    {risingFactions.map((f) => (
+                      <FactionCard key={f.mint} faction={f} />
+                    ))}
+                  </>
+                )}
               </div>
             )
           ) : agentsLoading ? (

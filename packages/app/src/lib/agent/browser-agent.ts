@@ -1,7 +1,7 @@
 import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js'
 import { PyreKit } from 'pyre-world-kit'
 import type { SerializedGameState } from 'pyre-world-kit'
-import type { LLMAdapter, FactionInfo, Personality, AgentTickResult } from 'pyre-agent-kit'
+import type { LLMAdapter, FactionInfo, Personality, AgentTickResult, AgentState } from 'pyre-agent-kit'
 import {
   assignPersonality,
   PERSONALITY_SOL,
@@ -44,16 +44,10 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
 
   const kit = new PyreKit(connection, publicKey)
 
-  // Always init to resolve vault link from on-chain data
+  // Init state (loads registry checkpoint)
   await kit.state.init()
   if (config.kitState) {
-    // Save vault info before hydrate clears it
-    const resolvedVaultCreator = kit.state.vaultCreator
-    const resolvedStronghold = kit.state.state?.stronghold ?? null
     kit.state.hydrate(config.kitState)
-    // Restore vault info — hydrate sets stronghold to null
-    if (resolvedVaultCreator) kit.state.state!.vaultCreator = resolvedVaultCreator
-    if (resolvedStronghold) kit.state.state!.stronghold = resolvedStronghold
   }
 
   let personality: Personality = config.personality ?? assignPersonality()
@@ -95,16 +89,24 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     `[${publicKey.slice(0, 8)}] browser agent initialized — ${personality}, tick ${kit.state.tick}, ${knownFactions.length} factions`,
   )
 
-  // Load current on-chain holdings so agent knows what it owns
-  await kit.state.refreshHoldings()
-
-  const vc = kit.state.vaultCreator
+  const vc = await kit.state.getVaultCreator()
   if (vc) {
     logger(`[${publicKey.slice(0, 8)}] vault linked: ${vc.slice(0, 8)}...`)
   } else {
     logger(`[${publicKey.slice(0, 8)}] no vault found — actions requiring a stronghold will fail`)
   }
-  const stronghold = () => kit.state.vaultCreator ?? publicKey
+  const stronghold = async () => (await kit.state.getVaultCreator()) ?? publicKey
+
+  // Build an AgentState-compatible object for llmDecide
+  const agentState: AgentState = {
+    keypair: null as any, // not used by llmDecide
+    publicKey,
+    personality,
+    infiltrated: new Set(),
+    allies: new Set(),
+    rivals: new Set(),
+    lastAction: 'none',
+  }
 
   async function tick(factions?: FactionInfo[]): Promise<AgentTickResult> {
     const activeFactions = factions ?? knownFactions
@@ -112,51 +114,121 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
       return { action: 'join', success: false, error: 'no factions', usedLLM: false }
     }
 
-    const holdings = kit.state.state!.holdings
-    const hasHoldings = holdings.size > 0
-    const weights = [...PERSONALITY_WEIGHTS[personality]]
-
-    // Disable impossible actions
-    if (!hasHoldings) {
-      weights[1] = 0 // defect
-      weights[12] = 0 // fud
-    }
-
-    // Disable rally for already-rallied factions
-    const rallyEligible = activeFactions.filter((f) => !kit.state.hasRallied(f.mint))
-    if (rallyEligible.length === 0) weights[2] = 0
-
-    // Boost launch when few factions
-    const nonRazed = activeFactions.filter((f) => f.status !== 'razed')
-    if (nonRazed.length <= 2) weights[3] += 0.25
-    else if (nonRazed.length <= 5) weights[3] += 0.10
-
-    // Without LLM, skip message and fud (need generated text)
-    if (!llm) {
-      weights[4] = 0 // message
-      weights[12] = 0 // fud
-    }
-
-    const total = weights.reduce((a, b) => a + b, 0)
-    const roll = Math.random() * total
-    let cumulative = 0
-    const ALL_ACTIONS = [
-      'join', 'defect', 'rally', 'launch', 'message',
-      'war_loan', 'repay_loan', 'siege', 'ascend', 'raze',
-      'tithe', 'infiltrate', 'fud',
-    ] as const
+    // Try LLM decision first
     let action: string = 'join'
-    for (let i = 0; i < weights.length; i++) {
-      cumulative += weights[i]
-      if (roll < cumulative) {
-        action = ALL_ACTIONS[i]
-        break
+    let faction = pick(activeFactions)
+    let sol = randRange(solRange[0], solRange[1])
+    let message: string | undefined
+    let usedLLM = false
+
+    if (llm && activeFactions.length > 0) {
+      try {
+        const holdings = await kit.state.getHoldings()
+        const TOKEN_MUL = 1_000_000
+        const holdingsStr = [...holdings.entries()]
+          .map(([m, b]) => {
+            const f = activeFactions.find((ff) => ff.mint === m)
+            return f ? `${f.symbol}: ${(b / TOKEN_MUL).toFixed(0)} tokens` : null
+          })
+          .filter(Boolean)
+          .join(', ') || 'none'
+
+        const symbols = activeFactions.slice(0, 15).map((f) => f.symbol).join(', ')
+        const heldSymbols = [...holdings.keys()]
+          .map((m) => activeFactions.find((f) => f.mint === m)?.symbol)
+          .filter(Boolean)
+          .join(', ')
+
+        const prompt = `You are a ${personality} agent in Pyre, a faction warfare game on Solana. One decision per turn.
+
+Factions: ${symbols}
+Your holdings: ${holdingsStr}
+Held factions: ${heldSymbols || 'none'}
+
+Actions:
+- JOIN SYMBOL "message" — buy in
+- DEFECT SYMBOL "message" — sell (requires holding)
+- MESSAGE SYMBOL "message" — talk in comms
+- FUD SYMBOL "message" — trash talk + micro sell (requires holding)
+- RALLY SYMBOL — support (no message)
+- INFILTRATE SYMBOL "message" — secretly join rival
+- LAUNCH "name" — create new faction
+
+Rules: one line only. SYMBOL must be from the list above. Message under 80 chars.
+Example: JOIN ${activeFactions[0]?.symbol || 'IRON'} "early is everything"
+
+Your move:`
+
+        const raw = await llm.generate(prompt)
+        if (raw) {
+          // Scan all lines for an action pattern — small models wrap output in prose
+          const actionPattern = /(JOIN|DEFECT|MESSAGE|FUD|RALLY|INFILTRATE|LAUNCH)\s+(?:"([^"]+)"|(\S+))(?:\s+"([^"]*)")?/i
+          const match = raw.match(actionPattern)
+          if (match) {
+            action = match[1].toLowerCase()
+            const target = match[2] || match[3]
+            message = match[4]?.trim() || undefined
+
+            if (action === 'launch') {
+              message = target // for launch, target is the name
+            } else {
+              const f = activeFactions.find(
+                (ff) => ff.symbol.toLowerCase() === target?.toLowerCase(),
+              )
+              if (f) faction = f
+            }
+            usedLLM = true
+          }
+        }
+      } catch (e: any) {
+        logger(`[${publicKey.slice(0, 8)}] LLM error: ${e.message?.slice(0, 80)}`)
       }
     }
 
-    const faction = pick(activeFactions)
-    const [minSol, maxSol] = solRange
-    const sol = randRange(minSol, maxSol)
+    // Fallback: weighted random (no LLM or LLM failed)
+    if (!usedLLM) {
+      const holdings = await kit.state.getHoldings()
+      const hasHoldings = holdings.size > 0
+      const weights = [...PERSONALITY_WEIGHTS[personality]]
+
+      if (!hasHoldings) {
+        weights[1] = 0 // defect
+        weights[12] = 0 // fud
+      }
+
+      const rallyEligible = activeFactions.filter((f) => !kit.state.hasRallied(f.mint))
+      if (rallyEligible.length === 0) weights[2] = 0
+
+      const nonRazed = activeFactions.filter((f) => f.status !== 'razed')
+      if (nonRazed.length <= 2) weights[3] += 0.15
+      else if (nonRazed.length <= 5) weights[3] += 0.03
+
+      if (!llm) {
+        weights[4] = 0 // message
+        weights[12] = 0 // fud
+      }
+
+      const total = weights.reduce((a, b) => a + b, 0)
+      const roll = Math.random() * total
+      let cumulative = 0
+      const ALL_ACTIONS = [
+        'join', 'defect', 'rally', 'launch', 'message',
+        'war_loan', 'repay_loan', 'siege', 'ascend', 'raze',
+        'tithe', 'infiltrate', 'fud',
+      ] as const
+      action = 'join'
+      for (let i = 0; i < weights.length; i++) {
+        cumulative += weights[i]
+        if (roll < cumulative) {
+          action = ALL_ACTIONS[i]
+          break
+        }
+      }
+    }
+
+    // Fetch holdings for execution (defect/fud need balances)
+    // RNG path already fetched, LLM path needs a fresh fetch
+    const execHoldings = await kit.state.getHoldings()
 
     try {
       let execResult: any
@@ -169,45 +241,72 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             mint: faction.mint,
             agent: publicKey,
             amount_sol: Math.floor(sol * LAMPORTS_PER_SOL),
-            stronghold: stronghold(),
+            message,
+            stronghold: await stronghold(),
             ascended: faction.status === 'ascended',
           }
           if (!kit.state.hasVoted(faction.mint)) {
             joinParams.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
           }
-          const { result, confirm } = await kit.exec('actions', 'join', joinParams)
-          execResult = result
-          execConfirm = confirm
-          description = `join ${faction.symbol}`
+          try {
+            const { result, confirm } = await kit.exec('actions', 'join', joinParams)
+            execResult = result
+            execConfirm = confirm
+          } catch (e: any) {
+            if (e.message?.includes('6022') || e.message?.includes('VoteRequired')) {
+              joinParams.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
+              const retry = await kit.exec('actions', 'join', joinParams)
+              execResult = retry.result
+              execConfirm = retry.confirm
+            } else {
+              throw e
+            }
+          }
+          kit.state.markVoted(faction.mint)
+          description = `join ${faction.symbol}${message ? ` — "${message}"` : ''}`
           break
         }
         case 'defect': {
-          const held = [...holdings.entries()].filter(([, b]) => b > 0)
-          if (held.length === 0)
-            return { action: 'defect', success: false, error: 'no holdings', usedLLM: false }
-          const [mint, balance] = pick(held)
-          const sellAmount = Math.max(1, Math.floor(balance * (0.2 + Math.random() * 0.3)))
-          const f = activeFactions.find((ff) => ff.mint === mint)
+          // LLM picks the faction, RNG picks random from holdings
+          let defectMint: string
+          let defectBalance: number
+          if (usedLLM && faction.mint) {
+            defectMint = faction.mint
+            defectBalance = execHoldings.get(faction.mint) ?? 0
+          } else {
+            const held = [...execHoldings.entries()].filter(([, b]) => b > 0)
+            if (held.length === 0)
+              return { action: 'defect', success: false, error: 'no holdings', usedLLM }
+            ;[defectMint, defectBalance] = pick(held)
+          }
+          if (defectBalance <= 0)
+            return { action: 'defect', success: false, error: 'no balance', usedLLM }
+          const sellAmount = Math.max(1, Math.floor(defectBalance * (0.2 + Math.random() * 0.3)))
+          const f = activeFactions.find((ff) => ff.mint === defectMint)
           const { result, confirm } = await kit.exec('actions', 'defect', {
-            mint,
+            mint: defectMint,
             agent: publicKey,
             amount_tokens: sellAmount,
-            stronghold: stronghold(),
+            message,
+            stronghold: await stronghold(),
             ascended: f?.status === 'ascended',
           })
           execResult = result
           execConfirm = confirm
-          description = `defect ${f?.symbol ?? mint.slice(0, 8)}`
+          description = `defect ${f?.symbol ?? defectMint.slice(0, 8)}${message ? ` — "${message}"` : ''}`
           break
         }
         case 'rally': {
-          if (rallyEligible.length === 0)
-            return { action: 'rally', success: false, error: 'already rallied all', usedLLM: false }
-          const target = pick(rallyEligible)
+          const founded = kit.state.state?.founded ?? []
+          const eligible = activeFactions.filter((f) => !kit.state.hasRallied(f.mint))
+          const rallyTargets = eligible.filter((f) => !founded.includes(f.mint))
+          if (rallyTargets.length === 0)
+            return { action: 'rally', success: false, error: 'no eligible factions', usedLLM: false }
+          const target = pick(rallyTargets)
           const { result, confirm } = await kit.exec('actions', 'rally', {
             mint: target.mint,
             agent: publicKey,
-            stronghold: stronghold(),
+            stronghold: await stronghold(),
           })
           execResult = result
           execConfirm = confirm
@@ -217,18 +316,31 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
         case 'launch': {
           const founded = kit.state.state?.founded ?? []
           if (founded.length >= 2)
-            return { action: 'launch', success: false, error: 'max factions founded', usedLLM: false }
+            return {
+              action: 'launch',
+              success: false,
+              error: 'max factions founded',
+              usedLLM: false,
+            }
 
           let name = 'Pyre Faction'
           let symbol = 'PYRE'
           if (llm) {
-            const { generateFactionIdentity } = await import('pyre-agent-kit')
-            const usedNames = new Set(activeFactions.map((f) => f.name))
-            const identity = await generateFactionIdentity(personality, usedNames, llm)
-            if (identity) {
-              name = identity.name
-              symbol = identity.symbol
-            }
+            try {
+              const raw = await llm.generate(
+                `Invent a creative faction name (2-3 words). It can be a cult, cartel, syndicate, order, lab, movement, guild — anything memorable. One line only, just the name.`,
+              )
+              if (raw) {
+                const cleaned = raw.trim().replace(/^["']+|["']+$/g, '').replace(/\n.*/s, '').trim()
+                if (cleaned.length >= 3 && cleaned.length <= 32) {
+                  name = cleaned
+                  const words = cleaned.split(/\s+/)
+                  symbol = words.length >= 2
+                    ? words.slice(0, 2).map((w) => w.slice(0, 2).toUpperCase()).join('')
+                    : cleaned.slice(0, 4).toUpperCase()
+                }
+              }
+            } catch {}
           }
 
           const { result, confirm } = await kit.exec('actions', 'launch', {
@@ -244,65 +356,86 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           break
         }
         case 'message': {
-          if (!llm)
-            return { action: 'message', success: false, error: 'no LLM', usedLLM: false }
-          const msg = await llm.generate(
-            `You are an agent in faction ${faction.symbol}. Write a short, punchy one-liner for faction comms (under 60 chars). Be creative — no generic crypto talk.`,
-          )
+          // LLM path already provides message, RNG path needs to generate one
+          const msg = message ?? (llm
+            ? await llm.generate(
+                `You are an agent in faction ${faction.symbol}. Write a short, punchy one-liner for faction comms (under 60 chars). Be creative — no generic crypto talk.`,
+              )
+            : null)
           if (!msg)
-            return { action: 'message', success: false, error: 'LLM returned null', usedLLM: true }
+            return { action: 'message', success: false, error: 'no message', usedLLM }
           const params: any = {
             mint: faction.mint,
             agent: publicKey,
             message: msg.slice(0, 80),
-            stronghold: stronghold(),
+            stronghold: await stronghold(),
             ascended: faction.status === 'ascended',
           }
           if (!kit.state.hasVoted(faction.mint)) {
             params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
           }
-          const { result, confirm } = await kit.exec('actions', 'message', params)
-          execResult = result
-          execConfirm = confirm
+          try {
+            const { result, confirm } = await kit.exec('actions', 'message', params)
+            execResult = result
+            execConfirm = confirm
+          } catch (e: any) {
+            if (e.message?.includes('6022') || e.message?.includes('VoteRequired')) {
+              params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
+              const retry = await kit.exec('actions', 'message', params)
+              execResult = retry.result
+              execConfirm = retry.confirm
+            } else {
+              throw e
+            }
+          }
+          kit.state.markVoted(faction.mint)
           description = `message ${faction.symbol}: "${msg.slice(0, 60)}"`
           break
         }
         case 'fud': {
-          const heldMints = [...holdings.keys()]
-          const heldFactions = activeFactions.filter((f) => heldMints.includes(f.mint))
-          if (heldFactions.length === 0)
-            return { action: 'fud', success: false, error: 'no holdings to FUD', usedLLM: false }
-          const target = pick(heldFactions)
-          if (!llm)
-            return { action: 'fud', success: false, error: 'no LLM', usedLLM: false }
-          const msg = await llm.generate(
-            `You are trash-talking faction ${target.symbol}. Write aggressive, short FUD (under 60 chars). Be specific and provocative.`,
-          )
-          if (!msg)
-            return { action: 'fud', success: false, error: 'LLM returned null', usedLLM: true }
+          // LLM path already picks faction + message, RNG path picks from holdings
+          const fudTarget = usedLLM ? faction : (() => {
+            const heldMints = [...execHoldings.keys()]
+            const heldFactions = activeFactions.filter((f) => heldMints.includes(f.mint))
+            return heldFactions.length > 0 ? pick(heldFactions) : null
+          })()
+          if (!fudTarget)
+            return { action: 'fud', success: false, error: 'no holdings to FUD', usedLLM }
+          const fudMsg = message ?? (llm
+            ? await llm.generate(
+                `You are trash-talking faction ${fudTarget.symbol}. Write aggressive, short FUD (under 60 chars). Be specific and provocative.`,
+              )
+            : null)
+          if (!fudMsg)
+            return { action: 'fud', success: false, error: 'no message', usedLLM }
           const { result, confirm } = await kit.exec('actions', 'fud', {
-            mint: target.mint,
+            mint: fudTarget.mint,
             agent: publicKey,
-            message: msg.slice(0, 80),
-            stronghold: stronghold(),
-            ascended: target.status === 'ascended',
+            message: fudMsg.slice(0, 80),
+            stronghold: await stronghold(),
+            ascended: fudTarget.status === 'ascended',
           })
           execResult = result
           execConfirm = confirm
-          description = `fud ${target.symbol}: "${msg.slice(0, 60)}"`
+          description = `fud ${fudTarget.symbol}: "${fudMsg.slice(0, 60)}"`
           break
         }
         case 'infiltrate': {
-          const heldMints = [...holdings.keys()]
+          const heldMints = [...execHoldings.keys()]
           const rivals = activeFactions.filter((f) => !heldMints.includes(f.mint))
           if (rivals.length === 0)
-            return { action: 'infiltrate', success: false, error: 'no rival factions', usedLLM: false }
+            return {
+              action: 'infiltrate',
+              success: false,
+              error: 'no rival factions',
+              usedLLM: false,
+            }
           const target = pick(rivals)
           const infiltrateParams: any = {
             mint: target.mint,
             agent: publicKey,
             amount_sol: Math.floor(sol * 1.5 * LAMPORTS_PER_SOL),
-            stronghold: stronghold(),
+            stronghold: await stronghold(),
             ascended: target.status === 'ascended',
           }
           if (!kit.state.hasVoted(target.mint)) {
@@ -317,7 +450,12 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
         case 'tithe': {
           const ascended = activeFactions.filter((f) => f.status === 'ascended')
           if (ascended.length === 0)
-            return { action: 'tithe', success: false, error: 'no ascended factions', usedLLM: false }
+            return {
+              action: 'tithe',
+              success: false,
+              error: 'no ascended factions',
+              usedLLM: false,
+            }
           const target = pick(ascended)
           const { result, confirm } = await kit.exec('actions', 'tithe', {
             mint: target.mint,
@@ -349,7 +487,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             mint: faction.mint,
             agent: publicKey,
             amount_sol: Math.floor(sol * LAMPORTS_PER_SOL),
-            stronghold: stronghold(),
+            stronghold: await stronghold(),
             ascended: faction.status === 'ascended',
           }
           if (!kit.state.hasVoted(faction.mint)) {
@@ -377,11 +515,12 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
       return {
         action: action as any,
         faction: faction.mint,
+        message,
         success: true,
-        usedLLM: action === 'message' || action === 'fud',
+        usedLLM,
       }
     } catch (err: any) {
-      logger(`[${publicKey.slice(0, 8)}] ${action} ERROR: ${err.message?.slice(0, 80)}`)
+      logger(`[${publicKey.slice(0, 8)}] ${action} ${faction.symbol} ERROR: ${err.message?.slice(0, 80)}`)
       return {
         action: action as any,
         faction: faction.mint,
@@ -396,9 +535,20 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     const counts = kit.state.state?.actionCounts
     if (!counts) return false
     const countsArray = [
-      counts.join, counts.defect, counts.rally, counts.launch, counts.message,
-      counts.reinforce, counts.war_loan, counts.repay_loan, counts.siege,
-      counts.ascend, counts.raze, counts.tithe, counts.infiltrate, counts.fud,
+      counts.join,
+      counts.defect,
+      counts.rally,
+      counts.launch,
+      counts.message,
+      counts.reinforce,
+      counts.war_loan,
+      counts.repay_loan,
+      counts.siege,
+      counts.ascend,
+      counts.raze,
+      counts.tithe,
+      counts.infiltrate,
+      counts.fud,
     ]
     const total = countsArray.reduce((a, b) => a + b, 0)
     if (total < 5) return false
