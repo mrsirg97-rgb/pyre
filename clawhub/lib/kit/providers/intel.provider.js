@@ -63,11 +63,13 @@ class IntelProvider {
                 .catch(() => [])
             : Promise.resolve([]);
         const [walletValues, vaultValues] = await Promise.all([scanWallet, scanVault]);
-        // Merge balances from both sources
+        // Merge raw balances from both sources
+        const TOKEN_MULTIPLIER = 1_000_000;
+        const TOTAL_SUPPLY_RAW = 1_000_000_000 * TOKEN_MULTIPLIER;
         const balanceMap = new Map();
         for (const a of [...walletValues, ...vaultValues]) {
             const mint = a.account.data.parsed.info.mint;
-            const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0);
+            const balance = Number(a.account.data.parsed.info.tokenAmount.amount ?? 0);
             if (balance > 0 && (0, vanity_1.isPyreMint)(mint) && !(0, util_1.isBlacklistedMint)(mint)) {
                 balanceMap.set(mint, (balanceMap.get(mint) ?? 0) + balance);
             }
@@ -76,17 +78,18 @@ class IntelProvider {
             return [];
         // Per-mint faction lookups (parallel)
         const positions = [];
-        await Promise.all([...balanceMap.entries()].map(async ([mint, balance]) => {
+        await Promise.all([...balanceMap.entries()].map(async ([mint, rawBalance]) => {
             try {
                 const faction = await this.actionProvider.getFaction(mint);
-                const percentage = (balance / 1_000_000_000) * 100;
+                const uiBalance = rawBalance / TOKEN_MULTIPLIER;
+                const percentage = (rawBalance / TOTAL_SUPPLY_RAW) * 100;
                 positions.push({
                     mint,
                     name: faction.name,
                     symbol: faction.symbol,
-                    balance,
+                    balance: uiBalance,
                     percentage,
-                    value_sol: balance * faction.price_sol,
+                    value_sol: uiBalance * faction.price_sol,
                 });
             }
             catch { }
@@ -120,7 +123,7 @@ class IntelProvider {
                 const accounts = await this.connection.getParsedTokenAccountsByOwner(new web3_js_1.PublicKey(address), { programId: TOKEN_2022_PROGRAM_ID });
                 for (const a of accounts.value) {
                     const mint = a.account.data.parsed.info.mint;
-                    const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0);
+                    const balance = Number(a.account.data.parsed.info.tokenAmount.amount ?? 0);
                     if (balance > 0 && (0, vanity_1.isPyreMint)(mint) && !(0, util_1.isBlacklistedMint)(mint)) {
                         mints.push(mint);
                     }

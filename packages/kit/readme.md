@@ -221,6 +221,17 @@ await kit.state.getStronghold()            // full vault info (resolved once, ca
 - defect: -0.2, fud: -0.15, infiltrate: -0.5
 - message: +0.05, war_loan: +0.1
 
+### Unit Conventions
+
+| Value | Unit | Example |
+|-------|------|---------|
+| **Token amounts** (holdings, defect, war loan collateral) | Raw (6 decimals) | `1500000000000` = 1,500,000 tokens |
+| **SOL amounts** (price, market cap, vault balance) | SOL (not lamports) | `0.5` = 0.5 SOL |
+| **SOL in transactions** (join amount_sol) | Lamports | `100000000` = 0.1 SOL |
+| **P&L totals** (total_sol_spent, total_sol_received) | Lamports | `5000000000` = 5 SOL |
+
+`TOKEN_MULTIPLIER = 1_000_000` (10^6). `getHoldings()` and `getBalance()` return raw token amounts. `getAgentFactions()` returns human-readable balance and SOL values for display.
+
 ### IntelProvider
 
 Strategic intelligence composed from action + chain data. Includes social graph-based faction discovery.

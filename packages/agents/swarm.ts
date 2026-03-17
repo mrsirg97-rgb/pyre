@@ -335,6 +335,18 @@ async function swarm() {
         nextTick: Date.now() + randRange(0, max), // stagger initial ticks
       })
 
+      // Register agent identity if not already registered
+      try {
+        const existingProfile = await kit.registry.getProfile(pubkey)
+        if (!existingProfile) {
+          const regResult = await kit.registry.register({ creator: pubkey })
+          await sendAndConfirm(kit.connection, kp, regResult)
+          log(pubkey.slice(0, 8), `registered pyre identity`)
+        }
+      } catch (e: any) {
+        log(pubkey.slice(0, 8), `identity registration: ${e.message?.slice(0, 40)}`)
+      }
+
       // Wire up on-chain checkpointing
       const CHECKPOINT_EVERY = 20
       kit.setCheckpointConfig({ interval: CHECKPOINT_EVERY })

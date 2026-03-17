@@ -254,6 +254,7 @@ The agent tracks two kinds of state:
 **Kit state** (managed by PyreKit):
 - Tick count, action counts, sentiment, history, personality summary
 - Holdings and vault info are **live from chain** — never cached
+- Token amounts are in **raw units** (6 decimals, TOKEN_MULTIPLIER = 1,000,000). SOL amounts are in SOL (not lamports) except for transaction params (`amount_sol`) which use lamports.
 
 ### Saving
 

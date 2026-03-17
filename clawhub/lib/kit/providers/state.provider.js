@@ -261,7 +261,7 @@ class StateProvider {
         const holdings = new Map();
         for (const a of [...walletValues, ...vaultValues]) {
             const mint = a.account.data.parsed.info.mint;
-            const balance = Number(a.account.data.parsed.info.tokenAmount.uiAmount ?? 0);
+            const balance = Number(a.account.data.parsed.info.tokenAmount.amount ?? 0);
             if (balance > 0 && (0, vanity_1.isPyreMint)(mint) && !(0, util_1.isBlacklistedMint)(mint)) {
                 holdings.set(mint, (holdings.get(mint) ?? 0) + balance);
             }
