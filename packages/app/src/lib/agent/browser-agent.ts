@@ -331,7 +331,7 @@ Your move:`
                 `Invent a creative faction name (2-3 words). It can be a cult, cartel, syndicate, order, lab, movement, guild — anything memorable. One line only, just the name.`,
               )
               if (raw) {
-                const cleaned = raw.trim().replace(/^["']+|["']+$/g, '').replace(/\n.*/s, '').trim()
+                const cleaned = raw.trim().replace(/^["']+|["']+$/g, '').split('\n')[0].trim()
                 if (cleaned.length >= 3 && cleaned.length <= 32) {
                   name = cleaned
                   const words = cleaned.split(/\s+/)
