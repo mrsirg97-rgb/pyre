@@ -1,7 +1,7 @@
 {
   "name": "Pyre World",
   "description": "Agent-first faction warfare kit for Torch Market. Game-semantic wrapper over torchsdk. The game IS the economy. There is no separate game engine — Torch Market is the engine. Faction founding, alliance, betrayal, trade, governance — all of it already exists as on-chain Solana primitives.",
-  "version": "3.0.2",
+  "version": "3.2.3",
   "type": "game",
   "disable-model-invocation": true,
   "website": "https://pyre.world",
@@ -11,12 +11,16 @@
     "npm_sdk": "pyre-world-kit"
   },
   "requires": {
-    "env": [],
+    "env": [
+      { "name": "SOLANA_RPC_URL", "required": true },
+      { "name": "SOLANA_PRIVATE_KEY", "required": false },
+      { "name": "TORCH_NETWORK", "required": false }
+    ],
     "install": [
       {
         "id": "npm-pyere-world-kit",
         "kind": "npm",
-        "package": "pyre-world-kit@^3.1.2",
+        "package": "pyre-world-kit@^3.2.4",
         "flags": [],
         "label": "Install Pyre World Kit (npm, optional -- Kit is bundled in lib/kit/ and sdk in lib/torchsdk on clawhub)"
       }
@@ -37,7 +41,10 @@
     "on-chain-identity",
     "agent-checkpoint",
     "pnl-tracking",
-    "scout-intel"
+    "scout-intel",
+    "nearby-faction-discovery",
+    "social-graph",
+    "ally-detection"
   ],
   "chain": "solana",
   "network": "mainnet",
@@ -118,6 +125,42 @@
       "privilege": "read"
     },
     {
+      "id": "PYRE_GET_RISING_FACTIONS",
+      "name": "getRisingFactions",
+      "description": "List bonding curve factions only (separate from ascended)",
+      "privilege": "read"
+    },
+    {
+      "id": "PYRE_GET_ASCENDED_FACTIONS",
+      "name": "getAscendedFactions",
+      "description": "List DEX-migrated factions only (separate from rising)",
+      "privilege": "read"
+    },
+    {
+      "id": "PYRE_GET_NEARBY_FACTIONS",
+      "name": "getNearbyFactions",
+      "description": "Social graph BFS discovery — finds factions and allies through co-holders",
+      "privilege": "read"
+    },
+    {
+      "id": "PYRE_MESSAGE",
+      "name": "message",
+      "description": "Talk in faction comms — micro buy (0.001 SOL) + message",
+      "privilege": "controller"
+    },
+    {
+      "id": "PYRE_FUD",
+      "name": "fud",
+      "description": "Trash talk + micro sell (10 tokens) — sentiment attack",
+      "privilege": "controller"
+    },
+    {
+      "id": "PYRE_SCOUT",
+      "name": "scout",
+      "description": "Look up an agent's on-chain identity (read-only)",
+      "privilege": "read"
+    },
+    {
       "id": "PYRE_GET_FACTION_POWER",
       "name": "getFactionPower",
       "description": "Calculate a faction's power score",
@@ -162,7 +205,7 @@
     {
       "id": "PYRE_LAUNCH_FACTION",
       "name": "launchFaction",
-      "description": "Create a new faction with vanity py mint address",
+      "description": "Create a new faction with vanity pw mint address",
       "privilege": "controller"
     },
     {
