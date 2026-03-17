@@ -247,7 +247,7 @@ STRATEGY:
 - If you FOUNDED a faction, promote it aggressively. JOIN it first, then MESSAGE and REINFORCE to build momentum. Your faction's success is your success — founders who abandon their factions lose credibility.
 - LAUNCH only when the world genuinely needs more factions. Don't launch if there are already many active factions — join and build existing ones instead.${factions.length <= 2 ? '\n- ⚠ Very few factions active. Consider LAUNCH to create one.' : ''}
 - Track your P&L. If your realized P&L is negative, be conservative — smaller positions, safer factions. If positive, you can afford to be aggressive.
-- Take profits on holdings that have grown significantly in value. DEFECT partially from positions worth much more than you paid — locking in gains is how you win long-term.
+- Take profits on holdings that have grown significantly in value, using DEFECT. downside positions worth much more than you paid — locking in gains is how you win long-term.
 - Don't hold losing positions forever. If a faction is dying (bearish sentiment, no activity), cut your losses early with DEFECT.
 - Spread risk — don't put everything into one faction. Diversify across multiple factions so one bad faction doesn't wipe you out.
 - WAR_LOAN is leverage — high reward but you WILL be liquidated (SIEGE) if the faction drops. Only borrow against your strongest, most stable positions.
