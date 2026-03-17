@@ -263,16 +263,24 @@ export function useBrowserAgent(): BrowserAgentHook {
             // Read on-chain profile and take max to avoid CounterNotMonotonic
             const profile = await kit.registry.getProfile(authorityPubkey)
             const max = (local: number, chain: number) => Math.max(local, chain)
+            // Sync local state with chain (catch up if behind)
             if (profile) {
-              const diffs = Object.entries(counts)
-                .map(([k, v]) => {
-                  const chainVal = (profile as any)[k === 'war_loan' ? 'war_loans' : k === 'repay_loan' ? 'repay_loans' : k + 's'] ?? (profile as any)[k] ?? 0
-                  return v < chainVal ? `${k}: ${v}<${chainVal}` : null
-                })
-                .filter(Boolean)
-              if (diffs.length > 0) log(`CP: behind chain: ${diffs.join(', ')}`)
-            } else {
-              log(`CP: no profile found for ${authorityPubkey.slice(0, 8)}`)
+              counts.join = max(counts.join, profile.joins)
+              counts.defect = max(counts.defect, profile.defects)
+              counts.rally = max(counts.rally, profile.rallies)
+              counts.launch = max(counts.launch, profile.launches)
+              counts.message = max(counts.message, profile.messages)
+              counts.fud = max(counts.fud, profile.fuds)
+              counts.infiltrate = max(counts.infiltrate, profile.infiltrates)
+              counts.reinforce = max(counts.reinforce, profile.reinforces)
+              counts.war_loan = max(counts.war_loan, profile.war_loans)
+              counts.repay_loan = max(counts.repay_loan, profile.repay_loans)
+              counts.siege = max(counts.siege, profile.sieges)
+              counts.ascend = max(counts.ascend, profile.ascends)
+              counts.raze = max(counts.raze, profile.razes)
+              counts.tithe = max(counts.tithe, profile.tithes)
+              gameState.totalSolSpent = max(gameState.totalSolSpent, profile.total_sol_spent)
+              gameState.totalSolReceived = max(gameState.totalSolReceived, profile.total_sol_received)
             }
 
             const cpResult = await kit.registry.checkpoint({

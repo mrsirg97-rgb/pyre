@@ -415,9 +415,28 @@ async function runAgent(config: AgentConfig) {
 
       const counts = gameState.actionCounts
 
-      // Read on-chain profile and take max to avoid CounterNotMonotonic
+      // Read on-chain profile and sync local state (catch up if behind)
       const profile = await kit.registry.getProfile(pub)
       const mx = (local: number, chain: number) => Math.max(local, chain)
+
+      if (profile) {
+        counts.join = mx(counts.join, profile.joins)
+        counts.defect = mx(counts.defect, profile.defects)
+        counts.rally = mx(counts.rally, profile.rallies)
+        counts.launch = mx(counts.launch, profile.launches)
+        counts.message = mx(counts.message, profile.messages)
+        counts.fud = mx(counts.fud, profile.fuds)
+        counts.infiltrate = mx(counts.infiltrate, profile.infiltrates)
+        counts.reinforce = mx(counts.reinforce, profile.reinforces)
+        counts.war_loan = mx(counts.war_loan, profile.war_loans)
+        counts.repay_loan = mx(counts.repay_loan, profile.repay_loans)
+        counts.siege = mx(counts.siege, profile.sieges)
+        counts.ascend = mx(counts.ascend, profile.ascends)
+        counts.raze = mx(counts.raze, profile.razes)
+        counts.tithe = mx(counts.tithe, profile.tithes)
+        gameState.totalSolSpent = mx(gameState.totalSolSpent, profile.total_sol_spent)
+        gameState.totalSolReceived = mx(gameState.totalSolReceived, profile.total_sol_received)
+      }
 
       const cpResult = await kit.registry.checkpoint({
         signer: pub,
