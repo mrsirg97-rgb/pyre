@@ -13,7 +13,7 @@ exports.getBlacklistedMints = getBlacklistedMints;
 exports.getDexPool = getDexPool;
 exports.getDexVaults = getDexVaults;
 const web3_js_1 = require("@solana/web3.js");
-const torchsdk_1 = require("torchsdk");
+const program_1 = require("torchsdk/dist/program");
 // ─── Blacklist ──────────────────────────────────────────────────────
 // Mints from previous swarm runs. Agents should skip these and only
 // interact with freshly launched factions.
@@ -131,16 +131,16 @@ function getBlacklistedMints() {
     return Array.from(BLACKLISTED_MINTS);
 }
 /** Create an ephemeral agent keypair (memory-only, zero key management) */
-var torchsdk_2 = require("torchsdk");
-Object.defineProperty(exports, "createEphemeralAgent", { enumerable: true, get: function () { return torchsdk_2.createEphemeralAgent; } });
+var torchsdk_1 = require("torchsdk");
+Object.defineProperty(exports, "createEphemeralAgent", { enumerable: true, get: function () { return torchsdk_1.createEphemeralAgent; } });
 /** Get the Raydium pool state PDA for an ascended faction's DEX pool */
 function getDexPool(mint) {
-    const { poolState } = (0, torchsdk_1.getRaydiumMigrationAccounts)(new web3_js_1.PublicKey(mint));
+    const { poolState } = (0, program_1.getRaydiumMigrationAccounts)(new web3_js_1.PublicKey(mint));
     return poolState;
 }
 /** Get Raydium pool vault addresses for an ascended faction */
 function getDexVaults(mint) {
-    const accts = (0, torchsdk_1.getRaydiumMigrationAccounts)(new web3_js_1.PublicKey(mint));
+    const accts = (0, program_1.getRaydiumMigrationAccounts)(new web3_js_1.PublicKey(mint));
     return {
         solVault: (accts.isWsolToken0 ? accts.token0Vault : accts.token1Vault).toString(),
         tokenVault: (accts.isWsolToken0 ? accts.token1Vault : accts.token0Vault).toString(),

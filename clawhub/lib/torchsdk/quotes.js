@@ -3,6 +3,7 @@
  * Quote calculations
  *
  * Get expected output for buy/sell operations.
+ * Works for both bonding curve tokens and migrated (Raydium DEX) tokens.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getBorrowQuote = exports.getSellQuote = exports.getBuyQuote = void 0;
@@ -10,8 +11,40 @@ const web3_js_1 = require("@solana/web3.js");
 const program_1 = require("./program");
 const constants_1 = require("./constants");
 const tokens_1 = require("./tokens");
+// Raydium CPMM trade fee: 0.25% (25 bps) — standard for Raydium CPMM pools
+const RAYDIUM_FEE_BPS = 25;
+/**
+ * Fetch Raydium pool reserves for a migrated token.
+ */
+const fetchPoolReserves = async (connection, mint) => {
+    const raydium = (0, program_1.getRaydiumMigrationAccounts)(mint);
+    const [vault0Info, vault1Info] = await Promise.all([
+        connection.getTokenAccountBalance(raydium.token0Vault),
+        connection.getTokenAccountBalance(raydium.token1Vault),
+    ]);
+    const vault0Amount = BigInt(vault0Info.value.amount);
+    const vault1Amount = BigInt(vault1Info.value.amount);
+    if (raydium.isWsolToken0) {
+        return { solReserves: vault0Amount, tokenReserves: vault1Amount };
+    }
+    else {
+        return { solReserves: vault1Amount, tokenReserves: vault0Amount };
+    }
+};
+/**
+ * CPMM swap calculation: constant product with fee.
+ *
+ * effective_input = input * (10000 - fee_bps) / 10000
+ * output = effective_input * reserve_out / (reserve_in + effective_input)
+ */
+const cpmmSwap = (amountIn, reserveIn, reserveOut, feeBps = RAYDIUM_FEE_BPS) => {
+    const effectiveInput = (amountIn * BigInt(10000 - feeBps)) / BigInt(10000);
+    return (effectiveInput * reserveOut) / (reserveIn + effectiveInput);
+};
 /**
  * Get a buy quote: how many tokens for a given SOL amount.
+ *
+ * Works for both bonding curve and migrated (Raydium DEX) tokens.
  */
 const getBuyQuote = async (connection, mintStr, amountSolLamports) => {
     const mint = new web3_js_1.PublicKey(mintStr);
@@ -20,9 +53,31 @@ const getBuyQuote = async (connection, mintStr, amountSolLamports) => {
         throw new Error(`Token not found: ${mintStr}`);
     }
     const { bondingCurve } = tokenData;
+    // Migrated token — quote from Raydium DEX pool
     if (bondingCurve.bonding_complete) {
-        throw new Error('Bonding curve complete, trade on DEX');
+        const { solReserves, tokenReserves } = await fetchPoolReserves(connection, mint);
+        const amountSol = BigInt(amountSolLamports);
+        const tokensOut = cpmmSwap(amountSol, solReserves, tokenReserves);
+        // Price = sol per token (in lamports per base unit)
+        const priceBefore = Number(solReserves) / Number(tokenReserves);
+        const priceAfter = Number(solReserves + amountSol) / Number(tokenReserves - tokensOut);
+        const priceImpact = ((priceAfter - priceBefore) / priceBefore) * 100;
+        // Price in human-readable: SOL per display token (with 6 decimals)
+        const pricePerTokenSol = (priceBefore * constants_1.TOKEN_MULTIPLIER) / constants_1.LAMPORTS_PER_SOL;
+        const minOutput = (tokensOut * BigInt(99)) / BigInt(100);
+        return {
+            input_sol: Number(amountSol),
+            output_tokens: Number(tokensOut),
+            tokens_to_user: Number(tokensOut),
+            tokens_to_treasury: 0,
+            protocol_fee_sol: 0,
+            price_per_token_sol: pricePerTokenSol,
+            price_impact_percent: priceImpact,
+            min_output_tokens: Number(minOutput),
+            source: 'dex',
+        };
     }
+    // Bonding curve token — use bonding math
     const virtualSol = BigInt(bondingCurve.virtual_sol_reserves.toString());
     const virtualTokens = BigInt(bondingCurve.virtual_token_reserves.toString());
     const realSol = BigInt(bondingCurve.real_sol_reserves.toString());
@@ -42,11 +97,14 @@ const getBuyQuote = async (connection, mintStr, amountSolLamports) => {
         price_per_token_sol: (priceBefore * constants_1.TOKEN_MULTIPLIER) / constants_1.LAMPORTS_PER_SOL,
         price_impact_percent: priceImpact,
         min_output_tokens: Number(minOutput),
+        source: 'bonding',
     };
 };
 exports.getBuyQuote = getBuyQuote;
 /**
  * Get a sell quote: how much SOL for a given token amount.
+ *
+ * Works for both bonding curve and migrated (Raydium DEX) tokens.
  */
 const getSellQuote = async (connection, mintStr, amountTokens) => {
     const mint = new web3_js_1.PublicKey(mintStr);
@@ -55,9 +113,27 @@ const getSellQuote = async (connection, mintStr, amountTokens) => {
         throw new Error(`Token not found: ${mintStr}`);
     }
     const { bondingCurve } = tokenData;
+    // Migrated token — quote from Raydium DEX pool
     if (bondingCurve.bonding_complete) {
-        throw new Error('Bonding curve complete, trade on DEX');
+        const { solReserves, tokenReserves } = await fetchPoolReserves(connection, mint);
+        const tokenAmount = BigInt(amountTokens);
+        const solOut = cpmmSwap(tokenAmount, tokenReserves, solReserves);
+        const priceBefore = Number(solReserves) / Number(tokenReserves);
+        const priceAfter = Number(solReserves - solOut) / Number(tokenReserves + tokenAmount);
+        const priceImpact = ((priceBefore - priceAfter) / priceBefore) * 100;
+        const pricePerTokenSol = (priceBefore * constants_1.TOKEN_MULTIPLIER) / constants_1.LAMPORTS_PER_SOL;
+        const minOutput = (solOut * BigInt(99)) / BigInt(100);
+        return {
+            input_tokens: Number(tokenAmount),
+            output_sol: Number(solOut),
+            protocol_fee_sol: 0,
+            price_per_token_sol: pricePerTokenSol,
+            price_impact_percent: priceImpact,
+            min_output_sol: Number(minOutput),
+            source: 'dex',
+        };
     }
+    // Bonding curve token — use bonding math
     const virtualSol = BigInt(bondingCurve.virtual_sol_reserves.toString());
     const virtualTokens = BigInt(bondingCurve.virtual_token_reserves.toString());
     const tokenAmount = BigInt(amountTokens);
@@ -73,6 +149,7 @@ const getSellQuote = async (connection, mintStr, amountTokens) => {
         price_per_token_sol: (priceBefore * constants_1.TOKEN_MULTIPLIER) / constants_1.LAMPORTS_PER_SOL,
         price_impact_percent: priceImpact,
         min_output_sol: Number(minOutput),
+        source: 'bonding',
     };
 };
 exports.getSellQuote = getSellQuote;

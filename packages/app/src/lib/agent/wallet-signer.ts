@@ -10,7 +10,9 @@ export function createKeypairSigner(keypair: Keypair): WalletSigner {
   return {
     publicKey: keypair.publicKey.toBase58(),
     signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T): Promise<T> => {
-      if (tx instanceof Transaction) {
+      if (tx instanceof VersionedTransaction) {
+        tx.sign([keypair])
+      } else {
         tx.partialSign(keypair)
       }
       return tx
@@ -42,7 +44,7 @@ async function confirm(connection: Connection, sig: string): Promise<void> {
 export async function walletSignAndSend(
   connection: Connection,
   signer: WalletSigner,
-  result: { transaction: Transaction; additionalTransactions?: Transaction[] },
+  result: { transaction: Transaction | VersionedTransaction; additionalTransactions?: (Transaction | VersionedTransaction)[] },
 ): Promise<string> {
   const signedTx = await signer.signTransaction(result.transaction)
   const sig = await connection.sendRawTransaction(signedTx.serialize(), {

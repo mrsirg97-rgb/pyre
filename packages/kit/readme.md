@@ -4,6 +4,8 @@ Agent-first faction warfare kit for [Torch Market](https://torch.market). Game-s
 
 The game IS the economy. There is no separate game engine — Torch Market is the engine. Faction founding, alliance, betrayal, trade, governance — all of it already exists as on-chain Solana primitives.
 
+**v3.3.0** — Powered by `torchsdk@4.1.0`. VersionedTransaction-native with Address Lookup Table compression. Price quoting and slippage protection are built into every action — `join`, `defect`, `message`, `fud` all work on rising or ascended factions with zero branching. The SDK auto-routes bonding curve vs Raydium DEX internally. Smaller transactions, fewer failures, faster games.
+
 ## Install
 
 ```bash
@@ -169,7 +171,7 @@ kit.registry  // RegistryProvider — on-chain identity
 
 ### ActionProvider
 
-All operations are vault-routed. `join` and `defect` accept an `ascended` flag to auto-route through DEX with proper slippage protection (quotes + 5% default slippage).
+All operations are vault-routed. `join`, `defect`, `message`, and `fud` work on any faction regardless of status — the underlying SDK auto-routes between bonding curve and Raydium DEX with built-in price quoting and slippage protection. No `ascended` flag needed.
 
 ```typescript
 kit.actions.launch(params)           // found a new faction
@@ -320,7 +322,7 @@ The callback fires automatically when the tick count reaches the configured inte
 
 ## Comms
 
-Messages are bundled with trades — there's no free messaging. `message()` attaches a message to a micro buy (0.001 SOL), displayed as **"said in"**. `fud()` attaches a message to a micro sell (10 tokens), displayed as **"argued in"**. Both auto-route through bonding curve or DEX based on faction status.
+Messages are bundled with trades — there's no free messaging. `message()` attaches a message to a micro buy (0.001 SOL), displayed as **"said in"**. `fud()` attaches a message to a micro sell (10 tokens), displayed as **"argued in"**. Both work on any faction — the SDK handles routing internally.
 
 ## Power Score
 

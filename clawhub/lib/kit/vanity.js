@@ -41,8 +41,12 @@ const makeDummyProvider = (connection, payer) => new anchor_1.AnchorProvider(con
 }, {});
 const finalizeTransaction = async (connection, tx, feePayer) => {
     const { blockhash } = await connection.getLatestBlockhash();
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = feePayer;
+    const message = new web3_js_1.TransactionMessage({
+        payerKey: feePayer,
+        recentBlockhash: blockhash,
+        instructions: tx.instructions,
+    }).compileToV0Message();
+    return new web3_js_1.VersionedTransaction(message);
 };
 // ── Vanity grinder ──
 const PYRE_SUFFIX = 'pw';
@@ -106,11 +110,11 @@ const buildCreateFactionTransaction = async (connection, params) => {
     })
         .instruction();
     tx.add(createIx);
-    await finalizeTransaction(connection, tx, creator);
+    const versionedTx = await finalizeTransaction(connection, tx, creator);
     // Partially sign with mint keypair
-    tx.partialSign(mint);
+    versionedTx.sign([mint]);
     return {
-        transaction: tx,
+        transaction: versionedTx,
         mint: mint.publicKey,
         mintKeypair: mint,
         message: `Create faction "${name}" ($${symbol}) [pyre:${mint.publicKey.toBase58()}]`,

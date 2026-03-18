@@ -6,7 +6,7 @@
  */
 
 import { PublicKey } from '@solana/web3.js'
-import { getRaydiumMigrationAccounts } from 'torchsdk'
+import { getRaydiumMigrationAccounts } from 'torchsdk/dist/program'
 import { Intel } from './types/intel.types'
 
 // ─── Blacklist ──────────────────────────────────────────────────────

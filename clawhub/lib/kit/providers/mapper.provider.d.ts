@@ -17,14 +17,14 @@ export declare class MapperProvider implements Mapper {
         pool_price_sol: number | null;
     };
     buyResult: (r: BuyTransactionResult) => {
-        transaction: import("@solana/web3.js").Transaction;
-        additionalTransactions: import("@solana/web3.js").Transaction[] | undefined;
+        transaction: import("@solana/web3.js").VersionedTransaction;
+        additionalTransactions: import("@solana/web3.js").VersionedTransaction[] | undefined;
         message: string;
-        migrationTransaction: import("@solana/web3.js").Transaction | undefined;
+        migrationTransaction: import("@solana/web3.js").VersionedTransaction | undefined;
     };
     createResult: (r: CreateTokenResult) => {
-        transaction: import("@solana/web3.js").Transaction;
-        additionalTransactions: import("@solana/web3.js").Transaction[] | undefined;
+        transaction: import("@solana/web3.js").VersionedTransaction;
+        additionalTransactions: import("@solana/web3.js").VersionedTransaction[] | undefined;
         message: string;
         mint: import("@solana/web3.js").PublicKey;
         mintKeypair: import("@solana/web3.js").Keypair;

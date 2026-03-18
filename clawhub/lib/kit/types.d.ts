@@ -5,7 +5,7 @@
  * Torch Market IS the game engine — these types translate
  * protocol primitives into faction warfare language.
  */
-import type { Transaction, Keypair, PublicKey } from '@solana/web3.js';
+import type { VersionedTransaction, Keypair, PublicKey } from '@solana/web3.js';
 import type { TokenSortOption, TransactionResult, CreateTokenResult, SaidVerification, ConfirmResult, EphemeralAgent } from 'torchsdk';
 /** Faction lifecycle: rising (bonding) → ready (complete) → ascended (migrated) → razed (reclaimed) */
 export type FactionStatus = 'rising' | 'ready' | 'ascended' | 'razed';
@@ -284,7 +284,7 @@ export interface TitheParams {
 /** Re-export base result types with game names */
 export type { TransactionResult, CreateTokenResult, EphemeralAgent, SaidVerification, ConfirmResult, };
 export interface JoinFactionResult extends TransactionResult {
-    migrationTransaction?: Transaction;
+    migrationTransaction?: VersionedTransaction;
 }
 export interface LaunchFactionResult extends TransactionResult {
     mint: PublicKey;

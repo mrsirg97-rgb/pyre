@@ -12,14 +12,14 @@
  *   3. SDK uses agent.sign(tx) for all vault operations
  *   4. On shutdown, keys are GC'd. Authority unlinks the wallet.
  */
-import { Keypair, Transaction } from '@solana/web3.js';
+import { Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
 export interface EphemeralAgent {
     /** Base58 public key — pass this to linkWallet */
     publicKey: string;
-    /** Raw keypair for advanced usage (e.g. partialSign) */
+    /** Raw keypair for advanced usage */
     keypair: Keypair;
     /** Sign a transaction with the ephemeral key */
-    sign(tx: Transaction): Transaction;
+    sign(tx: Transaction | VersionedTransaction): Transaction | VersionedTransaction;
 }
 /**
  * Create an ephemeral agent keypair.

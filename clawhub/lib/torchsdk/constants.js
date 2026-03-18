@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TOKEN_MULTIPLIER = exports.LAMPORTS_PER_SOL = exports.BLACKLISTED_MINTS = exports.LEGACY_MINTS = exports.TOKEN_DECIMALS = exports.TOTAL_SUPPLY = exports.TREASURY_LOCK_SEED = exports.VAULT_WALLET_LINK_SEED = exports.TORCH_VAULT_SEED = exports.COLLATERAL_VAULT_SEED = exports.LOAN_SEED = exports.STAR_RECORD_SEED = exports.USER_STATS_SEED = exports.PROTOCOL_TREASURY_SEED = exports.VOTE_SEED = exports.USER_POSITION_SEED = exports.TREASURY_SEED = exports.BONDING_CURVE_SEED = exports.GLOBAL_CONFIG_SEED = exports.TOKEN_2022_PROGRAM_ID = exports.MEMO_PROGRAM_ID = exports.RAYDIUM_FEE_RECEIVER = exports.getRaydiumFeeReceiver = exports.RAYDIUM_AMM_CONFIG = exports.getRaydiumAmmConfig = exports.WSOL_MINT = exports.RAYDIUM_CPMM_PROGRAM = exports.getRaydiumCpmmProgram = exports.PROGRAM_ID = void 0;
+exports.TOKEN_MULTIPLIER = exports.LAMPORTS_PER_SOL = exports.BLACKLISTED_MINTS = exports.LEGACY_MINTS = exports.TOKEN_DECIMALS = exports.TOTAL_SUPPLY = exports.TREASURY_LOCK_SEED = exports.VAULT_WALLET_LINK_SEED = exports.TORCH_VAULT_SEED = exports.COLLATERAL_VAULT_SEED = exports.LOAN_SEED = exports.STAR_RECORD_SEED = exports.USER_STATS_SEED = exports.PROTOCOL_TREASURY_SEED = exports.VOTE_SEED = exports.USER_POSITION_SEED = exports.TREASURY_SEED = exports.BONDING_CURVE_SEED = exports.GLOBAL_CONFIG_SEED = exports.TOKEN_2022_PROGRAM_ID = exports.getAddressLookupTableAddress = exports.MEMO_PROGRAM_ID = exports.getRaydiumFeeReceiver = exports.getRaydiumAmmConfig = exports.WSOL_MINT = exports.getRaydiumCpmmProgram = exports.PROGRAM_ID = void 0;
 const web3_js_1 = require("@solana/web3.js");
 // Program ID - Mainnet/Devnet (deployed program)
 exports.PROGRAM_ID = new web3_js_1.PublicKey('8hbUkonssSEEtkqzwM7ZcZrD9evacM92TcWSooVF4BeT');
@@ -14,8 +14,6 @@ const getRaydiumCpmmProgram = () => new web3_js_1.PublicKey(isDevnet()
     ? 'CPMDWBwJDtYax9qW7AyRuVC19Cc4L4Vcy4n2BHAbHkCW'
     : 'CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C');
 exports.getRaydiumCpmmProgram = getRaydiumCpmmProgram;
-/** @deprecated Use getRaydiumCpmmProgram() for dynamic network support */
-exports.RAYDIUM_CPMM_PROGRAM = (0, exports.getRaydiumCpmmProgram)();
 // WSOL Mint (same on all networks)
 exports.WSOL_MINT = new web3_js_1.PublicKey('So11111111111111111111111111111111111111112');
 // Raydium AMM Config (different on mainnet vs devnet)
@@ -23,17 +21,19 @@ const getRaydiumAmmConfig = () => new web3_js_1.PublicKey(isDevnet()
     ? '9zSzfkYy6awexsHvmggeH36pfVUdDGyCcwmjT3AQPBj6'
     : 'D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2');
 exports.getRaydiumAmmConfig = getRaydiumAmmConfig;
-/** @deprecated Use getRaydiumAmmConfig() for dynamic network support */
-exports.RAYDIUM_AMM_CONFIG = (0, exports.getRaydiumAmmConfig)();
 // Raydium Fee Receiver (different on mainnet vs devnet)
 const getRaydiumFeeReceiver = () => new web3_js_1.PublicKey(isDevnet()
     ? 'G11FKBRaAkHAKuLCgLM6K6NUc9rTjPAznRCjZifrTQe2'
     : 'DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8');
 exports.getRaydiumFeeReceiver = getRaydiumFeeReceiver;
-/** @deprecated Use getRaydiumFeeReceiver() for dynamic network support */
-exports.RAYDIUM_FEE_RECEIVER = (0, exports.getRaydiumFeeReceiver)();
 // SPL Memo Program
 exports.MEMO_PROGRAM_ID = new web3_js_1.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+// Address Lookup Table (different on mainnet vs devnet)
+// These compress repeated accounts (program IDs, PDAs) from 32 bytes to 1 byte per tx.
+const getAddressLookupTableAddress = () => new web3_js_1.PublicKey(isDevnet()
+    ? '3umSStZSLJNk5QstxeQB12a2MSDh4o8RgSzT76gigJ8P'
+    : 'GQzbU32oN3znZa3uWFKGc9cBukpQbYYJSirKstMuFF3i');
+exports.getAddressLookupTableAddress = getAddressLookupTableAddress;
 // Token-2022 Program (for Token Extensions)
 exports.TOKEN_2022_PROGRAM_ID = new web3_js_1.PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 // PDA Seeds (must match the Rust program)

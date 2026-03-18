@@ -1,4 +1,4 @@
-import { Connection, Keypair } from '@solana/web3.js'
+import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js'
 
 async function confirm(connection: Connection, sig: string): Promise<void> {
   try {
@@ -28,7 +28,11 @@ export const sendAndConfirm = async (
   result: any,
 ): Promise<string> => {
   const tx = result.transaction
-  tx.partialSign(keypair)
+  if (tx instanceof VersionedTransaction) {
+    tx.sign([keypair])
+  } else {
+    tx.partialSign(keypair)
+  }
   const sig = await connection.sendRawTransaction(tx.serialize(), {
     skipPreflight: false,
     preflightCommitment: 'confirmed',
@@ -37,7 +41,11 @@ export const sendAndConfirm = async (
 
   if (result.additionalTransactions) {
     for (const addlTx of result.additionalTransactions) {
-      addlTx.partialSign(keypair)
+      if (addlTx instanceof VersionedTransaction) {
+        addlTx.sign([keypair])
+      } else {
+        addlTx.partialSign(keypair)
+      }
       const addlSig = await connection.sendRawTransaction(addlTx.serialize())
       await confirm(connection, addlSig)
     }

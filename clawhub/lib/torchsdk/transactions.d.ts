@@ -4,8 +4,14 @@
  * Build unsigned transactions for buy, sell, create, star, vault, and lending.
  * Agents sign these locally and submit to the network.
  */
-import { Connection } from '@solana/web3.js';
-import { BuyParams, DirectBuyParams, SellParams, CreateTokenParams, StarParams, MigrateParams, BorrowParams, RepayParams, LiquidateParams, ClaimProtocolRewardsParams, VaultSwapParams, HarvestFeesParams, SwapFeesToSolParams, CreateVaultParams, DepositVaultParams, WithdrawVaultParams, WithdrawTokensParams, LinkWalletParams, UnlinkWalletParams, TransferAuthorityParams, ReclaimParams, TransactionResult, BuyTransactionResult, CreateTokenResult } from './types';
+import { Connection, AddressLookupTableAccount } from '@solana/web3.js';
+import { BuyParams, DirectBuyParams, SellParams, CreateTokenParams, StarParams, MigrateParams, BorrowParams, RepayParams, LiquidateParams, ClaimProtocolRewardsParams, HarvestFeesParams, SwapFeesToSolParams, CreateVaultParams, DepositVaultParams, WithdrawVaultParams, WithdrawTokensParams, LinkWalletParams, UnlinkWalletParams, TransferAuthorityParams, ReclaimParams, TransactionResult, BuyTransactionResult, CreateTokenResult } from './types';
+/**
+ * Fetch the Torch ALT for this network. Cached per connection instance.
+ */
+export declare const fetchAddressLookupTable: (connection: Connection) => Promise<AddressLookupTableAccount | null>;
+/** Clear the cached ALT (useful after deploying a new table). */
+export declare const clearAltCache: () => void;
 /**
  * Build an unsigned vault-funded buy transaction.
  *
@@ -195,17 +201,6 @@ export declare const buildWithdrawTokensTransaction: (connection: Connection, pa
  * @returns Unsigned transaction and descriptive message
  */
 export declare const buildMigrateTransaction: (connection: Connection, params: MigrateParams) => Promise<TransactionResult>;
-/**
- * Build an unsigned vault-routed DEX swap transaction.
- *
- * Executes a Raydium CPMM swap through the vault PDA for migrated Torch tokens.
- * Full custody preserved — all value flows through the vault.
- *
- * @param connection - Solana RPC connection
- * @param params - Swap parameters (mint, signer, vault_creator, amount_in, minimum_amount_out, is_buy)
- * @returns Unsigned transaction and descriptive message
- */
-export declare const buildVaultSwapTransaction: (connection: Connection, params: VaultSwapParams) => Promise<TransactionResult>;
 /**
  * Build an unsigned harvest-fees transaction.
  *

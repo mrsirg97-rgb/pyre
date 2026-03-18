@@ -30,7 +30,12 @@ const createEphemeralAgent = () => {
         publicKey: keypair.publicKey.toBase58(),
         keypair,
         sign: (tx) => {
-            tx.partialSign(keypair);
+            if (tx instanceof web3_js_1.VersionedTransaction) {
+                tx.sign([keypair]);
+            }
+            else {
+                tx.partialSign(keypair);
+            }
             return tx;
         },
     };

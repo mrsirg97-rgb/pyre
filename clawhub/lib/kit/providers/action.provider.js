@@ -170,20 +170,6 @@ class ActionProvider {
         });
     }
     async defect(params) {
-        if (params.ascended) {
-            const slippage = params.slippage_bps ?? 500;
-            const quote = await (0, torchsdk_1.getSellQuote)(this.connection, params.mint, params.amount_tokens);
-            const minOut = Math.max(1, Math.floor(quote.output_sol * (1 - slippage / 10_000)));
-            return (0, torchsdk_1.buildVaultSwapTransaction)(this.connection, {
-                mint: params.mint,
-                signer: params.agent,
-                vault_creator: params.stronghold,
-                amount_in: params.amount_tokens,
-                minimum_amount_out: minOut,
-                is_buy: false,
-                message: params.message,
-            });
-        }
         return (0, torchsdk_1.buildSellTransaction)(this.connection, {
             mint: params.mint,
             seller: params.agent,
@@ -195,19 +181,6 @@ class ActionProvider {
     }
     async fud(params) {
         const MICRO_SELL_TOKENS = 10 * 1_000_000; // 10 tokens in raw units (6 decimals)
-        if (params.ascended) {
-            const quote = await (0, torchsdk_1.getSellQuote)(this.connection, params.mint, MICRO_SELL_TOKENS);
-            const minOut = Math.max(1, Math.floor(quote.output_sol * (1 - 500 / 10_000)));
-            return (0, torchsdk_1.buildVaultSwapTransaction)(this.connection, {
-                mint: params.mint,
-                signer: params.agent,
-                vault_creator: params.stronghold,
-                amount_in: MICRO_SELL_TOKENS,
-                minimum_amount_out: minOut,
-                is_buy: false,
-                message: params.message,
-            });
-        }
         return (0, torchsdk_1.buildSellTransaction)(this.connection, {
             mint: params.mint,
             seller: params.agent,
@@ -217,21 +190,6 @@ class ActionProvider {
         });
     }
     async join(params) {
-        if (params.ascended) {
-            const slippage = params.slippage_bps ?? 500;
-            const quote = await (0, torchsdk_1.getBuyQuote)(this.connection, params.mint, params.amount_sol);
-            const minOut = Math.max(1, Math.floor(quote.tokens_to_user * (1 - slippage / 10_000)));
-            const result = await (0, torchsdk_1.buildVaultSwapTransaction)(this.connection, {
-                mint: params.mint,
-                signer: params.agent,
-                vault_creator: params.stronghold,
-                amount_in: params.amount_sol,
-                minimum_amount_out: minOut,
-                is_buy: true,
-                message: params.message,
-            });
-            return this.mapper.buyResult(result);
-        }
         const result = await (0, torchsdk_1.buildBuyTransaction)(this.connection, {
             mint: params.mint,
             buyer: params.agent,
@@ -256,20 +214,6 @@ class ActionProvider {
     }
     async message(params) {
         const MICRO_BUY_LAMPORTS = 1_000_000; // 0.001 SOL
-        if (params.ascended) {
-            const quote = await (0, torchsdk_1.getBuyQuote)(this.connection, params.mint, MICRO_BUY_LAMPORTS);
-            const minOut = Math.max(1, Math.floor(quote.tokens_to_user * (1 - 500 / 10_000)));
-            const result = await (0, torchsdk_1.buildVaultSwapTransaction)(this.connection, {
-                mint: params.mint,
-                signer: params.agent,
-                vault_creator: params.stronghold,
-                amount_in: MICRO_BUY_LAMPORTS,
-                minimum_amount_out: minOut,
-                is_buy: true,
-                message: params.message,
-            });
-            return this.mapper.buyResult(result);
-        }
         const result = await (0, torchsdk_1.buildBuyTransaction)(this.connection, {
             mint: params.mint,
             buyer: params.agent,

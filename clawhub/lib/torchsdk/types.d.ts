@@ -1,7 +1,7 @@
 /**
  * Torch Market SDK Types
  */
-import { PublicKey, Transaction, Keypair } from '@solana/web3.js';
+import { PublicKey, VersionedTransaction, Keypair } from '@solana/web3.js';
 export type TokenStatus = 'bonding' | 'complete' | 'migrated' | 'reclaimed';
 export interface TokenSummary {
     mint: string;
@@ -86,6 +86,8 @@ export interface BuyQuoteResult {
     price_per_token_sol: number;
     price_impact_percent: number;
     min_output_tokens: number;
+    /** Where this quote came from: bonding curve or Raydium DEX pool */
+    source: 'bonding' | 'dex';
 }
 export interface SellQuoteResult {
     input_tokens: number;
@@ -94,6 +96,8 @@ export interface SellQuoteResult {
     price_per_token_sol: number;
     price_impact_percent: number;
     min_output_sol: number;
+    /** Where this quote came from: bonding curve or Raydium DEX pool */
+    source: 'bonding' | 'dex';
 }
 export interface BorrowQuoteResult {
     max_borrow_sol: number;
@@ -166,6 +170,9 @@ export interface BuyParams {
     message?: string;
     /** Vault creator pubkey. Vault pays for the buy. */
     vault: string;
+    /** Pre-fetched quote from getBuyQuote. If provided, skips internal quote fetch
+     *  and uses quote.source to route bonding vs DEX. */
+    quote?: BuyQuoteResult;
 }
 export interface DirectBuyParams {
     mint: string;
@@ -174,6 +181,8 @@ export interface DirectBuyParams {
     slippage_bps?: number;
     vote?: 'burn' | 'return';
     message?: string;
+    /** Pre-fetched quote from getBuyQuote. If provided, skips internal quote fetch. */
+    quote?: BuyQuoteResult;
 }
 export interface SellParams {
     mint: string;
@@ -183,6 +192,9 @@ export interface SellParams {
     message?: string;
     /** Vault creator pubkey. SOL goes to vault, tokens sold from vault ATA. */
     vault?: string;
+    /** Pre-fetched quote from getSellQuote. If provided, skips internal quote fetch
+     *  and uses quote.source to route bonding vs DEX. */
+    quote?: SellQuoteResult;
 }
 export interface CreateTokenParams {
     creator: string;
@@ -256,10 +268,10 @@ export interface TokenMetadataResult {
     mint: string;
 }
 export interface TransactionResult {
-    transaction: Transaction;
+    transaction: VersionedTransaction;
     /** Additional transactions when a single tx exceeds the size limit.
      *  When present, send all transactions in order: transaction first, then these. */
-    additionalTransactions?: Transaction[];
+    additionalTransactions?: VersionedTransaction[];
     message: string;
 }
 export interface BuyTransactionResult extends TransactionResult {
@@ -268,7 +280,7 @@ export interface BuyTransactionResult extends TransactionResult {
      *  ~1 SOL for Raydium costs, reimbursed by treasury in the same tx.
      *  If the caller can't afford it or it fails, anyone can trigger migration
      *  later via buildMigrateTransaction. */
-    migrationTransaction?: Transaction;
+    migrationTransaction?: VersionedTransaction;
 }
 export interface CreateTokenResult extends TransactionResult {
     mint: PublicKey;

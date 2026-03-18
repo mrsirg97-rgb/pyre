@@ -21,8 +21,12 @@ const makeDummyProvider = (connection, payer) => new anchor_1.AnchorProvider(con
 }, {});
 async function finalizeTransaction(connection, tx, feePayer) {
     const { blockhash } = await connection.getLatestBlockhash();
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = feePayer;
+    const message = new web3_js_1.TransactionMessage({
+        payerKey: feePayer,
+        recentBlockhash: blockhash,
+        instructions: tx.instructions,
+    }).compileToV0Message();
+    return new web3_js_1.VersionedTransaction(message);
 }
 class RegistryProvider {
     connection;
@@ -105,9 +109,9 @@ class RegistryProvider {
             .accounts({ creator, profile, walletLink, systemProgram: web3_js_1.SystemProgram.programId })
             .instruction();
         tx.add(ix);
-        await finalizeTransaction(this.connection, tx, creator);
+        const versionedTx = await finalizeTransaction(this.connection, tx, creator);
         return {
-            transaction: tx,
+            transaction: versionedTx,
             message: `Register agent profile [${profile.toBase58()}]`,
         };
     }
@@ -140,9 +144,9 @@ class RegistryProvider {
             .accounts({ signer, profile, systemProgram: web3_js_1.SystemProgram.programId })
             .instruction();
         tx.add(ix);
-        await finalizeTransaction(this.connection, tx, signer);
+        const versionedTx = await finalizeTransaction(this.connection, tx, signer);
         return {
-            transaction: tx,
+            transaction: versionedTx,
             message: `Checkpoint agent [${profile.toBase58()}]`,
         };
     }
@@ -164,9 +168,9 @@ class RegistryProvider {
         })
             .instruction();
         tx.add(ix);
-        await finalizeTransaction(this.connection, tx, authority);
+        const versionedTx = await finalizeTransaction(this.connection, tx, authority);
         return {
-            transaction: tx,
+            transaction: versionedTx,
             message: `Link wallet ${walletToLink.toBase58()} to agent [${profile.toBase58()}]`,
         };
     }
@@ -188,9 +192,9 @@ class RegistryProvider {
         })
             .instruction();
         tx.add(ix);
-        await finalizeTransaction(this.connection, tx, authority);
+        const versionedTx = await finalizeTransaction(this.connection, tx, authority);
         return {
-            transaction: tx,
+            transaction: versionedTx,
             message: `Unlink wallet ${walletToUnlink.toBase58()} from agent [${profile.toBase58()}]`,
         };
     }
@@ -205,9 +209,9 @@ class RegistryProvider {
             .accounts({ authority, profile, newAuthority })
             .instruction();
         tx.add(ix);
-        await finalizeTransaction(this.connection, tx, authority);
+        const versionedTx = await finalizeTransaction(this.connection, tx, authority);
         return {
-            transaction: tx,
+            transaction: versionedTx,
             message: `Transfer agent authority to ${newAuthority.toBase58()}`,
         };
     }

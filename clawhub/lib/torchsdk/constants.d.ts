@@ -1,16 +1,11 @@
 import { PublicKey } from '@solana/web3.js';
 export declare const PROGRAM_ID: PublicKey;
 export declare const getRaydiumCpmmProgram: () => PublicKey;
-/** @deprecated Use getRaydiumCpmmProgram() for dynamic network support */
-export declare const RAYDIUM_CPMM_PROGRAM: PublicKey;
 export declare const WSOL_MINT: PublicKey;
 export declare const getRaydiumAmmConfig: () => PublicKey;
-/** @deprecated Use getRaydiumAmmConfig() for dynamic network support */
-export declare const RAYDIUM_AMM_CONFIG: PublicKey;
 export declare const getRaydiumFeeReceiver: () => PublicKey;
-/** @deprecated Use getRaydiumFeeReceiver() for dynamic network support */
-export declare const RAYDIUM_FEE_RECEIVER: PublicKey;
 export declare const MEMO_PROGRAM_ID: PublicKey;
+export declare const getAddressLookupTableAddress: () => PublicKey;
 export declare const TOKEN_2022_PROGRAM_ID: PublicKey;
 export declare const GLOBAL_CONFIG_SEED = "global_config";
 export declare const BONDING_CURVE_SEED = "bonding_curve";

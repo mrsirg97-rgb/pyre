@@ -10,6 +10,8 @@ import {
   Connection,
   PublicKey,
   Transaction,
+  VersionedTransaction,
+  TransactionMessage,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
   Keypair,
@@ -66,10 +68,14 @@ const finalizeTransaction = async (
   connection: Connection,
   tx: Transaction,
   feePayer: PublicKey,
-): Promise<void> => {
+): Promise<VersionedTransaction> => {
   const { blockhash } = await connection.getLatestBlockhash()
-  tx.recentBlockhash = blockhash
-  tx.feePayer = feePayer
+  const message = new TransactionMessage({
+    payerKey: feePayer,
+    recentBlockhash: blockhash,
+    instructions: tx.instructions,
+  }).compileToV0Message()
+  return new VersionedTransaction(message)
 }
 
 // ── Vanity grinder ──
@@ -160,13 +166,13 @@ export const buildCreateFactionTransaction = async (
     .instruction()
 
   tx.add(createIx)
-  await finalizeTransaction(connection, tx, creator)
+  const versionedTx = await finalizeTransaction(connection, tx, creator)
 
   // Partially sign with mint keypair
-  tx.partialSign(mint)
+  versionedTx.sign([mint])
 
   return {
-    transaction: tx,
+    transaction: versionedTx,
     mint: mint.publicKey,
     mintKeypair: mint,
     message: `Create faction "${name}" ($${symbol}) [pyre:${mint.publicKey.toBase58()}]`,

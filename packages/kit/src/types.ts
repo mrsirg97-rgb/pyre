@@ -6,7 +6,7 @@
  * protocol primitives into faction warfare language.
  */
 
-import type { Transaction, Keypair, PublicKey } from '@solana/web3.js'
+import type { VersionedTransaction, Keypair, PublicKey } from '@solana/web3.js'
 import type {
   TokenSortOption,
   TransactionResult,
@@ -347,7 +347,7 @@ export type {
 }
 
 export interface JoinFactionResult extends TransactionResult {
-  migrationTransaction?: Transaction
+  migrationTransaction?: VersionedTransaction
 }
 
 export interface LaunchFactionResult extends TransactionResult {

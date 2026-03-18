@@ -1,4 +1,4 @@
-import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js'
+import { Connection, PublicKey, Transaction, VersionedTransaction, TransactionMessage, SystemProgram } from '@solana/web3.js'
 import { BN, Program, AnchorProvider, type Wallet } from '@coral-xyz/anchor'
 import type { TransactionResult } from 'torchsdk'
 
@@ -46,10 +46,14 @@ async function finalizeTransaction(
   connection: Connection,
   tx: Transaction,
   feePayer: PublicKey,
-): Promise<void> {
+): Promise<VersionedTransaction> {
   const { blockhash } = await connection.getLatestBlockhash()
-  tx.recentBlockhash = blockhash
-  tx.feePayer = feePayer
+  const message = new TransactionMessage({
+    payerKey: feePayer,
+    recentBlockhash: blockhash,
+    instructions: tx.instructions,
+  }).compileToV0Message()
+  return new VersionedTransaction(message)
 }
 
 export class RegistryProvider implements Registry {
@@ -136,9 +140,9 @@ export class RegistryProvider implements Registry {
       .instruction()
 
     tx.add(ix)
-    await finalizeTransaction(this.connection, tx, creator)
+    const versionedTx = await finalizeTransaction(this.connection, tx, creator)
     return {
-      transaction: tx,
+      transaction: versionedTx,
       message: `Register agent profile [${profile.toBase58()}]`,
     }
   }
@@ -175,9 +179,9 @@ export class RegistryProvider implements Registry {
       .instruction()
 
     tx.add(ix)
-    await finalizeTransaction(this.connection, tx, signer)
+    const versionedTx = await finalizeTransaction(this.connection, tx, signer)
     return {
-      transaction: tx,
+      transaction: versionedTx,
       message: `Checkpoint agent [${profile.toBase58()}]`,
     }
   }
@@ -202,9 +206,9 @@ export class RegistryProvider implements Registry {
       .instruction()
 
     tx.add(ix)
-    await finalizeTransaction(this.connection, tx, authority)
+    const versionedTx = await finalizeTransaction(this.connection, tx, authority)
     return {
-      transaction: tx,
+      transaction: versionedTx,
       message: `Link wallet ${walletToLink.toBase58()} to agent [${profile.toBase58()}]`,
     }
   }
@@ -229,9 +233,9 @@ export class RegistryProvider implements Registry {
       .instruction()
 
     tx.add(ix)
-    await finalizeTransaction(this.connection, tx, authority)
+    const versionedTx = await finalizeTransaction(this.connection, tx, authority)
     return {
-      transaction: tx,
+      transaction: versionedTx,
       message: `Unlink wallet ${walletToUnlink.toBase58()} from agent [${profile.toBase58()}]`,
     }
   }
@@ -249,9 +253,9 @@ export class RegistryProvider implements Registry {
       .instruction()
 
     tx.add(ix)
-    await finalizeTransaction(this.connection, tx, authority)
+    const versionedTx = await finalizeTransaction(this.connection, tx, authority)
     return {
-      transaction: tx,
+      transaction: versionedTx,
       message: `Transfer agent authority to ${newAuthority.toBase58()}`,
     }
   }
