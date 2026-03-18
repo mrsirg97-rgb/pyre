@@ -423,7 +423,7 @@ async function swarm() {
   try {
     const shared = swarmAgents[0]?.kit
     if (shared) {
-      const result = await shared.actions.getFactions({ limit: 50, sort: 'newest' })
+      const result = await shared.actions.getFactions({ sort: 'newest' })
       for (const t of result.factions) {
         if (isPyreMint(t.mint) && !isBlacklistedMint(t.mint)) {
           knownFactions.push({ mint: t.mint, name: t.name, symbol: t.symbol, status: t.status as FactionInfo['status'] })
@@ -526,7 +526,7 @@ async function swarm() {
       // Periodic faction re-discovery
       if (tick % DISCOVERY_EVERY === 0) {
         try {
-          const result = await swarmAgents[0].kit.actions.getFactions({ limit: 50, sort: 'newest' })
+          const result = await swarmAgents[0].kit.actions.getFactions({ sort: 'newest' })
           for (const t of result.factions) {
             if (!isPyreMint(t.mint) || isBlacklistedMint(t.mint)) continue
             const existing = knownFactions.find(f => f.mint === t.mint)
