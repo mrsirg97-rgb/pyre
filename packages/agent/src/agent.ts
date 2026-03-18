@@ -71,6 +71,9 @@ export const buildAgentPrompt = (
     positionValues.push({ label, valueSol, mint })
   }
 
+  // Sort by value descending — biggest positions first
+  positionValues.sort((a, b) => b.valueSol - a.valueSol)
+
   // Approximate cost basis: distribute net SOL invested across positions by token balance ratio
   const netInvested = (gameState.totalSolSpent - gameState.totalSolReceived) / 1e9
   const totalTokens = holdingsEntries.reduce((sum, [, bal]) => sum + bal, 0)
@@ -208,6 +211,7 @@ VOICE: ${VOICE_TRAITS[agent.publicKey.charCodeAt(0) % VOICE_TRAITS.length]}
 - Your message should reflect YOUR portfolio. Winners talk different than losers.
 
 STRATEGY:
+- Limit yourself to ~5 major holdings. MESSAGE/FUD in others is fine, but keep your real positions focused.${positionValues.length > 5 ? ` You hold ${positionValues.length} — consider DEFECT from your weakest.` : ''}
 - MESSAGE/FUD cost almost nothing but move sentiment — use them constantly.
 - REINFORCE factions you hold and believe in. Don't JOIN the same symbol twice.
 - DEFECT to lock in profits on winners or cut losses on dying factions. Don't hold losers.
@@ -233,73 +237,54 @@ export const buildCompactModelPrompt = (
   const factions = factionCtx.all
   const holdingsEntries = [...(holdings ?? new Map()).entries()]
 
-  // Holdings with SOL value (no cost basis)
+  // Sort holdings by SOL value descending
   const TOKEN_MULTIPLIER = 1_000_000
-  const symbolCounts = new Map<string, number>()
-  for (const [mint] of holdingsEntries) {
-    const f = factions.find((ff) => ff.mint === mint)
-    if (f) symbolCounts.set(f.symbol, (symbolCounts.get(f.symbol) ?? 0) + 1)
-  }
-  let totalHoldingsValue = 0
-  const holdingsList = holdingsEntries
+  const valued = holdingsEntries
     .map(([mint, bal]) => {
       const f = factions.find((ff) => ff.mint === mint)
       if (!f) return null
-      const label =
-        (symbolCounts.get(f.symbol) ?? 0) > 1 ? `${f.symbol}(${mint.slice(0, 6)})` : f.symbol
-      const valueSol = (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0)
-      totalHoldingsValue += valueSol
-      return `${label}: ${valueSol.toFixed(4)} SOL`
+      return { symbol: f.symbol, valueSol: (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0) }
     })
     .filter(Boolean)
-    .join(', ') || 'none'
+    .sort((a, b) => b!.valueSol - a!.valueSol) as { symbol: string; valueSol: number }[]
 
   const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
 
-  const risingList = factionCtx.rising.slice(0, 3).map((f) => f.symbol).join(', ') || 'none'
-  const ascendedList = factionCtx.ascended.slice(0, 3).map((f) => f.symbol).join(', ') || 'none'
-  const nearbyList = factionCtx.nearby.slice(0, 5).map((f) => f.symbol).join(', ') || 'none'
-  const factionList = factions.slice(0, 10).map((f) => f.symbol).join(', ')
+  // Compact: max 10 symbols, top 5 held by value
+  const s = factions.slice(0, 10).map((f) => f.symbol)
+  const held = valued.slice(0, 5).map((v) => v.symbol)
+  const lastActions = [...kit.state.history].slice(0, 3);
 
-  const doNotRepeat =
-    recentMessages.length > 0
-      ? `\nDO NOT SAY anything similar to these recent messages:\n${recentMessages.map((m) => `- "${m}"`).join('\n')}\n`
-      : ''
+  // Actions conditional on whether agent holds anything
+  const hasHoldings = held.length > 0
+  const actions = hasHoldings
+    ? [
+        `JOIN ${s[0] || 'IRON'}`,
+        `DEFECT ${held[0]}`,
+        `REINFORCE ${held[0]}`,
+        `MESSAGE ${held[0]} "${pick(['who else is holding?', 'not selling', 'just getting started', 'volume picking up', 'im not leaving'])}"`,
+        `FUD ${held[0]} "${pick(['founders went quiet', 'weak hands', 'dead faction', 'volume dried up', 'overvalued'])}"`,
+        `RALLY ${s[1] || s[0] || 'IRON'}`,
+        `TITHE ${held[0]}`,
+      ]
+    : [
+        `JOIN ${s[0] || 'IRON'}`,
+        `MESSAGE ${s[0] || 'IRON'} "${pick(['who else is holding?', 'just getting started', 'volume picking up', 'im not leaving'])}"`,
+        `RALLY ${s[0] || 'IRON'}`,
+        `TITHE ${s[0] || 'IRON'}`,
+        `ASCEND ${s[0] || 'IRON'}`,
+      ]
 
-  const memoryEntries = [...kit.state.history].slice(-15)
-  const memoryBlock =
-    memoryEntries.length > 0
-      ? `\nOn-chain memory:\n${memoryEntries.map((m) => `- ${m}`).join('\n')}\n`
-      : ''
+  return `Pyre — faction warfare on Solana. Factions are rival guilds with war chests, members, and reputation. Every action grows the faction. Earlier actions contribute more. You make ONE decision per turn.
+Lifecycle: LAUNCH → RISING → READY → ASCEND (to DEX)
 
-  // Build the valid symbol list — this is the ONLY thing the model can pick from
-  const validSymbols = factions.slice(0, 15).map((f) => f.symbol)
-  const s = validSymbols
-  const held = holdingsEntries.map(([mint]) => {
-    const f = factions.find((ff) => ff.mint === mint)
-    return f?.symbol
-  }).filter(Boolean)
+You: "${agent.publicKey.slice(0, 8)}" — ${agent.personality}
+Factions: ${s.join(', ')}
+${hasHoldings ? `You hold: ${held.join(', ')}` : 'You hold nothing — JOIN a faction.'}${lastActions.length > 0 ? `\nLast: ${lastActions.join('; ')}` : ''}
 
-  return `You play Pyre. Pick ONE action. SYMBOL must be one of: ${s.join(', ')}
+${actions.join('\n')}
 
-You are "${agent.publicKey.slice(0, 8)}". ${agent.personality}. P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-You hold: ${held.join(', ') || 'nothing'}
-${memoryEntries.length > 0 ? `Recent: ${memoryEntries.slice(-5).join('; ')}` : ''}
-
-SYMBOL = a faction from the list above (e.g. ${s.slice(0, 3).join(', ')})
-
-ACTIONS — reply with exactly one line:
-JOIN SYMBOL — buy into a faction
-DEFECT SYMBOL — sell tokens, take profits
-REINFORCE SYMBOL — double down on a faction you hold
-INFILTRATE SYMBOL — secretly join a rival
-MESSAGE SYMBOL "${pick(['who else is holding?', 'not selling', 'this is just getting started', 'sleeping on this one', 'where did everyone go?', 'volume is picking up', 'calling it now, top 3', 'im not leaving', 'doubled down', 'why is nobody talking about this'])}"
-FUD SYMBOL "${pick(['founders went quiet', 'this is going nowhere', 'weak hands everywhere', 'dead faction walking', 'who is still in this?', 'volume dried up', 'i sold the top', 'no one is buying', 'exit while you can', 'overvalued'])}"
-RALLY SYMBOL — show support
-TITHE SYMBOL — harvest fees
-
-SYMBOL must be from the list above. One line. No explanation.
-
+One line. Faction must be from the list.
 Your action:`
 }
 
@@ -568,27 +553,35 @@ export async function llmDecide(
 ): Promise<LLMDecision | null> {
   const compact = options?.compact ?? false
 
-  // Fetch holdings fresh from chain
+  // Fetch holdings fresh from chain — log top 5 by value
   const holdings = await kit.state.getHoldings()
+  const TOKEN_MUL = 1_000_000
   const holdingSummary = [...holdings.entries()]
     .map(([m, b]) => {
       const f = factions.find((ff) => ff.mint === m)
-      return `${f?.symbol ?? m.slice(0, 8)}:${b}`
+      const sym = f?.symbol ?? m.slice(0, 8)
+      const val = f ? ((b / TOKEN_MUL) * (f.price_sol ?? 0)).toFixed(4) : '?'
+      return { sym, val, valueSol: f ? (b / TOKEN_MUL) * (f.price_sol ?? 0) : 0 }
     })
+    .sort((a, b) => b.valueSol - a.valueSol)
+    .slice(0, 5)
+    .map((h) => `${h.sym}:${h.val}`)
     .join(', ')
-  log(`[${agent.publicKey.slice(0, 8)}] holdings: ${holdingSummary || 'none'}`)
+  log(`[${agent.publicKey.slice(0, 8)}] top holdings: ${holdingSummary || 'none'} (${holdings.size} total)`)
 
   // Fetch faction context: rising, ascended, nearby (parallel)
+  // Compact mode: minimal fetches to keep context small for smol models
   const risingLimit = compact ? 3 : 5
   const ascendedLimit = compact ? 3 : 5
-  const nearbyLimit = compact ? 5 : 10
   const [risingResult, ascendedResult, nearbyResult] = await Promise.all([
     kit.intel.getRisingFactions(risingLimit).catch(() => ({ factions: [] })),
     kit.intel.getAscendedFactions(ascendedLimit).catch(() => ({ factions: [] })),
-    kit.intel.getNearbyFactions(agent.publicKey, { depth: 1, limit: nearbyLimit }).catch(() => ({
-      factions: [],
-      allies: [] as string[],
-    })),
+    compact
+      ? Promise.resolve({ factions: [], allies: [] as string[] })
+      : kit.intel.getNearbyFactions(agent.publicKey, { depth: 1, limit: 10 }).catch(() => ({
+          factions: [],
+          allies: [] as string[],
+        })),
   ])
 
   // Update allies from social graph discovery
@@ -621,16 +614,14 @@ export async function llmDecide(
   }
 
   let intelSnippet = ''
-  try {
+  if (!compact) try {
     const heldMints = [...holdings.keys()]
     const heldFactions = allFactions.filter((f) => heldMints.includes(f.mint))
     const otherFactions = allFactions.filter((f) => !heldMints.includes(f.mint))
-    const toScout = compact
-      ? [...heldFactions.slice(0, 1)]
-      : [
-          ...heldFactions.slice(0, 2),
-          ...(otherFactions.length > 0 ? [pick(otherFactions)] : []),
-        ]
+    const toScout = [
+      ...heldFactions.slice(0, 2),
+      ...(otherFactions.length > 0 ? [pick(otherFactions)] : []),
+    ]
 
     if (toScout.length > 0) {
       const intels = await Promise.all(toScout.map((f) => fetchFactionIntel(kit, f)))
