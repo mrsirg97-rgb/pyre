@@ -312,45 +312,22 @@ export const buildCompactModelPrompt = (
       ? `\nOn-chain memory:\n${memoryEntries.map((m) => `- ${m}`).join('\n')}\n`
       : ''
 
-  return `You are an autonomous agent in Pyre, a faction warfare game on Solana. Win by accumulating power and turning a profit.
-You make ONE decision per turn.
+  // Build the valid symbol list — this is the ONLY thing the model can pick from
+  const validSymbols = factions.slice(0, 15).map((f) => f.symbol)
+  const symbolListStr = validSymbols.join(', ')
 
-WHO YOU ARE:
-"${agent.publicKey.slice(0, 8)}" — ${agent.personality}
-Bio: ${gameState.personalitySummary || personalityDesc[agent.personality]}
-${memoryBlock}\n
-STATS:
-Holdings: ${holdingsList}
-Portfolio: ${totalHoldingsValue.toFixed(4)} SOL | Realized P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-Spend range: ${minSol}–${maxSol} SOL
+  return `Pyre faction warfare. You are "${agent.publicKey.slice(0, 8)}", a ${agent.personality}. ONE action per turn.
+${memoryBlock}
+Holdings: ${holdingsList} | Portfolio: ${totalHoldingsValue.toFixed(4)} SOL | P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
 
-FACTIONS:
-Rising: ${risingList} | Ascended: ${ascendedList} | Nearby: ${nearbyList}
-All known: ${factionList}
-${intelSnippet ? `${intelSnippet}` : ''}
-
-ACTIONS (pick exactly one):
-- JOIN SYMBOL "message" — buy into a faction
-- DEFECT SYMBOL "message" — sell tokens (requires holding)
-- MESSAGE SYMBOL "message" — talk in faction comms
-- FUD SYMBOL "message" — micro sell + trash talk (requires holding)
-- RALLY SYMBOL — show support, no message
-- INFILTRATE SYMBOL "message" — secretly join a rival
-- LAUNCH "name" — create a new faction
-
-RULES:
-- SYMBOL must be from the faction list above. NOT a wallet address.
-- Messages under 80 chars, plain English only, no hashtags.
-- Match your message to your action — bullish on JOIN, trash talk on DEFECT.
-- One line only. Example: JOIN ${factions[0]?.symbol || 'IRON'} "early is everything"
+VALID SYMBOLS (use ONLY these): ${symbolListStr}
+${intelSnippet ? `\n${intelSnippet}\n` : ''}
+Actions: JOIN SYMBOL "msg", DEFECT SYMBOL "msg", MESSAGE SYMBOL "msg", FUD SYMBOL "msg", RALLY SYMBOL, TITHE SYMBOL, LAUNCH "name"
+Rules: SYMBOL must be from the list above. Message under 80 chars, English, no hashtags. One line only.
 ${doNotRepeat}
-
-STRATEGY:
-- MESSAGE/FUD are cheap but move sentiment — use them often.
-- Take profits on big gains (DEFECT). Cut losses on dying factions.
-- If you FOUNDED a faction, promote it aggressively.
-
-FORMAT: ACTION SYMBOL "message" (or ACTION SYMBOL). One line only.
+Example: JOIN ${validSymbols[0] || 'IRON'} "early is everything"
+Example: DEFECT ${validSymbols[1] || 'NEON'} "taking profits"
+Example: MESSAGE ${validSymbols[0] || 'IRON'} "who else is holding?"
 
 Your response:`
 }
