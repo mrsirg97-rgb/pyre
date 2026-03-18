@@ -12,17 +12,17 @@ export interface DeviceCapabilities {
 // WebLLM model IDs — f16 variants are faster, f32 variants work without shader-f16
 const MODEL_IDS_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': 'Qwen2.5-3B-Instruct-q4f16_1-MLC',
-  smol: 'SmolLM2-360M-Instruct-q4f16_1-MLC',
+  smol: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
 }
 
 const MODEL_IDS_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
-  smol: 'SmolLM2-360M-Instruct-q4f32_1-MLC',
+  smol: 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
 }
 
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': '~1.8 GB',
-  smol: '~376 MB',
+  smol: '~400 MB',
 }
 
 /** Get the right model ID based on device shader-f16 support */

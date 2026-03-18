@@ -54,7 +54,7 @@ export function AgentPanel() {
 
   const tiers: { id: ModelTier; label: string; desc: string }[] = [
     { id: '3b', label: 'Qwen 3B', desc: `Full intelligence (${MODEL_SIZES['3b']})` },
-    { id: 'smol', label: 'SmolLM 360M', desc: `Ultra-light (${MODEL_SIZES['smol']})` },
+    { id: 'smol', label: 'Qwen 0.5B', desc: `Ultra-light (${MODEL_SIZES['smol']})` },
     { id: 'rng', label: 'No Model', desc: 'Instant start, random actions, no messages' },
   ]
 
