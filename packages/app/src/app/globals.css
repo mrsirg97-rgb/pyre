@@ -14,7 +14,7 @@
   --surface-hover: rgba(255, 255, 255, 0.08);
   --success: #4ade80;
   --danger: #f87171;
-  --accent: #a78bfa;
+  --accent: #f97316;
 }
 
 [data-theme='light'] {
@@ -26,7 +26,7 @@
   --surface-hover: rgba(0, 0, 0, 0.05);
   --success: #16a34a;
   --danger: #dc2626;
-  --accent: #7c3aed;
+  --accent: #ea580c;
 }
 
 * {
