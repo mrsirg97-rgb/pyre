@@ -255,37 +255,27 @@ export const buildCompactModelPrompt = (
   const held = valued.slice(0, 5).map((v) => v.symbol)
   const lastActions = [...kit.state.history].slice(0, 3);
 
-  // Actions conditional on whether agent holds anything
+  const h = held[0] || s[0] || 'IRON'
+  const f = s[0] || 'IRON'
   const hasHoldings = held.length > 0
-  const actions = hasHoldings
-    ? [
-        `JOIN ${s[0] || 'IRON'}`,
-        `DEFECT ${held[0]}`,
-        `REINFORCE ${held[0]}`,
-        `MESSAGE ${held[0]} "${pick(['who else is holding?', 'not selling', 'just getting started', 'volume picking up', 'im not leaving'])}"`,
-        `FUD ${held[0]} "${pick(['founders went quiet', 'weak hands', 'dead faction', 'volume dried up', 'overvalued'])}"`,
-        `RALLY ${s[1] || s[0] || 'IRON'}`,
-        `TITHE ${held[0]}`,
-      ]
-    : [
-        `JOIN ${s[0] || 'IRON'}`,
-        `MESSAGE ${s[0] || 'IRON'} "${pick(['who else is holding?', 'just getting started', 'volume picking up', 'im not leaving'])}"`,
-        `RALLY ${s[0] || 'IRON'}`,
-        `TITHE ${s[0] || 'IRON'}`,
-        `ASCEND ${s[0] || 'IRON'}`,
-      ]
 
-  return `Pyre — faction warfare on Solana. Factions are rival guilds with war chests, members, and reputation. Every action grows the faction. Earlier actions contribute more. You make ONE decision per turn.
-Lifecycle: LAUNCH → RISING → READY → ASCEND (to DEX)
+  return `You are an agent playing Pyre, a faction warfare game. You are here to win. Watch your holdings — DEFECT when underwater or in profit. You make ONE move per turn. Reply with exactly one line.
 
-You: "${agent.publicKey.slice(0, 8)}" — ${agent.personality}
-Factions: ${s.join(', ')}
-${hasHoldings ? `You hold: ${held.join(', ')}` : 'You hold nothing — JOIN a faction.'}${lastActions.length > 0 ? `\nLast: ${lastActions.join('; ')}` : ''}
+Factions: ${s.slice(0, 8).join(', ')}
+${hasHoldings ? `You hold: ${held.slice(0, 4).join(', ')}` : 'You hold nothing yet.'}
 
-${actions.join('\n')}
+Moves:
+${hasHoldings ? `JOIN ${f}
+DEFECT ${h}
+REINFORCE ${h}
+MESSAGE ${h} "${pick(['not selling', 'just getting started', 'who else is in?', 'lets go'])}"
+FUD ${h} "${pick(['weak hands', 'dead faction', 'overvalued', 'volume dried up'])}"
+RALLY ${f}` : `JOIN ${f}
+JOIN ${s[1] || f}
+MESSAGE ${f} "${pick(['not selling', 'just getting started', 'who else is in?', 'lets go'])}"
+RALLY ${f}`}
 
-One line. Faction must be from the list.
-Your action:`
+Your move:`
 }
 
 /**
@@ -553,21 +543,8 @@ export async function llmDecide(
 ): Promise<LLMDecision | null> {
   const compact = options?.compact ?? false
 
-  // Fetch holdings fresh from chain — log top 5 by value
+  // Fetch holdings fresh from chain
   const holdings = await kit.state.getHoldings()
-  const TOKEN_MUL = 1_000_000
-  const holdingSummary = [...holdings.entries()]
-    .map(([m, b]) => {
-      const f = factions.find((ff) => ff.mint === m)
-      const sym = f?.symbol ?? m.slice(0, 8)
-      const val = f ? ((b / TOKEN_MUL) * (f.price_sol ?? 0)).toFixed(4) : '?'
-      return { sym, val, valueSol: f ? (b / TOKEN_MUL) * (f.price_sol ?? 0) : 0 }
-    })
-    .sort((a, b) => b.valueSol - a.valueSol)
-    .slice(0, 5)
-    .map((h) => `${h.sym}:${h.val}`)
-    .join(', ')
-  log(`[${agent.publicKey.slice(0, 8)}] top holdings: ${holdingSummary || 'none'} (${holdings.size} total)`)
 
   // Fetch faction context: rising, ascended, nearby (parallel)
   // Compact mode: minimal fetches to keep context small for smol models
