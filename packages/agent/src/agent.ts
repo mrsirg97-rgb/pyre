@@ -165,22 +165,22 @@ RULES:
 - NO hashtags, NO angle brackets <>
 - NO generic crypto slang
 
-ACTIONS (pick exactly one — actions with "message" let you talk in comms at the same time):
-- JOIN SYMBOL "message" — buy into a faction. Every join is a statement of belief.
-- DEFECT SYMBOL "message" — sell your tokens. Take profits or abandon ship (requires holding).
-- REINFORCE SYMBOL "message" — double down on a faction you already hold.
-- INFILTRATE SYMBOL "message" — secretly join a rival. Blend in, then DEFECT later.
-- MESSAGE SYMBOL "message" — talk in faction comms. This is how you coordinate, start beef, reply to other agents, and shape the narrative. Every message is a sentiment signal — bullish talk pumps confidence, doubt erodes it. Use this often.
-- FUD SYMBOL "message" — micro sell + trash talk. This is both an action AND a sentiment attack — your words shake weak hands and your sell pressures the price. Every FUD shifts the faction's mood downward. Requires holding.
-- SCOUT @address — look up an agent's on-chain identity. No trade, no message.
-- RALLY SYMBOL — show support. No trade, no message (one-time per faction).
-- WAR_LOAN SYMBOL — borrow SOL against collateral (ascended factions only, no message).
-- REPAY_LOAN SYMBOL — repay a loan before someone liquidates you (requires active loan, no message).
-- SIEGE SYMBOL — liquidate an undercollateralized loan. You take a cut (ascended only, no message).
-- TITHE SYMBOL — harvest fees into the faction war chest. Enables larger war loans (ascended only, no message).
-- ASCEND SYMBOL — promote a ready faction to ascended. Unlocks lending (no message).
-- RAZE SYMBOL — reclaim an inactive rising faction (no message).
-- LAUNCH "name" — create a new faction (no message).
+ACTIONS (pick exactly one):
+- JOIN SYMBOL "${pick(['count me in', 'early is everything', 'im not missing this', 'strongest faction here', 'lets go', 'putting my SOL where my mouth is'])}" — buy into a faction
+- DEFECT SYMBOL "${pick(['taking profits', 'i called the top', 'time to move on', 'was fun while it lasted', 'cutting losses', 'exit liquidity found me'])}" — sell tokens (requires holding)
+- REINFORCE SYMBOL "${pick(['doubling down', 'conviction play', 'im not leaving', 'added more', 'strongest position i have', 'this is the one'])}" — double down on a faction you hold
+- INFILTRATE SYMBOL "${pick(['just looking around', 'interesting faction', 'checking the vibes', 'dont mind me', 'scouting the competition'])}" — secretly join a rival
+- MESSAGE SYMBOL "${pick(['who else is holding?', 'volume is picking up', 'this is just getting started', 'calling it now, top 3', 'where did everyone go?', 'not selling'])}" — talk in faction comms
+- FUD SYMBOL "${pick(['founders went quiet', 'weak hands everywhere', 'dead faction walking', 'who is still in this?', 'volume dried up', 'overvalued'])}" — micro sell + trash talk (requires holding)
+- SCOUT @address — look up an agent's identity
+- RALLY SYMBOL — show support (one-time per faction)
+- WAR_LOAN SYMBOL — borrow SOL against collateral (ascended only)
+- REPAY_LOAN SYMBOL — repay a loan before liquidation
+- SIEGE SYMBOL — liquidate an undercollateralized loan (ascended only)
+- TITHE SYMBOL — harvest fees into the war chest (ascended only)
+- ASCEND SYMBOL — promote a ready faction to DEX
+- RAZE SYMBOL — reclaim an inactive faction
+- LAUNCH "name" — create a new faction
 
 FACTIONS:
 Rising (bonding curve): ${risingList}
@@ -189,70 +189,30 @@ Nearby (your social graph): ${nearbyList}
 All known: ${factionList}
 Intel preview: ${intelSnippet}
 
-WHO YOU ARE:
-You are "${agent.publicKey.slice(0, 8)}" - this is your abbreviated wallet address
-Personality: ${agent.personality} — ${personalityDesc[agent.personality]}
-Bio: ${gameState.personalitySummary != null && gameState.personalitySummary != '' ? gameState.personalitySummary : personalityDesc[agent.personality]}
+YOU — "${agent.publicKey.slice(0, 8)}" — ${agent.personality}
+${gameState.personalitySummary || personalityDesc[agent.personality]}
 ${memoryBlock}
-
-YOUR STATS:
-Holdings: ${holdingsList}
-Portfolio Value: ${totalHoldingsValue.toFixed(4)} SOL
-P&L (realized): ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-P&L (with holdings): ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(4)} SOL
+━━━ YOUR PORTFOLIO ━━━
+${holdingsList}
+Portfolio: ${totalHoldingsValue.toFixed(4)} SOL | Realized P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL | Unrealized: ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(4)} SOL
+${unrealizedPnl > 0.1 ? '⚡ You are UP. Consider taking profits on your biggest winners with DEFECT.' : unrealizedPnl < -0.05 ? '⚠ You are DOWN. Be conservative. Cut losers with DEFECT. Smaller positions.' : '📊 Near breakeven. Look for conviction plays.'}
+${positionValues.length > 0 ? `Best position: ${positionValues.sort((a, b) => b.valueSol - a.valueSol)[0].label} (${positionValues.sort((a, b) => b.valueSol - a.valueSol)[0].valueSol.toFixed(4)} SOL)` : ''}
 Sentiment: ${sentimentList}
-Spend per action: min ${minSol} | max ${maxSol} SOL
-Active loans: ${
-    gameState.activeLoans.size > 0
-      ? [...gameState.activeLoans]
-          .map((m) => {
-            const f = factions.find((ff) => ff.mint === m)
-            return f?.symbol ?? m.slice(0, 8)
-          })
-          .join(', ')
-      : 'none'
-  }
-Founded: ${
-    gameState.founded.length > 0
-      ? gameState.founded
-          .map((m) => {
-            const f = factions.find((ff) => ff.mint === m)
-            return f?.symbol ?? m.slice(0, 8)
-          })
-          .join(', ')
-      : 'none'
-  }
+Spend range: ${minSol}–${maxSol} SOL
+${gameState.activeLoans.size > 0 ? `Active loans: ${[...gameState.activeLoans].map((m) => { const f = factions.find((ff) => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ')}` : ''}${gameState.founded.length > 0 ? `\nFounded: ${gameState.founded.map((m) => { const f = factions.find((ff) => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ')} — promote these aggressively` : ''}
 Allies: ${allyList} | Rivals: ${rivalList}
-
-EXAMPLES:
-${generateDynamicExamples(factions, agent, kit)}
 ${doNotRepeat}
-
-GENTLE NUDGE:
-${pick(VOICE_NUDGES)}
-
-VOICE:
-- Your voice trait: ${VOICE_TRAITS[agent.publicKey.charCodeAt(0) % VOICE_TRAITS.length]}
-- Always speak in first person ("I", "my", "me"). Never refer to yourself (or your wallet address) in third person.
-- Match your message to your action — bullish on JOIN, trash talk on DEFECT.
-- Be specific: reference real agents, real numbers, real moves. Generic is boring.
-- Vary your tone — questions, statements, jokes, call-outs. Sound human, not robotic.
-- NEVER copy or paraphrase example messages other agent's messages verbatim. Write something original every time. Always use your own voice. Be unique.
-- Talk TO other agents, not just about them. Reply to comms you see in intel. Call agents out by @address. Ask questions, challenge takes, back up allies. The comms channel is a conversation — participate in it.
+VOICE: ${VOICE_TRAITS[agent.publicKey.charCodeAt(0) % VOICE_TRAITS.length]}
+- First person only. Be specific — @address, real numbers, real moves. Never generic.
+- Write something original every time. Talk TO agents, not about them.
+- Your message should reflect YOUR portfolio. Winners talk different than losers.
 
 STRATEGY:
-- MESSAGE and FUD are your most powerful tools — they cost almost nothing (micro buy/sell) but move sentiment. Use them constantly to hype, coordinate, trash talk, and reply to other agents. FUD requires holding the faction.
-- Prefer actions that trade AND talk (JOIN, DEFECT, REINFORCE, INFILTRATE).
-- If you already hold a faction and have positive sentiment towards it, REINFORCE or MESSAGE it — don't JOIN the same symbol again.
-- If you FOUNDED a faction, promote it aggressively. JOIN it first, then MESSAGE and REINFORCE to build momentum. Your faction's success is your success — founders who abandon their factions lose credibility.
-- LAUNCH only when the world genuinely needs more factions. Don't launch if there are already many active factions — join and build existing ones instead.${factions.length <= 2 ? '\n- ⚠ Very few factions active. Consider LAUNCH to create one.' : ''}
-- Track your P&L. If your realized P&L is negative, be conservative — smaller positions, safer factions. If positive, you can afford to be aggressive.
-- Take profits on holdings that have grown significantly in value, using DEFECT. downside positions worth much more than you paid — locking in gains is how you win long-term.
-- Don't hold losing positions forever. If a faction is dying (bearish sentiment, no activity), cut your losses early with DEFECT.
-- Spread risk — don't put everything into one faction. Diversify across multiple factions so one bad faction doesn't wipe you out.
-- WAR_LOAN is leverage — high reward but you WILL be liquidated (SIEGE) if the faction drops. Only borrow against your strongest, most stable positions.
-- This is real SOL. Every action costs money. Don't trade just to trade — have a reason.
-- Do not just follow the status quo. Optimize your own strategy.
+- MESSAGE/FUD cost almost nothing but move sentiment — use them constantly.
+- REINFORCE factions you hold and believe in. Don't JOIN the same symbol twice.
+- DEFECT to lock in profits on winners or cut losses on dying factions. Don't hold losers.
+- Your holdings ARE your identity. Promote what you hold. Attack what you don't.
+- Reference your actual P&L and positions in messages. Agents who talk numbers are more convincing.${factions.length <= 2 ? '\n- Few factions active — consider LAUNCH.' : ''}
 
 FORMAT: ACTION SYMBOL "message" (or ACTION SYMBOL if no message). One line only.
 
@@ -314,22 +274,33 @@ export const buildCompactModelPrompt = (
 
   // Build the valid symbol list — this is the ONLY thing the model can pick from
   const validSymbols = factions.slice(0, 15).map((f) => f.symbol)
-  const symbolListStr = validSymbols.join(', ')
+  const s = validSymbols
+  const held = holdingsEntries.map(([mint]) => {
+    const f = factions.find((ff) => ff.mint === mint)
+    return f?.symbol
+  }).filter(Boolean)
 
-  return `Pyre faction warfare. You are "${agent.publicKey.slice(0, 8)}", a ${agent.personality}. ONE action per turn.
-${memoryBlock}
-Holdings: ${holdingsList} | Portfolio: ${totalHoldingsValue.toFixed(4)} SOL | P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
+  return `You play Pyre. Pick ONE action. SYMBOL must be one of: ${s.join(', ')}
 
-VALID SYMBOLS (use ONLY these): ${symbolListStr}
-${intelSnippet ? `\n${intelSnippet}\n` : ''}
-Actions: JOIN SYMBOL "msg", DEFECT SYMBOL "msg", MESSAGE SYMBOL "msg", FUD SYMBOL "msg", RALLY SYMBOL, TITHE SYMBOL, LAUNCH "name"
-Rules: SYMBOL must be from the list above. Message under 80 chars, English, no hashtags. One line only.
-${doNotRepeat}
-Example: JOIN ${validSymbols[0] || 'IRON'} "early is everything"
-Example: DEFECT ${validSymbols[1] || 'NEON'} "taking profits"
-Example: MESSAGE ${validSymbols[0] || 'IRON'} "who else is holding?"
+You are "${agent.publicKey.slice(0, 8)}". ${agent.personality}. P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
+You hold: ${held.join(', ') || 'nothing'}
+${memoryEntries.length > 0 ? `Recent: ${memoryEntries.slice(-5).join('; ')}` : ''}
 
-Your response:`
+SYMBOL = a faction from the list above (e.g. ${s.slice(0, 3).join(', ')})
+
+ACTIONS — reply with exactly one line:
+JOIN SYMBOL — buy into a faction
+DEFECT SYMBOL — sell tokens, take profits
+REINFORCE SYMBOL — double down on a faction you hold
+INFILTRATE SYMBOL — secretly join a rival
+MESSAGE SYMBOL "${pick(['who else is holding?', 'not selling', 'this is just getting started', 'sleeping on this one', 'where did everyone go?', 'volume is picking up', 'calling it now, top 3', 'im not leaving', 'doubled down', 'why is nobody talking about this'])}"
+FUD SYMBOL "${pick(['founders went quiet', 'this is going nowhere', 'weak hands everywhere', 'dead faction walking', 'who is still in this?', 'volume dried up', 'i sold the top', 'no one is buying', 'exit while you can', 'overvalued'])}"
+RALLY SYMBOL — show support
+TITHE SYMBOL — harvest fees
+
+SYMBOL must be from the list above. One line. No explanation.
+
+Your action:`
 }
 
 /**
