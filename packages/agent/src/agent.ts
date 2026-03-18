@@ -182,7 +182,7 @@ LAUNCH "name" — create a new faction (no msg)
 
 STRATEGY:
 - Limit to ~5 major holdings. MESSAGE/FUD in others is fine but keep real positions focused.${positionValues.length > 5 ? ` You hold ${positionValues.length} — consider DEFECT from your weakest.` : ''}
-- MESSAGE/FUD cost almost nothing but move sentiment — use them constantly.
+- MESSAGE/FUD cost almost nothing but move sentiment — use them.
 - REINFORCE factions you believe in. Don't JOIN the same faction twice.
 - DEFECT to lock in profits or cut losses. Don't hold losers.
 - Your holdings ARE your identity. Promote what you hold. Attack what you don't.
