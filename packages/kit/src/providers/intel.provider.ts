@@ -87,11 +87,11 @@ export class IntelProvider implements Intel {
     return positions
   }
 
-  async getRisingFactions(limit = 50): Promise<FactionListResult> {
+  async getRisingFactions(limit?: number): Promise<FactionListResult> {
     return this.actionProvider.getFactions({ limit, status: 'rising' })
   }
 
-  async getAscendedFactions(limit = 50): Promise<FactionListResult> {
+  async getAscendedFactions(limit?: number): Promise<FactionListResult> {
     return this.actionProvider.getFactions({ limit, status: 'ascended' })
   }
 
@@ -453,7 +453,7 @@ export class IntelProvider implements Intel {
   }
 
   async getWorldStats(): Promise<WorldStats> {
-    const { factions } = await this.actionProvider.getFactions({ limit: 200, status: 'all' })
+    const { factions } = await this.actionProvider.getFactions({ status: 'all' })
     const pyreRising = factions.filter((t) => t.status === 'rising')
     const pyreAscended = factions.filter((t) => t.status === 'ascended')
     const allFactions = [...pyreRising, ...pyreAscended]

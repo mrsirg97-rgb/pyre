@@ -122,7 +122,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
   const usedFactionNames = new Set<string>()
 
   async function discoverFactions(): Promise<FactionInfo[]> {
-    const result = await kit.actions.getFactions({ limit: 50, sort: 'newest' })
+    const result = await kit.actions.getFactions({ sort: 'newest' })
     const factions: FactionInfo[] = []
     for (const t of result.factions) {
       factions.push({

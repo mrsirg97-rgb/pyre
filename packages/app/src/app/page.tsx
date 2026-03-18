@@ -92,7 +92,7 @@ export default function StagePage() {
       fetchingRef.current = true
       if (showLoading) setLoading(true)
       try {
-        const result = await kit.getFactions({ limit: 50, sort: 'newest' })
+        const result = await kit.getFactions({ sort: 'newest' })
         const pyreFactions = result.factions.filter(
           (t) => isPyreMint(t.mint) && !isBlacklistedMint(t.mint),
         )

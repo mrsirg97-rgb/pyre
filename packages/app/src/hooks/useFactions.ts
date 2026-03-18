@@ -13,7 +13,7 @@ interface UseFactionsResult {
   refetch: () => void
 }
 
-export function useFactions(limit = 50): UseFactionsResult {
+export function useFactions(): UseFactionsResult {
   const { actions } = usePyreKit()
   const [factions, setFactions] = useState<FactionSummary[]>([])
   const [total, setTotal] = useState(0)
@@ -22,7 +22,7 @@ export function useFactions(limit = 50): UseFactionsResult {
   const fetchFactions = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await actions.getFactions({ limit, sort: 'newest' })
+      const result = await actions.getFactions({ sort: 'newest' })
       setFactions(result.factions)
       setTotal(result.factions.length)
     } catch {
@@ -30,7 +30,7 @@ export function useFactions(limit = 50): UseFactionsResult {
     } finally {
       setLoading(false)
     }
-  }, [actions, limit])
+  }, [actions])
 
   useEffect(() => {
     fetchFactions()

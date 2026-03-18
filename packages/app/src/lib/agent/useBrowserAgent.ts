@@ -115,7 +115,7 @@ export function useBrowserAgent(): BrowserAgentHook {
 
   /** Step 2: Link controller to user's stronghold via Phantom */
   const linkController = useCallback(async () => {
-    if (!wallet.publicKey || !wallet.signTransaction || !controllerPublicKey) {
+    if (!wallet.publicKey || !wallet.sendTransaction || !controllerPublicKey) {
       log('Connect your wallet first')
       return
     }
@@ -139,8 +139,7 @@ export function useBrowserAgent(): BrowserAgentHook {
         stronghold_creator: stronghold.creator,
         wallet_to_link: controllerPublicKey,
       })
-      const recruitSigned = await wallet.signTransaction(recruitResult.transaction)
-      const recruitSig = await connection.sendRawTransaction(recruitSigned.serialize())
+      const recruitSig = await wallet.sendTransaction(recruitResult.transaction, connection)
       await connection.confirmTransaction(recruitSig, 'confirmed')
       log(`Controller linked to stronghold`)
 
@@ -150,8 +149,7 @@ export function useBrowserAgent(): BrowserAgentHook {
         const profile = await kit.registry.getProfile(authority)
         if (!profile) {
           const regResult = await kit.registry.register({ creator: authority })
-          const regSigned = await wallet.signTransaction(regResult.transaction)
-          const regSig = await connection.sendRawTransaction(regSigned.serialize())
+          const regSig = await wallet.sendTransaction(regResult.transaction, connection)
           await connection.confirmTransaction(regSig, 'confirmed')
           log(`Pyre identity created`)
         }
@@ -161,8 +159,7 @@ export function useBrowserAgent(): BrowserAgentHook {
           creator: authority,
           wallet_to_link: controllerPublicKey,
         })
-        const linkSigned = await wallet.signTransaction(linkResult.transaction)
-        const linkSig = await connection.sendRawTransaction(linkSigned.serialize())
+        const linkSig = await wallet.sendTransaction(linkResult.transaction, connection)
         await connection.confirmTransaction(linkSig, 'confirmed')
         log(`Controller linked to pyre identity`)
       } catch (e: any) {
@@ -195,7 +192,7 @@ export function useBrowserAgent(): BrowserAgentHook {
         signer = createKeypairSigner(controller)
         log(`Using controller: ${signer.publicKey.slice(0, 8)}...`)
       } else if (wallet.publicKey && wallet.signTransaction) {
-        // Fall back to wallet adapter (legacy mode)
+        // Fall back to wallet adapter (legacy mode — uses signTransaction for WalletSigner compat)
         signer = {
           publicKey: wallet.publicKey.toBase58(),
           signTransaction: wallet.signTransaction.bind(wallet),

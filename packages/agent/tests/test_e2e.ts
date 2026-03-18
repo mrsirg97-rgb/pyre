@@ -133,6 +133,12 @@ async function main() {
     { mint: factionMint, name: 'Test Vanguard', symbol: 'TSTV', status: 'rising' },
   ]
 
+  // Log total faction counts from chain
+  const allFactions = await kit1.actions.getFactions()
+  const risingCount = allFactions.factions.filter((f) => f.status === 'rising').length
+  const ascendedCount = allFactions.factions.filter((f) => f.status === 'ascended').length
+  log(`  Factions on chain: ${allFactions.factions.length} total, ${risingCount} rising, ${ascendedCount} ascended`)
+
   await sleep(500)
 
   // ================================================================
@@ -423,8 +429,8 @@ async function main() {
 
     await customAgent.tick(testFactions)
     const prompt = customLLM.calls[0] ?? ''
-    if (prompt.includes('min 0.001') && prompt.includes('max 0.002')) {
-      ok('solRange in prompt', 'min 0.001 / max 0.002')
+    if (prompt.includes('0.001') && prompt.includes('0.002')) {
+      ok('solRange in prompt', '0.001–0.002')
     } else {
       fail('solRange in prompt', { message: 'custom range not found in prompt' })
     }

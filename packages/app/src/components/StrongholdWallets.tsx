@@ -55,7 +55,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
   }, [agents, search, vault.authority, vault.creator])
 
   async function handleLink() {
-    if (!wallet.publicKey || !wallet.signTransaction || !isAuthority) return
+    if (!wallet.publicKey || !wallet.sendTransaction || !isAuthority) return
 
     const addr = walletAddress.trim()
     if (!addr) {
@@ -81,10 +81,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
         wallet_to_link: addr,
       })
 
-      const signedTx = await wallet.signTransaction(tx)
-      const txId = await connection.sendRawTransaction(signedTx.serialize(), {
-        skipPreflight: true,
-      })
+      const txId = await wallet.sendTransaction(tx, connection)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setWalletAddress('')
@@ -102,7 +99,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
   }
 
   async function handleUnlink(addr: string) {
-    if (!wallet.publicKey || !wallet.signTransaction || !isAuthority) return
+    if (!wallet.publicKey || !wallet.sendTransaction || !isAuthority) return
 
     setUnlinkingWallet(addr)
     setError(null)
@@ -115,10 +112,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
         wallet_to_unlink: addr,
       })
 
-      const signedTx = await wallet.signTransaction(tx)
-      const txId = await connection.sendRawTransaction(signedTx.serialize(), {
-        skipPreflight: true,
-      })
+      const txId = await wallet.sendTransaction(tx, connection)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setSuccess(`Unlinked ${shortenAddress(addr)}`)

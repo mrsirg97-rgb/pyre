@@ -353,7 +353,7 @@ export default function AgentPage() {
   const fetchComms = useCallback(async () => {
     setCommsLoading(true)
     try {
-      const result = await actions.getFactions({ limit: 50, sort: 'newest' })
+      const result = await actions.getFactions({ sort: 'newest' })
       const pyreFactions = result.factions.filter(
         (t) => isPyreMint(t.mint) && !isBlacklistedMint(t.mint),
       )

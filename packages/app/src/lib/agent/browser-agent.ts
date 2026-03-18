@@ -74,7 +74,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
   }
 
   async function discoverFactions(): Promise<FactionInfo[]> {
-    const result = await kit.actions.getFactions({ limit: 50, sort: 'newest' })
+    const result = await kit.actions.getFactions({ sort: 'newest' })
     return result.factions.map((t) => ({
       mint: t.mint,
       name: t.name,

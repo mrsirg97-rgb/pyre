@@ -26,7 +26,7 @@ export default function StrongholdPage() {
   const [createError, setCreateError] = useState<string | null>(null)
 
   async function handleCreate() {
-    if (!wallet.publicKey || !wallet.signTransaction) return
+    if (!wallet.publicKey || !wallet.sendTransaction) return
 
     setCreating(true)
     setCreateError(null)
@@ -36,10 +36,7 @@ export default function StrongholdPage() {
         creator: wallet.publicKey.toString(),
       })
 
-      const signedTx = await wallet.signTransaction(tx)
-      const txId = await connection.sendRawTransaction(signedTx.serialize(), {
-        skipPreflight: true,
-      })
+      const txId = await wallet.sendTransaction(tx, connection)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setTimeout(refetch, 1000)

@@ -25,7 +25,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
   const isAuthority = wallet.publicKey?.toString() === vault.authority
 
   async function handleAction() {
-    if (!wallet.publicKey || !wallet.signTransaction) return
+    if (!wallet.publicKey || !wallet.sendTransaction) return
 
     const solAmount = parseFloat(amount)
     if (isNaN(solAmount) || solAmount <= 0) {
@@ -62,10 +62,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
         tx = result.transaction
       }
 
-      const signedTx = await wallet.signTransaction(tx)
-      const txId = await connection.sendRawTransaction(signedTx.serialize(), {
-        skipPreflight: true,
-      })
+      const txId = await wallet.sendTransaction(tx, connection)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setAmount('')
