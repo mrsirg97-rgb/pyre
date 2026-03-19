@@ -205,7 +205,6 @@ export const buildCompactModelPrompt = (
   const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
   const gameState = kit.state.state!
   const holdingsEntries = [...(holdings?.entries() ?? [])]
-
   // Sort holdings by SOL value descending
   const TOKEN_MULTIPLIER = 1_000_000
   const valued = holdingsEntries
@@ -219,11 +218,17 @@ export const buildCompactModelPrompt = (
 
   const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
 
-  // Compact: max 10 symbols, top 5 held by value
-  const nearby = factionCtx.nearby.filter(f => !holdings?.has(f.mint)).slice(0, 5)
-  const rising = factionCtx.rising.filter(f => !holdings?.has(f.mint) && !factionCtx.nearby.find(n => n.mint === f.mint))
-  const ascended = factionCtx.ascended.filter(f => !holdings?.has(f.mint) && !factionCtx.nearby.find(n => n.mint === f.mint))
-  const validatedFactions = [...nearby, ...rising, ...ascended]
+  // Compact: top 5 held by value + always surface some new factions to explore
+  const heldMints = new Set(holdingsEntries.map(([m]) => m))
+  const nearby = factionCtx.nearby.filter(f => !heldMints.has(f.mint)).slice(0, 3)
+  const nearbyMints = new Set(nearby.map(f => f.mint))
+  const rising = factionCtx.rising.filter(f => !heldMints.has(f.mint) && !nearbyMints.has(f.mint)).slice(0, 3)
+  const risingMints = new Set(rising.map(f => f.mint))
+  const ascended = factionCtx.ascended.filter(f => !heldMints.has(f.mint) && !nearbyMints.has(f.mint) && !risingMints.has(f.mint)).slice(0, 3)
+  // Always include 2-3 random factions the agent hasn't seen — drives exploration
+  const seenMints = new Set([...heldMints, ...nearbyMints, ...risingMints, ...ascended.map(f => f.mint)])
+  const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
+  const validatedFactions = [...nearby, ...rising, ...ascended, ...unexplored]
   const held = valued.slice(0, 5).map((v) => v.symbol)
   const sentimentList =
     [...kit.state.sentimentMap]
@@ -238,56 +243,67 @@ export const buildCompactModelPrompt = (
       .join(', ') || 'none'
 
   const factionPrompt = [
+    held.length > 0 ? `YOUR FACTIONS: ${held.join(', ')}` : undefined,
     rising.length > 0 ? `RISING: ${rising.map(f => f.symbol).join(', ')}` : undefined,
     ascended.length > 0 ? `ASCENDED: ${ascended.map(f => f.symbol).join(', ')}` : undefined,
     nearby.length > 0 ? `NEARBY: ${nearby.map(f => f.symbol).join(', ')}` : undefined,
+    unexplored.length > 0 ? `NEW: ${unexplored.map(f => f.symbol).join(', ')}` : undefined
   ].filter(Boolean)
 
   const h = held[0] || (validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON')
   const f1 = validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON'
   const f2 = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.symbol !== f1)).symbol ?? f1 : f1
-  const allSymbols = [...new Set([...held, ...validatedFactions.map(f => f.symbol)])].slice(0, 8)
 
-  return `You are playing Pyre, a faction warfare game on Solana. You must pick exactly one action.
+  return `You are playing Pyre, a faction warfare game on Solana.
 
-VALID FACTIONS:
-${factionPrompt.length > 0 ? factionPrompt.join('\n') : ''}
+---     LIFECYCLE      ---
+LAUNCH → RISING → READY → VOTE → ASCEND → ASCENDED
+- Ascended factions have war chests: TITHE harvests fees
+--------------------------
 
-YOUR STATUS:
-- Agent: "${agent.publicKey.slice(0, 8)}" — ${agent.personality}
+---   YOUR GAMESTATE  ---
+- Agent: "${agent.publicKey.slice(0, 8)}"
+- BIO: "${gameState.personalitySummary ? gameState.personalitySummary : agent.personality }"
 - P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-- Holding: ${held.length > 0 ? held.slice(0, 4).join(', ') : 'none'}
+- Member of Factions: ${held.length > 0 ? held.slice(0, 4).join(', ') : 'none'}
 - Sentiment: ${sentimentList}
-- Last action: ${kit.state.history[0] ?? 'none'}
+--------------------------
 
-F = faction name from the lists above (e.g. ${factionCtx.all.slice(0, 3).map((f) => f.symbol).join(', ') || 'IRON, VANG'}).
+---   VALID FACTIONS   ---
+${factionPrompt.length > 0 ? factionPrompt.join('\n') : ''}
+--------------------------
 
-ACTIONS (pick exactly one, replace F with a faction name from VALID FACTIONS):
-- JOIN F "${pick(['im in lets go', 'early on this one', 'strongest faction here', 'not missing this', 'deploying now'])}"
-- DEFECT F "${pick(['taking profits here', 'time to move on', 'cutting my losses', 'this one is done', 'exit now'])}"
-- REINFORCE F "${pick(['doubling down on this', 'added more conviction', 'not leaving this one', 'strongest hold'])}"
-- INFILTRATE F "${pick(['just scouting around', 'checking the vibes', 'dont mind me here', 'interesting faction'])}"
-- MESSAGE F "${pick(['who else is holding', 'just getting started here', 'not selling this one', 'volume picking up'])}"
-- FUD F "${pick(['founders went quiet', 'dead faction walking', 'overvalued right now', 'volume dried up'])}"
-- TITHE F
-- ASCEND F
-- LAUNCH "name"
+F = the faction name (e.g. ${factionCtx.all.slice(0, 3).map((f) => f.symbol).join(', ') || 'IRON, VANG'}).
+
+ACTIONS:
+- JOIN F "${pick(['im in lets go', 'early on this one', 'strongest faction here', 'not missing this', 'deploying now'])}" - join a faction
+- DEFECT F "${pick(['taking profits here', 'time to move on', 'cutting my losses', 'this one is done', 'exit now'])}" - leave or downsize in a faction
+- INFILTRATE F "${pick(['just scouting around', 'checking the vibes', 'dont mind me here', 'interesting faction', 'calculated play', 'moving in'])}" - sneak into a faction
+- REINFORCE F "${pick(['gaining speed here', 'still early', 'love it here'])}"- increase size in a faction
+- MESSAGE F "${pick(['who else is holding', 'just getting started here', 'not selling this one', 'volume picking up'])}" - talk in faction comms
+- FUD F "${pick(['founders went quiet', 'dead faction walking', 'overvalued right now', 'volume dried up'])}" - trash talk a faction
+- TITHE F - harvest faction rewards (no message)
+- ASCEND F - shift a faction from ready to ascended (no message)
+- LAUNCH "name" - create a faction (no message)
 
 RULES:
-- You MUST respond with exactly ONE line. Do NOT write multiple lines
-- The line MUST start with an action word: JOIN, DEFECT, REINFORCE, INFILTRATE, MESSAGE, FUD, TITHE, ASCEND, or LAUNCH
-- The second word MUST be a faction from VALID FACTIONS: ${allSymbols.join(', ')}
-- Do NOT explain your reasoning
+- The line MUST start with an ACTION word: JOIN, DEFECT, REINFORCE, INFILTRATE, MESSAGE, FUD, TITHE, ASCEND, or LAUNCH. Pick exactly one.
+- You MUST be a member/holding the faction to DEFECT or FUD.
+- The second word MUST be a faction from VALID FACTIONS only. If there are no factions available LAUNCH one.
+- messages should never include ACTIONS. be unique with the message itself, go off script sometimes.
+- You MUST respond with exactly ONE line. Do NOT write multiple lines.
+- Do NOT explain your reasoning.
 - Limit yourself to ~5 holdings. DEFECT before joining new factions.
 
-EXAMPLE RESPONSES:
+EXAMPLES:
 JOIN ${f1} "${pick(['im in', 'lets go', 'early'])}"
+INFILTRATE ${f2} "${pick(['calculated play', 'moving in', 'vibe check'])}"
 DEFECT ${h} "${pick(['taking profits', 'moving on'])}"
 MESSAGE ${h} "${pick(['who else is here', 'not selling'])}"
 FUD ${f2} "${pick(['overvalued', 'dead faction'])}"
-REINFORCE ${h}
+TITHE ${h}
 
-Your move:`
+YOUR ACTION:`
 }
 
 /**
