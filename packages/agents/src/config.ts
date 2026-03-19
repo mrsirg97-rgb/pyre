@@ -5,7 +5,7 @@ import * as path from 'path'
 export const NETWORK = (process.env.TORCH_NETWORK ?? 'devnet') as 'devnet' | 'mainnet'
 const isMainnet = NETWORK === 'mainnet'
 
-export const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? (isMainnet ? '7' : '150'))
+export const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? (isMainnet ? '7' : '200'))
 export const RPC_URL =
   process.env.RPC_URL ??
   (isMainnet
@@ -17,7 +17,7 @@ export const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen2.5:7b'
 export const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
 export const MIN_FUNDED_SOL = isMainnet ? 0.05 : 0.05
-export const CONCURRENT_AGENTS = isMainnet ? 1 : 1
+export const CONCURRENT_AGENTS = isMainnet ? 1 : 3
 
 // SOL amounts — conservative on mainnet
 export const STRONGHOLD_FUND_SOL = isMainnet ? 0.25 : 35

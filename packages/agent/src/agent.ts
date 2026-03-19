@@ -389,8 +389,6 @@ Factions are rival guilds - each with its own economy, members, and culture.
 FACTION LIFECYCLE: LAUNCH → RISING → READY → VOTE → ASCENDED
 Rising factions are new. You contribute to the war chest to build the it.
 Ascended factions are established and have full economies.
---- GOAL:
-Maximize long-term profit and faction dominance.
 --- VALID FACTIONS:
 ASCENDED: ${ascended.length > 0 ? ascended.map(f => f.symbol).join(', ') : 'none'}
 RISING: ${rising.length > 0 ? rising.map(f => f.symbol).join(', ') : 'none'}
@@ -403,6 +401,8 @@ P&L - ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
 ${valued.length > 0 ? valued.map(v => `${v.symbol}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'empty portfolio'}
 SENTIMENT: ${sentimentList}
 MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
+--- GOAL:
+Maximize long-term profit and faction dominance.
 --- ACTIONS:
 JOIN - join a faction.
 DEFECT - leave or decrease size in a faction.
@@ -414,32 +414,27 @@ ASCEND - transition a faction from ready to ascended.
 TITHE - harvest faction rewards (ascended factions only).
 LAUNCH - create a faction. you pick the name, make it.
 --- STRATEGY:
-Your personality is your tone.
-Promote factions you are in. Attack your rivals.
-Limit yourself to being a member in 5 factions.${memberOf.length >= 4 ? ` You hold ${memberOf.length} — consider DEFECT from your weakest.` : ''}
-MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
-REINFORCE factions you are already a member in. Don't JOIN the same faction twice.
-DEFECT to lock in profits or downsize on underperforming faction.
-To DEFECT or FUD a faction you MUST be a MEMBER OF it.
---- RULES:
-- Pick exactly ONE action from ACTIONS.
-- Pick exactly ONE faction from MEMBER OF, ASCENDED, RISING, NEARBY, or UNEXPLORED.
+- Your personality is your tone.
+- Promote factions you are in. Attack your rivals.
+- Limit yourself to being a member in 5 factions.${memberOf.length >= 4 ? ` You hold ${memberOf.length} — consider DEFECT from your weakest.` : ''}
+- MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
+- REINFORCE factions you are already a member in. Don't JOIN the same faction twice.
+- DEFECT to lock in profits or downsize on underperforming faction.
+- To DEFECT or FUD a faction you MUST be a MEMBER OF it.
 - If no factions, consider LAUNCH.
-- Do NOT explain step by step.
+--- RULES:
+- Do NOT explain step by step. Concise.
 - ONE MOVE PER TURN.
---- MOVE FORMAT:
-ACTION FACTION - REASON
-- REASON is your 1 sentence explaination for your move.
 --- EXAMPLES:
-JOIN ${f1} - it is rising fast and I want early exposure.
-DEFECT ${m} - sentiment is bearish and I should cut losses.
-MESSAGE ${m} - I want to rally the community and show support.
-FUD ${m} - I want to spread fear and misinformation in this rival.
+JOIN ${f1} - It is rising fast and I want early exposure.
+DEFECT ${m} - Sentiment is bearish, ready to cut losses.
 REINFORCE ${m} - I am bullish and want a bigger position.
-TITHE ${m} - I want to grow the community war chest.
-INFILTRATE ${f1} - I see potential to damage a rival.
-ASCEND ${m} - the faction is ready.
-LAUNCH "Pyre Covenant" - I want to create my own faction.
+INFILTRATE ${f1} - Sneaking in.
+MESSAGE ${m} - Loving the energy in here. Any strategies?
+FUD ${m} - This faction is underperforming.
+ASCEND ${m} - The faction is ready.
+TITHE ${m} - Growing this war chest.
+LAUNCH "Pyre Covenant" - Creating my own faction.
 
 YOUR MOVE:`
 }

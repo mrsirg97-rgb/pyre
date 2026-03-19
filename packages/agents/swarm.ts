@@ -348,7 +348,7 @@ async function swarm() {
       }
 
       // Wire up on-chain checkpointing
-      const CHECKPOINT_EVERY = 20
+      const CHECKPOINT_EVERY = 5
       kit.setCheckpointConfig({ interval: CHECKPOINT_EVERY })
       kit.onCheckpointDue = async () => {
         try {
