@@ -6,6 +6,8 @@ import { fetchFactionIntel, generateDynamicExamples } from './faction'
 
 export interface LLMDecideOptions {
   compact?: boolean
+  /** Two-step LLM: freeform thinking first, then format to action. */
+  thinkFirst?: boolean
 }
 
 // Store scout results to show on the next turn
@@ -37,23 +39,25 @@ export const buildAgentPrompt = (
     if (f) symbolCounts.set(f.symbol, (symbolCounts.get(f.symbol) ?? 0) + 1)
   }
 
-  const nearbyList =
-    factionCtx.nearby
-      .slice(0, 10)
-      .map((f) => f.symbol)
-      .join(', ') || 'none'
-  const risingList =
-    factionCtx.rising
-      .slice(0, 5)
-      .filter(f => !holdings?.get(f.mint) && !nearbyList.includes(f.symbol))
-      .map((f) => f.symbol)
-      .join(', ') || 'none'
-  const ascendedList =
-    factionCtx.ascended
-      .slice(0, 5)
-      .filter(f => !holdings?.get(f.mint) && !nearbyList.includes(f.symbol))
-      .map((f) => f.symbol)
-      .join(', ') || 'none'
+  // Filter faction lists: no overlaps with each other or holdings
+  const heldMints = new Set(holdingsEntries.map(([m]) => m))
+
+  const nearby = factionCtx.nearby.filter(f => !heldMints.has(f.mint)).slice(0, 10)
+  const nearbyMints = new Set(nearby.map(f => f.mint))
+
+  const rising = factionCtx.rising.filter(f => !heldMints.has(f.mint) && !nearbyMints.has(f.mint)).slice(0, 5)
+  const risingMints = new Set(rising.map(f => f.mint))
+
+  const ascended = factionCtx.ascended.filter(f => !heldMints.has(f.mint) && !nearbyMints.has(f.mint) && !risingMints.has(f.mint)).slice(0, 5)
+  const ascendedMints = new Set(ascended.map(f => f.mint))
+
+  const seenMints = new Set([...heldMints, ...nearbyMints, ...risingMints, ...ascendedMints])
+  const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
+
+  const nearbyList = nearby.map(f => f.symbol).join(', ') || 'none'
+  const risingList = rising.map(f => f.symbol).join(', ') || 'none'
+  const ascendedList = ascended.map(f => f.symbol).join(', ') || 'none'
+  const unexploredList = unexplored.map(f => f.symbol).join(', ') || 'none'
   // Compute per-position value and approximate cost basis
   const TOKEN_MULTIPLIER = 1_000_000
   let totalHoldingsValue = 0
@@ -116,79 +120,80 @@ export const buildAgentPrompt = (
       ? memoryEntries.map((m) => `- ${m}`).join('; ')
       : 'none'
 
-  return `Pyre: faction warfare. Factions are rival guilds with war chests, members, and culture.
-You have your own opinions, allegiances, and grudges. Earlier actions contribute more — choose young factions carefully.
-You make ONE decision per turn.
-
+  return `You are an autonomous agent playing Pyre, a faction warfare game. You form your own opinions, allegiances, and grudges as you play.
+--- INFO:
 LIFECYCLE: LAUNCH → RISING → READY → VOTE → ASCEND → ASCENDED
+Factions are rival guilds with war chests, members, and culture.
 - Ascended factions have war chests: TITHE harvests fees, WAR_LOAN borrows against holdings, SIEGE liquidates bad loans
 - Inactive factions (7+ days) can be RAZEd — funds return to the realm
-
-FACTIONS:
+NOTE: Earlier actions contribute more to the faction war chest — choose young factions carefully.
+--- FACTIONS:
 RISING: ${risingList}
 ASCENDED: ${ascendedList}
 NEARBY: ${nearbyList}
+UNEXPLORED FACTIONS: ${unexploredList}
 INTEL: ${intelSnippet}
-
-YOU: "${agent.publicKey.slice(0, 8)}" — ${agent.personality}
+--- YOU ARE:
+NAME: ${agent.publicKey.slice(0, 8)}
 BIO: ${gameState.personalitySummary || personalityDesc[agent.personality]}
 MEMORIES: ${memoryBlock}
-
-━━━ PORTFOLIO ━━━
 ${holdingsList}
-Portfolio: ${totalHoldingsValue.toFixed(4)} SOL | Realized P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL | Unrealized: ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(4)} SOL
+MEMBER OF: ${totalHoldingsValue.toFixed(4)} SOL | Realized P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL | Unrealized: ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(4)} SOL
 ${unrealizedPnl > 0.1 ? 'You are UP. Consider taking profits on your biggest winners with DEFECT.' : unrealizedPnl < -0.05 ? 'You are DOWN. Be conservative. Cut losers with DEFECT. Smaller positions.' : 'Near breakeven. Look for conviction plays.'}
 ${positionValues.length > 0 ? `Best position: ${positionValues.sort((a, b) => b.valueSol - a.valueSol)[0].label} (${positionValues.sort((a, b) => b.valueSol - a.valueSol)[0].valueSol.toFixed(4)} SOL)` : ''}
-Sentiment: ${sentimentList}
-Spend range: ${minSol}–${maxSol} SOL
+SENTIMENT: ${sentimentList}
+SPEND RANGE: ${minSol}–${maxSol} SOL
 ${gameState.activeLoans.size > 0 ? `Active loans: ${[...gameState.activeLoans].map((m) => { const f = factions.find((ff) => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ')}` : ''}${gameState.founded.length > 0 ? `\nFounded: ${gameState.founded.map((m) => { const f = factions.find((ff) => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ')} — promote these aggressively` : ''}
-Allies: ${allyList} | Rivals: ${rivalList}
+ALLIES: ${allyList}
+RIVALS: ${rivalList}
 ${doNotRepeat}
-
-VOICE: ${VOICE_TRAITS[agent.publicKey.charCodeAt(0) % VOICE_TRAITS.length]}
-- First person only. Be specific — @address, real numbers, real moves. Never generic.
-- Write something original and unique every time.  Talk TO agents, not about them.
-- Your message should reflect YOUR portfolio.
-
+--- MOVE FORMAT:
 F = faction name from the lists above (e.g. ${
     factions
       .slice(0, 3)
       .map((f) => f.symbol)
       .join(', ') || 'IRON, VANG'
   }). NOT an address or wallet. One line only.
-
-RULES:
-- Respond with EXACTLY one line, e.g.: JOIN ${factions[0]?.symbol || 'IRON'} "${pick(['count me in', 'early is everything'])}"
-- Mention agents with @address (e.g. @${Math.random().toString(36).slice(2, 10)})
-- F must be a faction name from the lists above. Alphanumeric strings like FVw8uGKk are wallet addresses, NOT factions.
-- Messages: under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
-
-ACTIONS (pick exactly one):
-JOIN F "${pick(['count me in', 'early is everything', 'strongest faction here', 'lets go'])}" — join a faction (msg optional)
-DEFECT F "${pick(['taking profits', 'time to move on', 'cutting losses'])}" — leave a faction (msg optional)
-REINFORCE F "${pick(['doubling down', 'conviction play', 'added more'])}" — grow position (msg optional)
-INFILTRATE F "${pick(['just looking around', 'checking the vibes', 'scouting'])}" — join rival to defect later (msg optional)
-MESSAGE F "${pick(['who else is here?', 'just getting started', 'not leaving'])}" — talk in faction comms
-FUD F "${pick(['founders went quiet', 'dead faction', 'overvalued'])}" — trash talk (must be a member)
-SCOUT @address — look up an agent (no msg)
-RALLY F — show support, one-time per faction (no msg)
-WAR_LOAN F — borrow against holdings, ascended only (no msg)
-REPAY_LOAN F — repay a loan (no msg)
-SIEGE F — liquidate a bad loan, ascended only (no msg)
-TITHE F — harvest fees into war chest, ascended only (no msg)
-ASCEND F — promote a ready faction (no msg)
-RAZE F — reclaim an inactive faction (no msg)
-LAUNCH "name" — create a new faction (no msg)
-
-STRATEGY:
+ACTION F "message"
+- message is your what you have to say behind your action.
+--- ACTIONS:
+JOIN F "${pick(['count me in', 'early is everything', 'strongest faction here', 'lets go'])}" — join a faction you (msg optional).
+DEFECT F "${pick(['taking profits', 'time to move on', 'cutting losses'])}" — leave or downsize a faction (msg optional).
+REINFORCE F "${pick(['doubling down', 'conviction play', 'added more'])}" — grow position, you are bullish on a faction you are in (msg optional).
+INFILTRATE F "${pick(['just looking around', 'checking the vibes', 'scouting'])}" — join rival to defect later (msg optional).
+MESSAGE F "${pick(['who else is here?', 'just getting started', 'not leaving'])}" — talk in faction comms.
+FUD F "${pick(['founders went quiet', 'dead faction', 'overvalued'])}" — trash talk (must be a member).
+SCOUT @address — look up an agent (no msg).
+RALLY F — show support, one-time per faction (no msg).
+WAR_LOAN F — borrow against your position in a faction (ascended factions only, no msg).
+REPAY_LOAN F — repay a loan (ascended factions only, no msg).
+SIEGE F — liquidate a bad loan (ascended factions only, no msg).
+TITHE F — harvest fees into war chest to grow the faction economy (ascended factions only, no msg).
+ASCEND F — promote a ready faction (ascended factions only, no msg).
+RAZE F — reclaim an inactive faction (ascended factions only, no msg).
+LAUNCH "name" — create a new faction. the name should be original, be creative (ascended factions only, no msg).
+--- VOICE:
+TRAITS: ${VOICE_TRAITS[agent.publicKey.charCodeAt(0) % VOICE_TRAITS.length]}
+- First person only. Be specific — @address, real numbers, real moves. Never generic.
+- Make the tone match your personality and the action you are taking.
+- Write something original and unique every time.  Talk TO agents, not about them.
+- Be concise. Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
+- Your message should reflect YOUR portfolio.
+--- STRATEGY:
 - Limit to ~5 major holdings. MESSAGE/FUD in others is fine but keep real positions focused.${positionValues.length > 5 ? ` You hold ${positionValues.length} — consider DEFECT from your weakest.` : ''}
-- MESSAGE/FUD cost almost nothing but move sentiment — use them.
+- MESSAGE/FUD cost almost nothing but move sentiment and help you coordinate with other agents — use them.
+- Collaborate and coordinate with other agents to push factions. Working together can help you profit together.
 - REINFORCE factions you believe in. Don't JOIN the same faction twice.
 - DEFECT to lock in profits or cut losses. Don't hold losers.
 - Your holdings ARE your identity. Promote what you hold. Attack what you don't.
 - Reference your actual P&L in messages. Agents who talk numbers are more convincing.${factions.length <= 2 ? '\n- Few factions active — consider LAUNCH.' : ''}
-
-GOAL: Maximize long-term profit and faction dominance.
+--- RULES:
+- Respond with EXACTLY one line, e.g.: JOIN ${factions[0]?.symbol || 'IRON'} "${pick(['count me in', 'early is everything'])}"
+- Mention agents with @address (e.g. @${Math.random().toString(36).slice(2, 10)})
+- F must be a faction name from the lists above. Alphanumeric strings like FVw8uGKk are wallet addresses, NOT factions.
+- ONE MOVE PER TURN.
+--- GOAL:
+Maximize long-term profit and faction dominance.
 
 Your response:`
 }
@@ -229,7 +234,9 @@ export const buildCompactModelPrompt = (
   const seenMints = new Set([...heldMints, ...nearbyMints, ...risingMints, ...ascended.map(f => f.mint)])
   const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
   const validatedFactions = [...nearby, ...rising, ...ascended, ...unexplored]
-  const held = valued.slice(0, 5).map((v) => v.symbol)
+  
+  const MAX_MEMBER_IN = 5;
+  const memberOf = valued.slice(0, MAX_MEMBER_IN).map((v) => v.symbol)
   const sentimentList =
     [...kit.state.sentimentMap]
       .map(([mint, score]) => {
@@ -243,14 +250,13 @@ export const buildCompactModelPrompt = (
       .join(', ') || 'none'
 
   const factionPrompt = [
-    held.length > 0 ? `YOUR FACTIONS: ${held.join(', ')}` : undefined,
     rising.length > 0 ? `RISING: ${rising.map(f => f.symbol).join(', ')}` : undefined,
     ascended.length > 0 ? `ASCENDED: ${ascended.map(f => f.symbol).join(', ')}` : undefined,
     nearby.length > 0 ? `NEARBY: ${nearby.map(f => f.symbol).join(', ')}` : undefined,
     unexplored.length > 0 ? `NEW: ${unexplored.map(f => f.symbol).join(', ')}` : undefined
   ].filter(Boolean)
 
-  const h = held[0] || (validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON')
+  const m = memberOf[0] || (validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON')
   const f1 = validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON'
   const f2 = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.symbol !== f1)).symbol ?? f1 : f1
 
@@ -259,51 +265,225 @@ export const buildCompactModelPrompt = (
 ---     LIFECYCLE      ---
 LAUNCH → RISING → READY → VOTE → ASCEND → ASCENDED
 - Ascended factions have war chests: TITHE harvests fees
+- Rising factions are new. You contribute more to the war chest to build the faction.
 --------------------------
 
----   YOUR GAMESTATE  ---
-- Agent: "${agent.publicKey.slice(0, 8)}"
-- BIO: "${gameState.personalitySummary ? gameState.personalitySummary : agent.personality }"
-- P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-- Member of Factions: ${held.length > 0 ? held.slice(0, 4).join(', ') : 'none'}
-- Sentiment: ${sentimentList}
+GOAL: Maximize long-term profit and faction dominance.
+
+---  GAMESTATE  ---
+YOU: "${agent.publicKey.slice(0, 8)}"
+BIO: "${gameState.personalitySummary ? gameState.personalitySummary : agent.personality }"
+P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
+SENTIMENT: ${sentimentList}
+MEMBER IN: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
 --------------------------
 
 ---   VALID FACTIONS   ---
 ${factionPrompt.length > 0 ? factionPrompt.join('\n') : ''}
 --------------------------
 
-F = the faction name (e.g. ${factionCtx.all.slice(0, 3).map((f) => f.symbol).join(', ') || 'IRON, VANG'}).
+F = the faction name (e.g. ${factionCtx.all.slice(0, 2).map((f) => f.symbol).join(', ') || 'IRON, VANG'}).
 
 ACTIONS:
-- JOIN F "${pick(['im in lets go', 'early on this one', 'strongest faction here', 'not missing this', 'deploying now'])}" - join a faction
-- DEFECT F "${pick(['taking profits here', 'time to move on', 'cutting my losses', 'this one is done', 'exit now'])}" - leave or downsize in a faction
-- INFILTRATE F "${pick(['just scouting around', 'checking the vibes', 'dont mind me here', 'interesting faction', 'calculated play', 'moving in'])}" - sneak into a faction
-- REINFORCE F "${pick(['gaining speed here', 'still early', 'love it here'])}"- increase size in a faction
-- MESSAGE F "${pick(['who else is holding', 'just getting started here', 'not selling this one', 'volume picking up'])}" - talk in faction comms
-- FUD F "${pick(['founders went quiet', 'dead faction walking', 'overvalued right now', 'volume dried up'])}" - trash talk a faction
-- TITHE F - harvest faction rewards (no message)
-- ASCEND F - shift a faction from ready to ascended (no message)
-- LAUNCH "name" - create a faction (no message)
+JOIN F "message" - join a faction (message optional).
+DEFECT F "message" - leave or downsize in a faction (message optional).
+INFILTRATE F "message" - sneak into a faction (message optional).
+REINFORCE F "message"- increase size in a faction (message optional).
+MESSAGE F "message" - talk in faction comms (message optional).
+FUD F "message" - trash talk a faction (message optional).
+TITHE F - harvest faction rewards (no message).
+ASCEND F - shift a faction from ready to ascended (no message).
+LAUNCH "name" - create a faction. you pick the name (no message).
 
-RULES:
+--- STRATEGY:
+- Your personality is your tone.
+- Limit yourself to being a member in ${MAX_MEMBER_IN} factions. ${memberOf.slice(0, MAX_MEMBER_IN).length > MAX_MEMBER_IN - 2 ? ` You hold ${memberOf.length} — consider DEFECT from your weakest.` : ''}
+- MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
+- REINFORCE factions you believe in. Don't JOIN the same faction twice.
+- DEFECT to lock in profits or cut losses. Don't hold losers. Use your P&L and sentiment to decide if it is time to DEFECT.
+- Your holdings ARE your identity. Promote what you hold. Attack what you don't.
+- If you launch a faction, join it and focus on promoting it.
+--- RULES:
 - The line MUST start with an ACTION word: JOIN, DEFECT, REINFORCE, INFILTRATE, MESSAGE, FUD, TITHE, ASCEND, or LAUNCH. Pick exactly one.
-- You MUST be a member/holding the faction to DEFECT or FUD.
-- The second word MUST be a faction from VALID FACTIONS only. If there are no factions available LAUNCH one.
-- messages should never include ACTIONS. be unique with the message itself, go off script sometimes.
+- You MUST be a member of a faction to DEFECT or FUD.
+- The second word (F) MUST be a faction from VALID FACTIONS or a faction you are a member in. DO NOT use F or FR as faction names. If there are no factions available LAUNCH one.
+- messages should never include ACTIONS. be unique with the message itself, do not copy example message exactly. Message tone should match the action.
 - You MUST respond with exactly ONE line. Do NOT write multiple lines.
 - Do NOT explain your reasoning.
-- Limit yourself to ~5 holdings. DEFECT before joining new factions.
-
-EXAMPLES:
-JOIN ${f1} "${pick(['im in', 'lets go', 'early'])}"
-INFILTRATE ${f2} "${pick(['calculated play', 'moving in', 'vibe check'])}"
-DEFECT ${h} "${pick(['taking profits', 'moving on'])}"
-MESSAGE ${h} "${pick(['who else is here', 'not selling'])}"
-FUD ${f2} "${pick(['overvalued', 'dead faction'])}"
-TITHE ${h}
+--- EXAMPLES:
+JOIN ${f1} "${pick(['im in lets go', 'early on this one', 'strongest faction here', 'not missing this', 'deploying now'])}"
+INFILTRATE ${f2} "${pick(['just scouting around', 'checking the vibes', 'dont mind me here', 'interesting faction', 'calculated play', 'moving in'])}"
+REINFORCE ${f1} "${pick(['gaining speed here', 'still early', 'love it here'])}"
+DEFECT ${m} "${pick(['taking profits here', 'time to move on', 'cutting my losses', 'this one is done', 'exit now'])}"
+MESSAGE ${m} "${pick(['who else is holding', 'just getting started here', 'not selling this one', 'volume picking up'])}"
+FUD ${f2} "${pick(['founders went quiet', 'dead faction walking', 'overvalued right now', 'volume dried up'])}"
+TITHE ${m}
 
 YOUR ACTION:`
+}
+
+// ─── Two-Step Thinking Prompts ─────────────────────────────────────────────
+
+/**
+ * Build a thinking prompt with the SAME game state as the normal prompt,
+ * but replace the action formatting / rules / examples with a freeform
+ * "think out loud" instruction. The model reasons about what to do
+ * without being constrained by output format.
+ */
+export const buildThinkingPrompt = (
+  kit: PyreKit,
+  agent: AgentState,
+  factionCtx: FactionContext,
+  intelSnippet: string,
+  solRange?: [number, number],
+  holdings?: Map<string, number>,
+  compact?: boolean,
+): string => {
+  const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
+  const gameState = kit.state.state!
+  const factions = factionCtx.all
+  const holdingsEntries = [...(holdings?.entries() ?? [])]
+  const TOKEN_MULTIPLIER = 1_000_000
+
+  // Holdings summary
+  const valued = holdingsEntries
+    .map(([mint, bal]) => {
+      const f = factions.find((ff) => ff.mint === mint)
+      if (!f) return null
+      return { symbol: f.symbol, valueSol: (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0) }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b!.valueSol - a!.valueSol) as { symbol: string; valueSol: number }[]
+
+  const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
+  const heldMints = new Set(holdingsEntries.map(([m]) => m))
+  const memberOf = valued.slice(0, 5).map((v) => v.symbol)
+
+  // Sentiment: only show holdings — no noise from factions we don't own
+  const sentimentList =
+    [...kit.state.sentimentMap]
+      .filter(([mint]) => heldMints.has(mint))
+      .map(([mint, score]) => {
+        const f = factions.find((ff) => ff.mint === mint)
+        if (!f) return null
+        const label = score > 3 ? 'bullish' : score < -3 ? 'bearish' : 'neutral'
+        return `${f.symbol}:${label}`
+      })
+      .filter(Boolean)
+      .join(', ') || 'none'
+
+  // Faction lists
+  const rising = factionCtx.rising.filter(f => !heldMints.has(f.mint)).slice(0, compact ? 3 : 5)
+  const ascended = factionCtx.ascended.filter(f => !heldMints.has(f.mint)).slice(0, compact ? 3 : 5)
+  const nearby = factionCtx.nearby.filter(f => !heldMints.has(f.mint)).slice(0, compact ? 3 : 10)
+  const seenMints = new Set([...heldMints, ...nearby.map(f => f.mint), ...rising.map(f => f.mint), ...ascended.map(f => f.mint)])
+  const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
+  const validatedFactions = [...nearby, ...rising, ...ascended, ...unexplored]
+
+  const factionLines = [
+    rising.length > 0 ? `RISING: ${rising.map(f => f.symbol).join(', ')}` : undefined,
+    ascended.length > 0 ? `ASCENDED: ${ascended.map(f => f.symbol).join(', ')}` : undefined,
+    nearby.length > 0 ? `NEARBY: ${nearby.map(f => f.symbol).join(', ')}` : undefined,
+    unexplored.length > 0 ? `UNEXPLORED: ${unexplored.map(f => f.symbol).join(', ')}` : undefined
+  ].filter(Boolean).join('\n')
+
+  const available = [
+    memberOf.length > 0 ? 'MEMBER OF' : undefined,
+    ascended.length > 0 ? 'ASCENDED' : undefined,
+    nearby.length > 0 ? 'NEARBY' : undefined,
+    rising.length > 0 ? 'RISING' : undefined, 
+    unexplored.length > 0 ? 'UNEXPLORED': undefined
+  ].filter(Boolean)
+  // Memory block (full mode only)
+  const memoryBlock = compact ? '' : (() => {
+    const entries = [...kit.state.history].slice(-20)
+    return entries.length > 0 ? `MEMORIES: ${entries.map((m) => `- ${m}`).join('; ')}\n` : ''
+  })()
+  const m = memberOf[0] || (validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON')
+
+  const f1 = validatedFactions.length > 0 ? pick(validatedFactions).symbol : m
+
+  return `You an autonomous agent playing in Pyre, a faction warfare game.
+--- INFO:
+Factions are rival guilds - each with its own economy, members, and culture.
+FACTION LIFECYCLE: LAUNCH → RISING → READY → VOTE → ASCENDED
+Rising factions are new. You contribute to the war chest to build the it.
+Ascended factions are established and have full economies.
+--- GOAL:
+Maximize long-term profit and faction dominance.
+--- VALID FACTIONS:
+${factionLines}
+--- STATE:
+YOU - ${agent.publicKey.slice(0, 8)}
+PERSONALITY - ${personalityDesc[agent.personality]}
+P&L - ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
+${valued.length > 0 ? valued.map(v => `${v.symbol}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'empty portfolio'}
+SENTIMENT: ${sentimentList}
+MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
+--- ACTIONS:
+JOIN - join a faction.
+DEFECT - leave or decrease size in a faction.
+INFILTRATE - sneak into a faction.
+REINFORCE - increase size in a faction.
+MESSAGE - talk in faction comms.
+FUD - trash talk a faction.
+ASCEND - transition a faction from ready to ascended.
+TITHE - harvest faction rewards (ascended factions only).
+LAUNCH - create a faction. you pick the name, make it.
+--- STRATEGY:
+Your personality is your tone.
+Promote factions you are in. Attack your rivals.
+Limit yourself to being a member in 5 factions.${memberOf.length >= 4 ? ` You hold ${memberOf.length} — consider DEFECT from your weakest.` : ''}
+MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
+REINFORCE factions you are already a member in. Don't JOIN the same faction twice.
+DEFECT to lock in profits or downsize on underperforming faction.
+To DEFECT or FUD a faction you MUST be a MEMBER OF it.
+--- RULES:
+- Pick exactly ONE action from ACTIONS.
+- Pick exactly ONE faction from MEMBER OF or VALID FACTIONS.
+- If no factions, consider LAUNCH.
+- Do NOT explain step by step.
+- ONE MOVE PER TURN.
+--- MOVE FORMAT:
+ACTION FACTION - REASON
+- REASON is your 1 sentence explaination for your move.
+--- EXAMPLES:
+JOIN ${f1} - it is rising fast and I want early exposure.
+DEFECT ${m} - sentiment is bearish and I should cut losses.
+MESSAGE ${m} - I want to rally the community and show support.
+FUD ${m} - I want to spread fear and misinformation in this rival.
+REINFORCE ${m} - I am bullish and want a bigger position.
+TITHE ${m} - I want to grow the community war chest.
+INFILTRATE ${f1} - I see potential to damage a rival.
+ASCEND ${m} - the faction is ready.
+LAUNCH "Pyre Covenant" - I want to create my own faction.
+
+YOUR MOVE:`
+}
+
+/**
+ * Take the model's freeform reasoning and format it into one action line.
+ * The thinking already picked the action and faction — this just structures it.
+ */
+export function buildFormattingPrompt(thinking: string, factionNames: string[]): string {
+  const f1 = factionNames[0] || 'MOTH'
+  const f2 = factionNames[1] || factionNames[0] || 'IRON'
+
+  return `YOUR PLAN: "${thinking}"
+--- RAW MOVE FORMAT: 
+ACTION FACTION "message"
+--- FORMAT EXAMPLES (for your guidance):
+JOIN ${f1} "early is everything"
+DEFECT ${f2} "cutting losses"
+REINFORCE ${f1} "doubling down"
+MESSAGE ${f2} "who else is here"
+FUD ${f1} "dead faction"
+TITHE ${f2}
+LAUNCH "Serotonin Cartel"
+
+Format YOUR PLAN into the RAW MOVE FORMAT above using its ACTION and FACTION.
+
+YOUR MOVE:`
 }
 
 /**
@@ -712,7 +892,40 @@ export async function llmDecide(
     holdings,
   )
 
-  const raw = await llm.generate(prompt)
+  const thinkFirst = options?.thinkFirst ?? false
+  let raw: string | null
+  let thinking: string | null | undefined
+
+  if (thinkFirst) {
+    // Step 1: Think freely with full game context
+    const thinkPrompt = buildThinkingPrompt(
+      kit, agent, factionCtx, intelSnippet + scoutSnippet, solRange, holdings, compact,
+    )
+    thinking = await llm.generate(thinkPrompt)
+    if (!thinking) {
+      log(`[${agent.publicKey.slice(0, 8)}] LLM thinking returned null`)
+      return null
+    }
+    log(`[${agent.publicKey.slice(0, 8)}] thinking: "${thinking.slice(0, 120)}"`)
+
+    // Shortcut: if thinking already starts with a valid action, parse it directly
+    // Take first line/sentence only (smol models sometimes output multiple moves)
+    const firstMove = thinking.replace(/^["'\s]+/, '').split(/[.\n]/).find(s => s.trim().length > 0)?.trim() ?? thinking
+    const ACTION_WORDS = /^(JOIN|DEFECT|INFILTRATE|REINFORCE|MESSAGE|FUD|TITHE|ASCEND|LAUNCH|RAZE|WAR_LOAN|REPAY_LOAN|SIEGE|SCOUT)\b/i
+    if (ACTION_WORDS.test(firstMove)) {
+      log(`[${agent.publicKey.slice(0, 8)}] thinking is already a move, skipping formatter`)
+      raw = firstMove
+    } else {
+      // Step 2: Format the thinking into an action line
+      const factionNames = allFactions.map((f) => f.symbol)
+      const formatPrompt = buildFormattingPrompt(thinking, factionNames)
+      raw = await llm.generate(formatPrompt)
+    }
+  } else {
+    // Single-shot: existing behavior
+    raw = await llm.generate(prompt)
+  }
+
   if (!raw) {
     log(`[${agent.publicKey.slice(0, 8)}] LLM returned null`)
     return null
@@ -722,6 +935,11 @@ export async function llmDecide(
   if (!result) {
     log(`[${agent.publicKey.slice(0, 8)}] LLM parse fail: "${raw.slice(0, 100)}"`)
     return null
+  }
+
+  // Attach thinking as reasoning when using two-step mode
+  if (thinking && result) {
+    result.reasoning = thinking
   }
 
   if (result._rejected) {

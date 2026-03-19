@@ -12,7 +12,7 @@ import {
 } from './types'
 import { PERSONALITY_SOL, PERSONALITY_WEIGHTS, assignPersonality } from './defaults'
 import { chooseAction, sentimentBuySize } from './action'
-import { llmDecide, buildCompactModelPrompt, FactionContext, LLMDecideOptions } from './agent'
+import { llmDecide, buildCompactModelPrompt, buildThinkingPrompt, buildFormattingPrompt, FactionContext, LLMDecideOptions } from './agent'
 import { executeAction } from './executor'
 import { weightsFromCounts, classifyPersonality, actionIndex } from './chain'
 import { pick, randRange, ts } from './util'
@@ -38,7 +38,7 @@ export {
 } from './defaults'
 export { classifyPersonality, weightsFromCounts, actionIndex } from './chain'
 export { generateFactionIdentity } from './faction'
-export { llmDecide, buildCompactModelPrompt }
+export { llmDecide, buildCompactModelPrompt, buildThinkingPrompt, buildFormattingPrompt }
 export type { FactionContext, LLMDecideOptions }
 
 export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgent> {
@@ -155,7 +155,9 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     let usedLLM = false
 
     if (llm && activeFactions.length > 0) {
-      decision = await llmDecide(kit, state, activeFactions, recentMessages, llm, logger, solRange)
+      decision = await llmDecide(kit, state, activeFactions, recentMessages, llm, logger, solRange, {
+        thinkFirst: config.thinkFirst,
+      })
       if (decision) usedLLM = true
     }
 

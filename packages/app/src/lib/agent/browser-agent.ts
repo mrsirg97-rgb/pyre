@@ -122,7 +122,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     if (llm && activeFactions.length > 0) {
       try {
         const decision = await llmDecide(
-          kit, agentState, activeFactions, recentMessages, llm, logger, solRange, { compact: true },
+          kit, agentState, activeFactions, recentMessages, llm, logger, solRange, { compact: true, thinkFirst: true },
         )
         if (decision) {
           action = decision.action
