@@ -176,7 +176,7 @@ LAUNCH "name" — create a new faction. the name should be original, be creative
 TRAITS: ${VOICE_TRAITS[agent.publicKey.charCodeAt(0) % VOICE_TRAITS.length]}
 - First person only. Be specific — @address, real numbers, real moves. Never generic.
 - Make the tone match your personality and the action you are taking.
-- Write something original and unique every time.  Talk TO agents, not about them.
+- Write something original and unique every time. Talk TO agents, not about them.
 - Be concise. Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
 - Your message should reflect YOUR portfolio.
 --- STRATEGY:
@@ -248,14 +248,6 @@ export const buildCompactModelPrompt = (
       .filter(Boolean)
       .slice(0, 3)
       .join(', ') || 'none'
-
-  const factionPrompt = [
-    rising.length > 0 ? `RISING: ${rising.map(f => f.symbol).join(', ')}` : undefined,
-    ascended.length > 0 ? `ASCENDED: ${ascended.map(f => f.symbol).join(', ')}` : undefined,
-    nearby.length > 0 ? `NEARBY: ${nearby.map(f => f.symbol).join(', ')}` : undefined,
-    unexplored.length > 0 ? `NEW: ${unexplored.map(f => f.symbol).join(', ')}` : undefined
-  ].filter(Boolean)
-
   const m = memberOf[0] || (validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON')
   const f1 = validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON'
   const f2 = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.symbol !== f1)).symbol ?? f1 : f1
@@ -279,7 +271,10 @@ MEMBER IN: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
 --------------------------
 
 ---   VALID FACTIONS   ---
-${factionPrompt.length > 0 ? factionPrompt.join('\n') : ''}
+ASCENDED: ${ascended.length > 0 ? ascended.map(f => f.symbol).join(', ') : 'none'}
+RISING: ${rising.length > 0 ? rising.map(f => f.symbol).join(', ') : 'none'}
+NEARBY: ${nearby.length > 0 ? nearby.map(f => f.symbol).join(', ') : 'none'}
+UNEXPLORED: ${unexplored.length > 0 ? unexplored.map(f => f.symbol).join(', ') : 'none'}
 --------------------------
 
 F = the faction name (e.g. ${factionCtx.all.slice(0, 2).map((f) => f.symbol).join(', ') || 'IRON, VANG'}).
@@ -379,21 +374,6 @@ export const buildThinkingPrompt = (
   const seenMints = new Set([...heldMints, ...nearby.map(f => f.mint), ...rising.map(f => f.mint), ...ascended.map(f => f.mint)])
   const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
   const validatedFactions = [...nearby, ...rising, ...ascended, ...unexplored]
-
-  const factionLines = [
-    rising.length > 0 ? `RISING: ${rising.map(f => f.symbol).join(', ')}` : undefined,
-    ascended.length > 0 ? `ASCENDED: ${ascended.map(f => f.symbol).join(', ')}` : undefined,
-    nearby.length > 0 ? `NEARBY: ${nearby.map(f => f.symbol).join(', ')}` : undefined,
-    unexplored.length > 0 ? `UNEXPLORED: ${unexplored.map(f => f.symbol).join(', ')}` : undefined
-  ].filter(Boolean).join('\n')
-
-  const available = [
-    memberOf.length > 0 ? 'MEMBER OF' : undefined,
-    ascended.length > 0 ? 'ASCENDED' : undefined,
-    nearby.length > 0 ? 'NEARBY' : undefined,
-    rising.length > 0 ? 'RISING' : undefined, 
-    unexplored.length > 0 ? 'UNEXPLORED': undefined
-  ].filter(Boolean)
   // Memory block (full mode only)
   const memoryBlock = compact ? '' : (() => {
     const entries = [...kit.state.history].slice(-20)
@@ -412,7 +392,10 @@ Ascended factions are established and have full economies.
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- VALID FACTIONS:
-${factionLines}
+ASCENDED: ${ascended.length > 0 ? ascended.map(f => f.symbol).join(', ') : 'none'}
+RISING: ${rising.length > 0 ? rising.map(f => f.symbol).join(', ') : 'none'}
+NEARBY: ${nearby.length > 0 ? nearby.map(f => f.symbol).join(', ') : 'none'}
+UNEXPLORED: ${unexplored.length > 0 ? unexplored.map(f => f.symbol).join(', ') : 'none'}
 --- STATE:
 YOU - ${agent.publicKey.slice(0, 8)}
 PERSONALITY - ${personalityDesc[agent.personality]}
@@ -440,7 +423,7 @@ DEFECT to lock in profits or downsize on underperforming faction.
 To DEFECT or FUD a faction you MUST be a MEMBER OF it.
 --- RULES:
 - Pick exactly ONE action from ACTIONS.
-- Pick exactly ONE faction from MEMBER OF or VALID FACTIONS.
+- Pick exactly ONE faction from MEMBER OF, ASCENDED, RISING, NEARBY, or UNEXPLORED.
 - If no factions, consider LAUNCH.
 - Do NOT explain step by step.
 - ONE MOVE PER TURN.
