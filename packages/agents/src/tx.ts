@@ -28,7 +28,7 @@ export const sendAndConfirm = async (
   result: any,
 ): Promise<string> => {
   const tx = result.transaction
-  tx.partialSign(keypair)
+  tx.sign([keypair])
   const sig = await connection.sendRawTransaction(tx.serialize(), {
     skipPreflight: false,
     preflightCommitment: 'confirmed',
@@ -37,7 +37,7 @@ export const sendAndConfirm = async (
 
   if (result.additionalTransactions) {
     for (const addlTx of result.additionalTransactions) {
-      addlTx.partialSign(keypair)
+      addlTx.sign([keypair])
       const addlSig = await connection.sendRawTransaction(addlTx.serialize())
       await confirm(connection, addlSig)
     }
