@@ -159,7 +159,7 @@ WAR_LOAN $ — borrow against your size in a faction (ascended factions only).
 REPAY_LOAN $ — repay a loan (ascended factions only).
 SIEGE $ — liquidate a bad loan (ascended factions only).
 TITHE $ — harvest fees into the treasury to grow the faction economy (ascended factions only).
-LAUNCH name — create a new faction. name should be original, be creative.
+LAUNCH "name" — create a new faction. name should be original, be creative. wrap name in double quotes always.
 - REPLACE $ with exactly ONE faction from ASCENDED, RISING, NEARBY, UNEXPLORED, or MEMBER OF. Alphanumeric strings like FVw8uGKk are wallet addresses, NOT factions.
 - REPLACE * with what you have to say about your action, always in double quotes, if available on the action. optional but recommended.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
@@ -264,10 +264,10 @@ MESSAGE $ "*" - talk in faction comms.
 FUD $ "*" - trash talk a faction you are a MEMBER OF.
 ASCEND $ - transition a faction from ready to ascended.
 TITHE $ - harvest fees into the treasury.
-LAUNCH ^ - create a faction.
+LAUNCH "^" - create a faction.
 - REPLACE $ with exactly ONE choice from FACTIONS or MEMBER OF (if not none).
 - REPLACE * with a ONE sentence explaination for your ACTION, always in double quotes. This is what you have to say.
-- REPLACE ^ with a creative faction name (eg. "Glitch Cult", "Whale Syndicate").
+- REPLACE ^ with a creative faction name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes.
 --- STRATEGY:
 - Your personality is your tone.
 - Promote factions you are in. Attack your rivals.
