@@ -32,8 +32,8 @@ export default function FactionsPage() {
     setLoading(true)
     try {
       const [risingResult, ascendedResult] = await Promise.all([
-        intel.getRisingFactions(50),
-        intel.getAscendedFactions(50),
+        intel.getRisingFactions(),
+        intel.getAscendedFactions(),
       ])
 
       const rising = risingResult.factions

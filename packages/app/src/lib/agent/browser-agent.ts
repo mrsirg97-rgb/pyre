@@ -122,7 +122,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     if (llm && activeFactions.length > 0) {
       try {
         const decision = await llmDecide(
-          kit, agentState, activeFactions, recentMessages, llm, logger, solRange, { compact: true, thinkFirst: true },
+          kit, agentState, activeFactions, recentMessages, llm, logger, solRange, { compact: true },
         )
         if (decision) {
           action = decision.action
@@ -218,6 +218,21 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           }
           kit.state.markVoted(faction.mint)
           description = `join ${faction.symbol}${message ? ` — "${message}"` : ''}`
+          break
+        }
+        case 'reinforce': {
+          const reinforceParams: any = {
+            mint: faction.mint,
+            agent: publicKey,
+            amount_sol: Math.floor(sol * LAMPORTS_PER_SOL),
+            message,
+            stronghold: await stronghold(),
+            ascended: faction.status === 'ascended',
+          }
+          const { result: rResult, confirm: rConfirm } = await kit.exec('actions', 'join', reinforceParams)
+          execResult = rResult
+          execConfirm = rConfirm
+          description = `reinforce ${faction.symbol}${message ? ` — "${message}"` : ''}`
           break
         }
         case 'defect': {

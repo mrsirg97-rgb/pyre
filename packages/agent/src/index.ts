@@ -12,7 +12,7 @@ import {
 } from './types'
 import { PERSONALITY_SOL, PERSONALITY_WEIGHTS, assignPersonality } from './defaults'
 import { chooseAction, sentimentBuySize } from './action'
-import { llmDecide, buildCompactModelPrompt, buildThinkingPrompt, buildFormattingPrompt, FactionContext, LLMDecideOptions } from './agent'
+import { llmDecide, buildCompactModelPrompt, FactionContext, LLMDecideOptions } from './agent'
 import { executeAction } from './executor'
 import { weightsFromCounts, classifyPersonality, actionIndex } from './chain'
 import { pick, randRange, ts } from './util'
@@ -38,7 +38,7 @@ export {
 } from './defaults'
 export { classifyPersonality, weightsFromCounts, actionIndex } from './chain'
 export { generateFactionIdentity } from './faction'
-export { llmDecide, buildCompactModelPrompt, buildThinkingPrompt, buildFormattingPrompt }
+export { llmDecide, buildCompactModelPrompt }
 export type { FactionContext, LLMDecideOptions }
 
 export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgent> {
@@ -155,9 +155,7 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
     let usedLLM = false
 
     if (llm && activeFactions.length > 0) {
-      decision = await llmDecide(kit, state, activeFactions, recentMessages, llm, logger, solRange, {
-        thinkFirst: config.thinkFirst,
-      })
+      decision = await llmDecide(kit, state, activeFactions, recentMessages, llm, logger, solRange)
       if (decision) usedLLM = true
     }
 
@@ -191,6 +189,13 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
         if (!f) return { action, success: false, error: 'no factions', usedLLM: false }
         decision.faction = f.mint
         decision.sol = sentimentBuySize(state.personality, kit.state.getSentiment(f.mint), solRange)
+      } else if (action === 'reinforce') {
+        const held = [...holdings.entries()].filter(([, b]) => b > 0)
+        if (held.length === 0)
+          return { action, success: false, error: 'no holdings to reinforce', usedLLM: false }
+        const target = pick(held)
+        decision.faction = target[0]
+        decision.sol = sentimentBuySize(state.personality, kit.state.getSentiment(target[0]), solRange)
       } else if (action === 'message' || action === 'fud') {
         return { action, success: false, error: 'no LLM for message', usedLLM: false }
       } else if (action === 'defect') {

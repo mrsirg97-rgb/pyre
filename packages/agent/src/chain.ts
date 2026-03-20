@@ -15,6 +15,7 @@ const ALL_ACTIONS: Action[] = [
   'rally',
   'launch',
   'message',
+  'reinforce',
   'war_loan',
   'repay_loan',
   'siege',

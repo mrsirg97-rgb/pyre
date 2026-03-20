@@ -2,19 +2,20 @@ import { PERSONALITY_WEIGHTS } from './defaults'
 import { Action, AgentState, FactionInfo, Personality } from './types'
 
 const ALL_ACTIONS: Action[] = [
-  'join',
-  'defect',
-  'rally',
-  'launch',
-  'message',
-  'war_loan',
-  'repay_loan',
-  'siege',
-  'ascend',
-  'raze',
-  'tithe',
-  'infiltrate',
-  'fud',
+  'join',       // 0
+  'defect',     // 1
+  'rally',      // 2
+  'launch',     // 3
+  'message',    // 4
+  'reinforce',  // 5
+  'war_loan',   // 6
+  'repay_loan', // 7
+  'siege',      // 8
+  'ascend',     // 9
+  'raze',       // 10
+  'tithe',      // 11
+  'infiltrate', // 12
+  'fud',        // 13
 ]
 
 /**
@@ -36,9 +37,15 @@ export const chooseAction = (
   const heldMints = [...agent.holdings.keys()]
   const rivalFactions = knownFactions.filter((f) => !heldMints.includes(f.mint))
 
+  // Index reference:
+  // 0:join 1:defect 2:rally 3:launch 4:message 5:reinforce
+  // 6:war_loan 7:repay_loan 8:siege 9:ascend 10:raze 11:tithe 12:infiltrate 13:fud
+
   if (!hasHoldings) {
     weights[0] += weights[1]
-    weights[1] = 0
+    weights[1] = 0   // can't defect
+    weights[5] = 0   // can't reinforce
+    weights[13] = 0  // can't fud
   }
   if (!canRally) {
     weights[0] += weights[2]
@@ -48,35 +55,31 @@ export const chooseAction = (
   const ascendedFactions = knownFactions.filter((f) => f.status === 'ascended')
   const holdsAscended = ascendedFactions.some((f) => agent.holdings.has(f.mint))
   if (!holdsAscended) {
-    weights[0] += weights[5]
-    weights[5] = 0
+    weights[0] += weights[6]
+    weights[6] = 0   // can't war_loan
   }
   if ((agent.activeLoans?.size ?? 0) === 0) {
-    weights[0] += weights[6]
-    weights[6] = 0
+    weights[0] += weights[7]
+    weights[7] = 0   // can't repay_loan
   }
   if (ascendedFactions.length === 0) {
-    weights[0] += weights[7]
-    weights[7] = 0
+    weights[0] += weights[8]
+    weights[8] = 0   // can't siege
   }
 
   const readyFactions = knownFactions.filter((f) => f.status === 'ready')
   if (readyFactions.length === 0) {
-    weights[0] += weights[8]
-    weights[8] = 0
+    weights[0] += weights[9]
+    weights[9] = 0   // can't ascend
   }
   const risingFactions = knownFactions.filter((f) => f.status === 'rising')
   if (risingFactions.length === 0) {
-    weights[0] += weights[9]
-    weights[9] = 0
+    weights[0] += weights[10]
+    weights[10] = 0  // can't raze
   }
   if (rivalFactions.length === 0) {
-    weights[0] += weights[11]
-    weights[11] = 0
-  }
-  if (!hasHoldings) {
     weights[0] += weights[12]
-    weights[12] = 0
+    weights[12] = 0  // can't infiltrate
   }
 
   // Few factions available → boost launch (modest — agents converge on existing factions naturally)
@@ -94,9 +97,9 @@ export const chooseAction = (
   }
 
   if (ascendedFactions.length > 0) {
-    if (holdsAscended) weights[5] += 0.15
-    weights[7] += 0.12
-    if ((agent.activeLoans?.size ?? 0) > 0) weights[6] += 0.06
+    if (holdsAscended) weights[6] += 0.15   // war_loan
+    weights[8] += 0.12                       // siege
+    if ((agent.activeLoans?.size ?? 0) > 0) weights[7] += 0.06  // repay_loan
   }
 
   const total = weights.reduce((a, b) => a + b, 0)

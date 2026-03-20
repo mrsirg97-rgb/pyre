@@ -1,15 +1,15 @@
 import { Personality } from './types'
 
 // ─── Personality Weights ────────────────────────────────────────────
-// [join, defect, rally, launch, message, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
+// [join, defect, rally, launch, message, reinforce, war_loan, repay_loan, siege, ascend, raze, tithe, infiltrate, fud]
 
 export const PERSONALITY_WEIGHTS: Record<Personality, number[]> = {
-  //         join  defct rally lunch msg   wloan repay siege ascnd raze  tithe infil fud
-  loyalist: [0.2, 0.05, 0.1, 0.02, 0.22, 0.03, 0.03, 0.02, 0.04, 0.02, 0.08, 0.04, 0.15],
-  mercenary: [0.14, 0.14, 0.03, 0.03, 0.18, 0.06, 0.03, 0.05, 0.03, 0.03, 0.04, 0.08, 0.16],
-  provocateur: [0.1, 0.06, 0.03, 0.03, 0.22, 0.03, 0.02, 0.03, 0.02, 0.04, 0.04, 0.08, 0.3],
-  scout: [0.16, 0.08, 0.06, 0.02, 0.24, 0.03, 0.02, 0.04, 0.03, 0.04, 0.03, 0.06, 0.19],
-  whale: [0.18, 0.12, 0.04, 0.03, 0.2, 0.05, 0.03, 0.02, 0.03, 0.03, 0.05, 0.08, 0.14],
+  //         join  defct rally lunch msg   reinf wloan repay siege ascnd raze  tithe infil fud
+  loyalist: [0.15, 0.05, 0.1, 0.02, 0.2, 0.1, 0.03, 0.03, 0.02, 0.04, 0.02, 0.08, 0.04, 0.12],
+  mercenary: [0.12, 0.14, 0.03, 0.03, 0.16, 0.06, 0.06, 0.03, 0.05, 0.03, 0.03, 0.04, 0.08, 0.14],
+  provocateur: [0.08, 0.06, 0.03, 0.03, 0.2, 0.04, 0.03, 0.02, 0.03, 0.02, 0.04, 0.04, 0.08, 0.3],
+  scout: [0.12, 0.08, 0.06, 0.02, 0.22, 0.06, 0.03, 0.02, 0.04, 0.03, 0.04, 0.03, 0.06, 0.19],
+  whale: [0.14, 0.12, 0.04, 0.03, 0.16, 0.1, 0.05, 0.03, 0.02, 0.03, 0.03, 0.05, 0.08, 0.12],
 }
 
 // SOL spend ranges per personality
@@ -112,8 +112,8 @@ export const ACTION_MAP: Record<string, string> = {
   JOINING: 'JOIN',
   BUYING: 'JOIN',
   INVESTING: 'JOIN',
-  REINFORCE: 'JOIN',
-  INCREASE: 'JOIN',
+  REINFORCE: 'REINFORCE',
+  INCREASE: 'REINFORCE',
   GATHER: 'JOIN',
   SELL: 'DEFECT',
   DUMP: 'DEFECT',

@@ -11,6 +11,7 @@ export type Action =
   | 'rally'
   | 'launch'
   | 'message'
+  | 'reinforce'
   | 'war_loan'
   | 'repay_loan'
   | 'siege'
@@ -75,8 +76,6 @@ export interface PyreAgentConfig {
   maxFoundedFactions?: number
   state?: SerializedAgentState
   logger?: (msg: string) => void
-  /** Two-step LLM: freeform thinking first, then format to action. Good for small models. */
-  thinkFirst?: boolean
 }
 
 export interface AgentTickResult {

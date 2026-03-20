@@ -76,6 +76,37 @@ const handlers: Record<string, ActionHandler> = {
     return `joined ${faction.symbol} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
   },
 
+  async reinforce(kit, agent, factions, decision, log) {
+    const faction = findFaction(factions, decision.faction)
+    if (!faction) return null
+    const vc = await vaultCreator(kit)
+    if (!vc) return null
+
+    const balance = await kit.state.getBalance(faction.mint)
+    if (balance <= 0) return null // can't reinforce what you don't hold
+
+    const sol =
+      decision.sol ??
+      sentimentBuySize(agent.personality, kit.state.getSentiment(faction.mint), [0.01, 0.1])
+    const lamports = Math.floor(sol * LAMPORTS_PER_SOL)
+
+    const params: any = {
+      mint: faction.mint,
+      agent: agent.publicKey,
+      amount_sol: lamports,
+      message: decision.message,
+      stronghold: vc,
+      ascended: faction.status === 'ascended',
+    }
+
+    const { result, confirm } = await kit.exec('actions', 'join', params)
+    await sendAndConfirm(kit.connection, agent.keypair, result)
+    await confirm()
+
+    agent.lastAction = `reinforced ${faction.symbol}`
+    return `reinforced ${faction.symbol} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
+  },
+
   async defect(kit, agent, factions, decision) {
     const faction = findFaction(factions, decision.faction)
     if (!faction) return null
