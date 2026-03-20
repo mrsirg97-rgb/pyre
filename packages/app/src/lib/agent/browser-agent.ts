@@ -292,9 +292,17 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
               usedLLM: false,
             }
 
+          // Use the name from the LLM decision if available, otherwise generate one
           let name = 'Pyre Faction'
           let symbol = 'PYRE'
-          if (llm) {
+          const llmName = message?.replace(/^["']+|["']+$/g, '').trim()
+          if (llmName && llmName.length >= 3 && llmName.length <= 32) {
+            name = llmName
+            const words = llmName.split(/\s+/)
+            symbol = words.length >= 2
+              ? words.slice(0, 2).map((w: string) => w.slice(0, 2).toUpperCase()).join('')
+              : llmName.slice(0, 4).toUpperCase()
+          } else if (llm) {
             try {
               const raw = await llm.generate(
                 `Invent a creative faction name (2-3 words). It can be a cult, cartel, syndicate, order, lab, movement, guild — anything memorable. One line only, just the name.`,
