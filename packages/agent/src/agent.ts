@@ -2,7 +2,7 @@ import type { PyreKit } from 'pyre-world-kit'
 import { ACTION_MAP, PERSONALITY_SOL, personalityDesc, VOICE_NUDGES, VOICE_TRAITS } from './defaults'
 import { Action, AgentState, FactionInfo, LLMAdapter, LLMDecision } from './types'
 import { pick, randRange } from './util'
-import { fetchFactionIntel, generateDynamicExamples } from './faction'
+import { fetchFactionIntel } from './faction'
 
 export interface LLMDecideOptions {
   compact?: boolean
@@ -114,11 +114,11 @@ export const buildAgentPrompt = (
 --- INFO:
 Factions are rival guilds and economies, with treasuries, members, and culture.
 LIFECYCLE: LAUNCH → RISING → READY → VOTE → ASCEND → ASCENDED
-RISING FACTIONS:
+RISING:
 - 0.5% realm fee + treasury contribution (starts ~12.5%, decays to ~4% as the faction grows).
 - initial vote on joining: 90% goes to your position and 10% seeds the treasury. After that, 100% goes to your position.
 - early actions contribute more to the treasury. Later actions tip less.
-ASCENDED FACTIONS:
+ASCENDED:
 - treasuries are active: TITHE harvests fees, WAR_LOAN borrows against holdings, SIEGE liquidates bad loans.
 - 0.04% war tax on every transaction — harvestable into the treasury for lending.
 --- GOAL:
@@ -244,13 +244,8 @@ export const buildCompactModelPrompt = (
 --- INFO:
 Factions are rival guilds and economies, with treasuries, members, and culture.
 FACTION LIFECYCLE: LAUNCH → RISING → READY → VOTE → ASCENDED
-ASCENDED:
-- established community
-- 0.04% war tax on every transaction — harvestable into the treasury.
-RISING FACTIONS:
-- new community
-- 0.5% realm fee + treasury contribution (~12.5% early, decays to ~4%).
-- early moves contribute more to the treasury. later moves tip less.
+RISING: new community. 0.5% realm tax + early moves contribute more to the treasury. later moves contribute less.
+ASCENDED: established. 0.04% war tax on every transaction — harvestable into the treasury.
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- STATE:
@@ -268,18 +263,20 @@ REINFORCE $ "*" - fortify position in a faction you are a MEMBER OF.
 MESSAGE $ "*" - talk in faction comms.
 FUD $ "*" - trash talk a faction you are a MEMBER OF.
 ASCEND $ - transition a faction from ready to ascended.
-TITHE $ - harvest fees into the war chest.
-LAUNCH "^" - create a faction.
+TITHE $ - harvest fees into the treasury.
+LAUNCH ^ - create a faction.
 - REPLACE $ with exactly ONE choice from FACTIONS or MEMBER OF (if not none).
 - REPLACE * with a ONE sentence explaination for your ACTION, always in double quotes. This is what you have to say.
-- REPLACE ^ with a creative faction name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes.
+- REPLACE ^ with a creative faction name (eg. "Glitch Cult", "Whale Syndicate").
 --- STRATEGY:
 - Your personality is your tone.
 - Promote factions you are in. Attack your rivals.
 - Limit yourself to being a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider DEFECT from your weakest.` : ''}
-- If no FACTIONS or you are not a MEMBER OF any, consider LAUNCH. If you LAUNCH a faction, consider JOIN and promote it.
+- If no FACTIONS or you are not a MEMBER OF any, consider LAUNCH.
+- If you LAUNCH a faction, JOIN and promote it.
 - MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
-- DEFECT to lock in profits or downsize on underperforming faction. You can only DEFECT or FUD factions you are a MEMBER OF.
+- DEFECT to lock in profits or downsize on underperforming faction. 
+- To REINFORCE, DEFECT or FUD, you MUST be a MEMBER OF the faction.
 ---
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
 EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
