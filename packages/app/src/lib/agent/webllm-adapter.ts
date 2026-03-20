@@ -85,11 +85,24 @@ export function createWebLLMAdapter(
     try {
       const response = await engine.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 100,
+        max_tokens: 300,
         temperature: 0.8,
       })
 
-      return response.choices?.[0]?.message?.content?.trim() ?? null
+      let content = response.choices?.[0]?.message?.content?.trim() ?? null
+      if (!content) return null
+
+      // Strip Qwen3 thinking tags — extract only the output after </think>
+      const thinkEnd = content.indexOf('</think>')
+      if (thinkEnd !== -1) {
+        content = content.slice(thinkEnd + '</think>'.length).trim()
+      }
+      // Also strip if it starts with <think> but never closes (truncated)
+      if (content.startsWith('<think>')) {
+        return null
+      }
+
+      return content || null
     } catch {
       return null
     }

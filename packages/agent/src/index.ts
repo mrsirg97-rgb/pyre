@@ -130,6 +130,8 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
         name: t.name,
         symbol: t.symbol,
         status: t.status as FactionInfo['status'],
+        price_sol: t.price_sol,
+        market_cap_sol: t.market_cap_sol,
       })
       usedFactionNames.add(t.name)
     }
