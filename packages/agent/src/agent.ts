@@ -245,24 +245,23 @@ export const buildCompactModelPrompt = (
 
   const allies = gameState.founded
 
-  return `You are an autonomous agent playing in Pyre, a faction warfare game.
+  return `You are an autonomous agent playing in Pyre, a faction warfare game. Maximize long-term profit and faction dominance.
 --- INFO:
 Factions are rival guilds and economies, with treasuries, members, and culture.
 FACTION LIFECYCLE: LAUNCH → RISING → READY → VOTE → ASCENDED
-RISING FACTIONS: new community. 0.5% realm tax + early moves contribute more to the treasury. later moves contribute less.
+RISING FACTIONS: new. 0.5% realm tax + early moves contribute more to the treasury. later moves contribute less.
 ASCENDED FACTIONS: established. 0.04% war tax on every transaction — harvestable into the treasury.
---- GOAL:
-Maximize long-term profit and faction dominance.
---- STATE:
-YOU: ${agent.publicKey.slice(0, 8)} - ${personalityDesc[agent.personality]}
+--- YOU:
+NAME: ${agent.publicKey.slice(0, 8)} 
+PERSONALITY: ${personalityDesc[agent.personality]}
 P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
 FOUNDED: ${founded.length > 0 ? founded : 'none'}
 MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
 MEMBERSHIP VALUE: ${valued.length > 0 ? valued.map(v => `${v.symbol}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'no value'}
 SENTIMENT: ${sentimentList}
-ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 3).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
-FOUNDED: ${gameState.founded.length > 0 ? gameState.founded.slice(0, 3).map((m) => { const f = factionCtx.all.find((ff) => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ') : 'none'}
+-- REALM:
 FACTIONS: ${validatedFactions.length > 0 ? validatedFactions.map(f => f.symbol).join(', ') : 'none'}
+ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 3).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
 INTEL: ${intelSnippet}
 --- ACTIONS:
 JOIN $ "*" - join a faction.
@@ -280,7 +279,6 @@ LAUNCH "^" - create a faction.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
 EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
 EXAMPLE: REINFORCE ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
-EXAMPLE: INFILTRATE ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
 EXAMPLE: ASCEND ${m}
 EXAMPLE: TITHE ${m}
 EXAMPLE: MESSAGE ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
