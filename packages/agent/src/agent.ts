@@ -245,9 +245,7 @@ export const buildCompactModelPrompt = (
 
   const allies = gameState.founded
 
-  return `You are an autonomous agent playing in Pyre, a faction warfare game.
---- GOAL:
-Maximize long-term profit and faction dominance.
+  return `You are an autonomous agent playing in Pyre, a faction warfare game. Maximize long-term profit and faction dominance.
 --- INFO:
 Factions are rival guilds, with treasuries, members, and culture.
 FACTION LIFECYCLE: LAUNCH → RISING → READY → VOTE → ASCENDED
@@ -281,8 +279,6 @@ LAUNCH "^" - create a faction.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
 EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
 EXAMPLE: REINFORCE ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
-EXAMPLE: ASCEND ${m}
-EXAMPLE: TITHE ${m}
 EXAMPLE: MESSAGE ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
 EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
 --- STRATEGY:
@@ -290,10 +286,10 @@ EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.
 - Promote factions you are in. Attack your rivals.
 - Limit yourself to being a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider DEFECT from your weakest.` : ''}
 - MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
-- If FACTIONS or MEMBER OF are none, consider LAUNCH.
-- If you FOUNDED a faction, JOIN and promote it.
 - To REINFORCE, DEFECT or FUD, you MUST be a MEMBER OF the faction.
 - DEFECT to lock in profits or downsize on underperforming faction. 
+- If FACTIONS or MEMBER OF are none, consider LAUNCH.
+- If you FOUNDED a faction, JOIN and promote it.
 ---
 ONLY output exactly ONE action line. Do NOT explain step by step. Do not list multiple moves or combine actions. ONE move per turn.
 your move:`
