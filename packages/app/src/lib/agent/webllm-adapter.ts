@@ -44,6 +44,7 @@ export function createWebLLMAdapter(
   tier: Exclude<ModelTier, 'rng'>,
   hasShaderF16: boolean,
   onStatusChange: (state: WebLLMState) => void,
+  onThinking?: (thinking: string) => void,
 ): LLMAdapter & { init: () => Promise<void>; destroy: () => void } {
   let engine: any = null
   let ready = false
@@ -85,20 +86,28 @@ export function createWebLLMAdapter(
     try {
       const response = await engine.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 300,
+        max_tokens: 768,
         temperature: 0.8,
       })
 
       let content = response.choices?.[0]?.message?.content?.trim() ?? null
       if (!content) return null
 
+      console.log(`[pyre] LLM raw (${content.length} chars): ${content.slice(0, 200)}`)
+
       // Strip Qwen3 thinking tags — extract only the output after </think>
       const thinkEnd = content.indexOf('</think>')
       if (thinkEnd !== -1) {
+        const thinking = content.slice(0, thinkEnd).replace('<think>', '').trim()
         content = content.slice(thinkEnd + '</think>'.length).trim()
+        if (thinking) {
+          console.log(`[pyre] thinking: ${thinking}`)
+          onThinking?.(thinking)
+        }
       }
-      // Also strip if it starts with <think> but never closes (truncated)
+      // Thinking never closed (truncated) — still try to extract useful output
       if (content.startsWith('<think>')) {
+        console.log(`[pyre] thinking truncated (no </think>), returning null`)
         return null
       }
 

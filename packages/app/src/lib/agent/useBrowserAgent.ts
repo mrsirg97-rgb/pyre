@@ -217,6 +217,7 @@ export function useBrowserAgent(): BrowserAgentHook {
             if (state.status === 'ready') log(`Model ready (${selectedTier})`)
             if (state.status === 'error') log(`Model error: ${state.error}`)
           },
+          (thinking) => log(`thinking: ${thinking}`),
         )
         llmRef.current = webllmAdapter
 

@@ -46,7 +46,8 @@ export const buildAgentPrompt = (
   const readyMints = new Set(ready.map(f => f.mint))
   const seenMints = new Set([...heldMints, ...nearbyMints, ...risingMints, ...ascendedMints, ...readyMints])
   const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
-  const fmtFaction = (f: FactionInfo) => f.market_cap_sol ? `${f.symbol} (${f.market_cap_sol.toFixed(2)} SOL)` : f.symbol
+  const fmtId = (f: FactionInfo) => f.mint.slice(-8)
+  const fmtFaction = (f: FactionInfo) => f.market_cap_sol ? `${fmtId(f)} (${f.market_cap_sol.toFixed(2)} SOL)` : fmtId(f)
   const nearbyList = nearby.map(fmtFaction).join(', ') || 'none'
   const risingList = rising.map(fmtFaction).join(', ') || 'none'
   const ascendedList = ascended.map(fmtFaction).join(', ') || 'none'
@@ -60,8 +61,7 @@ export const buildAgentPrompt = (
   for (const [mint, bal] of holdingsEntries) {
     const f = factionCtx.all.find((ff) => ff.mint === mint)
     if (!f) continue
-    const label =
-      (symbolCounts.get(f.symbol) ?? 0) > 1 ? `${f.symbol}(${mint.slice(0, 6)})` : f.symbol
+    const label = mint.slice(-8)
     const uiBalance = bal / TOKEN_MULTIPLIER
     const valueSol = uiBalance * (f.price_sol ?? 0)
     totalHoldingsValue += valueSol
@@ -91,7 +91,7 @@ export const buildAgentPrompt = (
       .map(([mint, score]) => {
         const f = factionCtx.all.find((ff) => ff.mint === mint)
         const label = score > 3 ? 'bullish' : score < -3 ? 'bearish' : 'neutral'
-        return f ? `${f.symbol}: ${label} (${score > 0 ? '+' : ''}${score})` : null
+        return f ? `${f.mint.slice(-8)}: ${label} (${score > 0 ? '+' : ''}${score})` : null
       })
       .filter(Boolean)
       .join(', ') || 'no strong feelings yet'
@@ -110,10 +110,13 @@ export const buildAgentPrompt = (
       ? memoryEntries.slice(0, 7).map((m) => `- ${m}`).join('; ')
       : 'none'
 
-  const m = [...heldMints][0] || (validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON')
-  const f1 = validatedFactions.length > 0 ? pick(validatedFactions).symbol : m
-  const f2 = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.symbol !== f1)).symbol ?? f1 : f1
-  
+  const mMint = [...heldMints][0] || (validatedFactions.length > 0 ? pick(validatedFactions).mint : null)
+  const m = mMint ? mMint.slice(-8) : 'xxxxxx pw'
+  const f1Mint = validatedFactions.length > 0 ? pick(validatedFactions) : null
+  const f1 = f1Mint ? f1Mint.mint.slice(-8) : m
+  const f2Mint = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.mint !== f1Mint?.mint)) : f1Mint
+  const f2 = f2Mint ? f2Mint.mint.slice(-8) : f1
+
   return `You are an autonomous agent playing Pyre, a faction warfare game.
 --- GOAL:
 Maximize long-term profit and faction dominance.
@@ -133,11 +136,11 @@ PERSONALITY: ${gameState.personalitySummary ?? personalityDesc[agent.personality
 MEMORIES: ${memoryBlock}
 VALUE: ${totalHoldingsValue.toFixed(4)} SOL | Realized P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL | Unrealized: ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(4)} SOL
 SPEND RANGE: ${minSol}–${maxSol} SOL
-FOUNDED: ${gameState.founded.length > 0 ? `${gameState.founded.map((m) => { const f = factionCtx.all.find((ff) => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ')} — promote these aggressively` : 'none'}
+FOUNDED: ${gameState.founded.length > 0 ? `${gameState.founded.map((m) => m.slice(-8)).join(', ')} — promote these aggressively` : 'none'}
 MEMBER OF: ${holdingsList}
 SENTIMENT: ${sentimentList}
 ${positionValues.length > 0 ? `BEST FACTION: ${positionValues.sort((a, b) => b.valueSol - a.valueSol)[0].label} (${positionValues.sort((a, b) => b.valueSol - a.valueSol)[0].valueSol.toFixed(4)} SOL)` : ''}
-ACTIVE LOANS: ${gameState.activeLoans.size > 0 ? `${[...gameState.activeLoans].map((m) => { const f = factionCtx.all.find((ff) => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ')}` : 'none'}
+ACTIVE LOANS: ${gameState.activeLoans.size > 0 ? `${[...gameState.activeLoans].map((m) => m.slice(-8)).join(', ')}` : 'none'}
 ${unrealizedPnl > 0.1 ? 'You are UP. Consider taking profits on your biggest winners with DEFECT.' : unrealizedPnl < -0.05 ? 'You are DOWN. Be conservative. Cut losers with DEFECT. Smaller positions.' : 'Near breakeven. Look for conviction plays.'}
 --- INTEL:
 ALLIES: ${allyList}
@@ -165,7 +168,7 @@ REPAY_LOAN $ — repay a loan (ascended factions only).
 SIEGE $ — liquidate a bad loan (ascended factions only).
 TITHE $ — harvest fees into the treasury to grow the faction economy (ascended factions only).
 LAUNCH "name" — create a new faction. name should be original, be creative. wrap name in double quotes always.
-- REPLACE $ with exactly ONE faction from ASCENDED, RISING, READY, NEARBY, UNEXPLORED, or MEMBER OF.
+- REPLACE $ with exactly ONE faction from ASCENDED, RISING, READY, NEARBY, UNEXPLORED, or MEMBER OF (always contains the pw suffix).
 - REPLACE * with what you have to say about your action, always in double quotes, if available on the action. optional but recommended.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
 EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
@@ -214,16 +217,16 @@ export const buildCompactModelPrompt = (
     .map(([mint, bal]) => {
       const f = factionCtx.all.find((ff) => ff.mint === mint)
       if (!f) return null
-      return { symbol: f.symbol, valueSol: (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0) }
+      return { id: mint.slice(-8), valueSol: (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0) }
     })
     .filter(Boolean)
-    .sort((a, b) => b!.valueSol - a!.valueSol) as { symbol: string; valueSol: number }[]
+    .sort((a, b) => b!.valueSol - a!.valueSol) as { id: string; valueSol: number }[]
 
   const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
 
-  const founded = gameState.founded.slice(0, 2)
+  const founded = gameState.founded.slice(0, 2).map((m: string) => m.slice(-8))
   const heldMints = new Set(holdingsEntries.map(([m]) => m))
-  const memberOf = valued.slice(0, 5).map((v) => v.symbol)
+  const memberOf = valued.slice(0, 5).map((v) => v.id)
 
   const sentimentList =
     [...kit.state.sentimentMap]
@@ -232,7 +235,7 @@ export const buildCompactModelPrompt = (
         const f = factionCtx.all.find((ff) => ff.mint === mint)
         if (!f) return null
         const label = score > 3 ? 'bullish' : score < -3 ? 'bearish' : 'neutral'
-        return `${f.symbol}:${label}`
+        return `${f.mint.slice(-8)}:${label}`
       })
       .filter(Boolean)
       .join(', ') || 'none'
@@ -249,9 +252,12 @@ export const buildCompactModelPrompt = (
   const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
   const validatedFactions = [...ascended, ...ready, ...rising, ...nearby, ...unexplored]
   
-  const m = memberOf[0] || (validatedFactions.length > 0 ? pick(validatedFactions).symbol : 'IRON')
-  const f1 = validatedFactions.length > 0 ? pick(validatedFactions).symbol : m
-  const f2 = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.symbol !== f1)).symbol ?? f1 : f1
+  const mMint2 = [...heldMints][0] || (validatedFactions.length > 0 ? pick(validatedFactions).mint : null)
+  const m = mMint2 ? mMint2.slice(-8) : 'xxxxxxpw'
+  const f1v = validatedFactions.length > 0 ? pick(validatedFactions) : null
+  const f1 = f1v ? f1v.mint.slice(-8) : m
+  const f2v = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.mint !== f1v?.mint)) : f1v
+  const f2 = f2v ? f2v.mint.slice(-8) : f1
 
   return `You are an autonomous agent playing in Pyre, a faction warfare game.
 --- GOAL:
@@ -265,20 +271,20 @@ Ascended Factions are established. 0.04% war tax on every transaction, harvestab
 NAME: ${agent.publicKey.slice(0, 8)} 
 PERSONALITY: ${personalityDesc[agent.personality]}
 P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-FOUNDED: ${founded.length > 0 ? founded.map((m: string) => { const f = factionCtx.all.find((ff) => ff.mint === m); return f?.symbol ?? m.slice(0, 8) }).join(', ') : 'none'}
+FOUNDED: ${founded.length > 0 ? founded.join(', ') : 'none'}
 MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
-MEMBERSHIP VALUE: ${valued.length > 0 ? valued.map(v => `${v.symbol}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'no value'}
+MEMBERSHIP VALUE: ${valued.length > 0 ? valued.map(v => `${v.id}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'no value'}
 SENTIMENT: ${sentimentList}
 --- INTEL:
 ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 2).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
 RIVALS: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 2).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
 LATEST: ${intelSnippet}
 --- FACTIONS:
-ASCENDED: ${ascended.length > 0 ? ascended.map(f => f.market_cap_sol ? `${f.symbol} (${f.market_cap_sol.toFixed(2)} SOL)` : f.symbol).join(', ') : 'none'}
-RISING: ${rising.length > 0 ? rising.map(f => f.market_cap_sol ? `${f.symbol} (${f.market_cap_sol.toFixed(2)} SOL)` : f.symbol).join(', ') : 'none'}
-READY: ${ready.length > 0 ? ready.map(f => f.market_cap_sol ? `${f.symbol} (${f.market_cap_sol.toFixed(2)} SOL)` : f.symbol).join(', ') : 'none'}
-NEARBY: ${nearby.length > 0 ? nearby.map(f => f.market_cap_sol ? `${f.symbol} (${f.market_cap_sol.toFixed(2)} SOL)` : f.symbol).join(', ') : 'none'}
-UNEXPLORED: ${unexplored.length > 0 ? unexplored.map(f => f.market_cap_sol ? `${f.symbol} (${f.market_cap_sol.toFixed(2)} SOL)` : f.symbol).join(', ') : 'none'}
+ASCENDED: ${ascended.length > 0 ? ascended.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+RISING: ${rising.length > 0 ? rising.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+READY: ${ready.length > 0 ? ready.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+NEARBY: ${nearby.length > 0 ? nearby.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+UNEXPLORED: ${unexplored.length > 0 ? unexplored.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
 --- ACTIONS:
 JOIN $ "*" - join a faction.
 DEFECT $ "*" - leave or decrease position in a faction.
@@ -289,7 +295,7 @@ FUD $ "*" - trash talk a faction.
 ASCEND $ - transition a faction from ready to ascended.
 TITHE $ - harvest fees into the treasury.
 LAUNCH "^" - create a faction.
-- REPLACE $ with exactly ONE choice from ASCENDED, RISING, READY, NEARBY, UNEXPLORED, or MEMBER OF if NOT none.
+- REPLACE $ with exactly ONE choice from ASCENDED, RISING, READY, NEARBY, UNEXPLORED, or MEMBER OF (always contains the pw suffix).
 - REPLACE * with a ONE sentence RESPONSE for your ACTION, always in double quotes.
 - REPLACE ^ with a unique faction inspired name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
@@ -345,15 +351,22 @@ function editDistance1(a: string, b: string): boolean {
 }
 
 function resolveFaction(
-  symbolLower: string | undefined,
+  target: string | undefined,
   factions: FactionInfo[],
   holdings: Map<string, number>,
   kit: PyreKit,
   action: string,
 ): FactionInfo | undefined {
   const gameState = kit.state.state!
-  if (!symbolLower) return undefined
-  const matches = factions.filter((f) => f.symbol.toLowerCase() === symbolLower)
+  if (!target) return undefined
+  const targetLower = target.toLowerCase()
+
+  // Try mint suffix match first (last-8 chars ending in pw)
+  const mintMatch = factions.find((f) => f.mint.toLowerCase().endsWith(targetLower))
+  if (mintMatch) return mintMatch
+
+  // Fall back to symbol match
+  const matches = factions.filter((f) => f.symbol.toLowerCase() === targetLower)
   if (matches.length === 0) return undefined
   if (matches.length === 1) return matches[0]
 
