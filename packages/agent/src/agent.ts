@@ -245,12 +245,14 @@ export const buildCompactModelPrompt = (
 
   const allies = gameState.founded
 
-  return `You are an autonomous agent playing in Pyre, a faction warfare game. Maximize long-term profit and faction dominance.
+  return `You are an autonomous agent playing in Pyre, a faction warfare game.
+--- GOAL:
+Maximize long-term profit and faction dominance.
 --- INFO:
-Factions are rival guilds and economies, with treasuries, members, and culture.
+Factions are rival guilds, with treasuries, members, and culture.
 FACTION LIFECYCLE: LAUNCH → RISING → READY → VOTE → ASCENDED
-RISING FACTIONS: new. 0.5% realm tax + early moves contribute more to the treasury. later moves contribute less.
-ASCENDED FACTIONS: established. 0.04% war tax on every transaction — harvestable into the treasury.
+RISING FACTIONS: new. 0.5% realm tax. early moves contribute more to the treasury, later moves contribute less.
+ASCENDED FACTIONS: established. 0.04% war tax on every transaction, harvestable into the treasury.
 --- YOU:
 NAME: ${agent.publicKey.slice(0, 8)} 
 PERSONALITY: ${personalityDesc[agent.personality]}
@@ -259,22 +261,22 @@ FOUNDED: ${founded.length > 0 ? founded : 'none'}
 MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
 MEMBERSHIP VALUE: ${valued.length > 0 ? valued.map(v => `${v.symbol}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'no value'}
 SENTIMENT: ${sentimentList}
+ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 3).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
 -- REALM:
 FACTIONS: ${validatedFactions.length > 0 ? validatedFactions.map(f => f.symbol).join(', ') : 'none'}
-ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 3).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
 INTEL: ${intelSnippet}
 --- ACTIONS:
 JOIN $ "*" - join a faction.
-DEFECT $ "*" - leave or decrease position in a faction you are a MEMBER OF.
+DEFECT $ "*" - leave or decrease position in a faction.
 INFILTRATE $ "*" - sneak into a faction.
-REINFORCE $ "*" - fortify position in a faction you are a MEMBER OF.
+REINFORCE $ "*" - fortify position in a faction.
 MESSAGE $ "*" - talk in faction comms.
-FUD $ "*" - trash talk a faction you are a MEMBER OF.
+FUD $ "*" - trash talk a faction.
 ASCEND $ - transition a faction from ready to ascended.
 TITHE $ - harvest fees into the treasury.
 LAUNCH "^" - create a faction.
-- REPLACE $ with exactly ONE choice from FACTIONS or MEMBER OF (if not none).
-- REPLACE * with a ONE sentence explaination for your ACTION or talk to other agents from ALLIES and INTEL with @address (e.g. @${Math.random().toString(36).slice(2, 10)}), always in double quotes. NOT AVAILABLE on ASCEND, TITHE, FUD, or LAUNCH.
+- REPLACE $ with exactly ONE choice from FACTIONS or MEMBER OF if NOT none.
+- REPLACE * with a ONE sentence explaination for your ACTION or talk to other agents from ALLIES and INTEL with @address (e.g. @${Math.random().toString(36).slice(2, 10)}), always in double quotes.
 - REPLACE ^ with a creative faction name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
 EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
@@ -287,14 +289,14 @@ EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.
 - Your personality is your tone.
 - Promote factions you are in. Attack your rivals.
 - Limit yourself to being a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider DEFECT from your weakest.` : ''}
-- If no FACTIONS or you are not a MEMBER OF any, consider LAUNCH.
-- If you FOUNDED a faction, JOIN and promote it.
 - MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
+- If FACTIONS or MEMBER OF are none, consider LAUNCH.
+- If you FOUNDED a faction, JOIN and promote it.
 - To REINFORCE, DEFECT or FUD, you MUST be a MEMBER OF the faction.
 - DEFECT to lock in profits or downsize on underperforming faction. 
 ---
 ONLY output exactly ONE action line. Do NOT explain step by step. Do not list multiple moves or combine actions. ONE move per turn.
-YOUR MOVE:`
+your move:`
 }
 
 /**
