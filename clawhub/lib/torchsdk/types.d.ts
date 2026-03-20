@@ -267,6 +267,17 @@ export interface TokenMetadataResult {
     /** Mint address */
     mint: string;
 }
+/**
+ * Minimal wallet interface for signAndSendTransaction flows.
+ * Compatible with Phantom, Backpack, and other Solana wallets that
+ * support atomic sign-and-send.
+ */
+export interface WalletAdapter {
+    publicKey: PublicKey;
+    signAndSendTransaction: (tx: VersionedTransaction) => Promise<{
+        signature: string;
+    }>;
+}
 export interface TransactionResult {
     transaction: VersionedTransaction;
     /** Additional transactions when a single tx exceeds the size limit.

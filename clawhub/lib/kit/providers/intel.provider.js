@@ -97,10 +97,10 @@ class IntelProvider {
         positions.sort((a, b) => b.value_sol - a.value_sol);
         return positions;
     }
-    async getRisingFactions(limit = 50) {
+    async getRisingFactions(limit) {
         return this.actionProvider.getFactions({ limit, status: 'rising' });
     }
-    async getAscendedFactions(limit = 50) {
+    async getAscendedFactions(limit) {
         return this.actionProvider.getFactions({ limit, status: 'ascended' });
     }
     async getNearbyFactions(wallet, { depth = 1, limit = 50 } = {}) {
@@ -418,7 +418,7 @@ class IntelProvider {
         return events.slice(0, limit ?? 100);
     }
     async getWorldStats() {
-        const { factions } = await this.actionProvider.getFactions({ limit: 200, status: 'all' });
+        const { factions } = await this.actionProvider.getFactions({ status: 'all' });
         const pyreRising = factions.filter((t) => t.status === 'rising');
         const pyreAscended = factions.filter((t) => t.status === 'ascended');
         const allFactions = [...pyreRising, ...pyreAscended];

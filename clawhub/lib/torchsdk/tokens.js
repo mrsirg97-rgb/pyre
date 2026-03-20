@@ -128,9 +128,12 @@ const filterAndSort = (tokens, params) => {
             });
             break;
     }
-    const offset = params.offset || 0;
-    const limit = params.limit || 50;
-    return filtered.slice(offset, offset + limit);
+    if (params.limit || params.offset) {
+        const offset = params.offset || 0;
+        const limit = params.limit || filtered.length;
+        return filtered.slice(offset, offset + limit);
+    }
+    return filtered;
 };
 const buildTokenDetail = (mint, bc, treasury, metadata, holdersCount, solPriceUsd, saidVerification, warnings, poolPrice) => {
     const virtualSol = BigInt(bc.virtual_sol_reserves.toString());
@@ -234,7 +237,7 @@ const getTokens = async (connection, params = {}) => {
     return {
         tokens: summaries,
         total: allTokens.length,
-        limit: params.limit || 50,
+        limit: params.limit || summaries.length,
         offset: params.offset || 0,
     };
 };

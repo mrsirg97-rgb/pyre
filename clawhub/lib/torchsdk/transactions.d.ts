@@ -5,7 +5,7 @@
  * Agents sign these locally and submit to the network.
  */
 import { Connection, AddressLookupTableAccount } from '@solana/web3.js';
-import { BuyParams, DirectBuyParams, SellParams, CreateTokenParams, StarParams, MigrateParams, BorrowParams, RepayParams, LiquidateParams, ClaimProtocolRewardsParams, HarvestFeesParams, SwapFeesToSolParams, CreateVaultParams, DepositVaultParams, WithdrawVaultParams, WithdrawTokensParams, LinkWalletParams, UnlinkWalletParams, TransferAuthorityParams, ReclaimParams, TransactionResult, BuyTransactionResult, CreateTokenResult } from './types';
+import { BuyParams, DirectBuyParams, SellParams, CreateTokenParams, StarParams, MigrateParams, BorrowParams, RepayParams, LiquidateParams, ClaimProtocolRewardsParams, HarvestFeesParams, SwapFeesToSolParams, CreateVaultParams, DepositVaultParams, WithdrawVaultParams, WithdrawTokensParams, LinkWalletParams, UnlinkWalletParams, TransferAuthorityParams, ReclaimParams, TransactionResult, BuyTransactionResult, CreateTokenResult, WalletAdapter } from './types';
 /**
  * Fetch the Torch ALT for this network. Cached per connection instance.
  */
@@ -33,6 +33,24 @@ export declare const buildBuyTransaction: (connection: Connection, params: BuyPa
  * @returns Unsigned transaction and descriptive message
  */
 export declare const buildDirectBuyTransaction: (connection: Connection, params: DirectBuyParams) => Promise<BuyTransactionResult>;
+/**
+ * Build, simulate, and submit a vault-funded buy via signAndSendTransaction.
+ *
+ * This is the recommended path for Phantom and other browser wallets.
+ * The wallet receives the final, immutable transaction for atomic sign+send,
+ * which avoids false-positive "malicious dapp" warnings.
+ *
+ * @returns Transaction signature on success
+ */
+export declare const sendBuy: (connection: Connection, wallet: WalletAdapter, params: Omit<BuyParams, "buyer">) => Promise<string>;
+/**
+ * Build, simulate, and submit a direct buy (no vault) via signAndSendTransaction.
+ *
+ * Same Phantom-friendly flow as sendBuy but buyer pays from their own wallet.
+ *
+ * @returns Transaction signature on success
+ */
+export declare const sendDirectBuy: (connection: Connection, wallet: WalletAdapter, params: Omit<DirectBuyParams, "buyer">) => Promise<string>;
 /**
  * Build an unsigned sell transaction.
  *

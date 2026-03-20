@@ -9,7 +9,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildSwapFeesToSolTransaction = exports.buildHarvestFeesTransaction = exports.buildMigrateTransaction = exports.buildWithdrawTokensTransaction = exports.buildReclaimFailedTokenTransaction = exports.buildClaimProtocolRewardsTransaction = exports.buildLiquidateTransaction = exports.buildRepayTransaction = exports.buildBorrowTransaction = exports.buildTransferAuthorityTransaction = exports.buildUnlinkWalletTransaction = exports.buildLinkWalletTransaction = exports.buildWithdrawVaultTransaction = exports.buildDepositVaultTransaction = exports.buildCreateVaultTransaction = exports.buildStarTransaction = exports.buildCreateTokenTransaction = exports.buildSellTransaction = exports.buildDirectBuyTransaction = exports.buildBuyTransaction = exports.clearAltCache = exports.fetchAddressLookupTable = void 0;
+exports.buildSwapFeesToSolTransaction = exports.buildHarvestFeesTransaction = exports.buildMigrateTransaction = exports.buildWithdrawTokensTransaction = exports.buildReclaimFailedTokenTransaction = exports.buildClaimProtocolRewardsTransaction = exports.buildLiquidateTransaction = exports.buildRepayTransaction = exports.buildBorrowTransaction = exports.buildTransferAuthorityTransaction = exports.buildUnlinkWalletTransaction = exports.buildLinkWalletTransaction = exports.buildWithdrawVaultTransaction = exports.buildDepositVaultTransaction = exports.buildCreateVaultTransaction = exports.buildStarTransaction = exports.buildCreateTokenTransaction = exports.buildSellTransaction = exports.sendDirectBuy = exports.sendBuy = exports.buildDirectBuyTransaction = exports.buildBuyTransaction = exports.clearAltCache = exports.fetchAddressLookupTable = void 0;
 const web3_js_1 = require("@solana/web3.js");
 const spl_token_1 = require("@solana/spl-token");
 const anchor_1 = require("@coral-xyz/anchor");
@@ -250,6 +250,57 @@ const buildDirectBuyTransaction = async (connection, params) => {
     return buildBuyTransactionInternal(connection, mint, buyer, amount_sol, slippage_bps, vote, message, undefined, quote);
 };
 exports.buildDirectBuyTransaction = buildDirectBuyTransaction;
+// ── Sign-and-send helpers (Phantom / wallet-integrated flows) ────────
+/**
+ * Build, simulate, and submit a vault-funded buy via signAndSendTransaction.
+ *
+ * This is the recommended path for Phantom and other browser wallets.
+ * The wallet receives the final, immutable transaction for atomic sign+send,
+ * which avoids false-positive "malicious dapp" warnings.
+ *
+ * @returns Transaction signature on success
+ */
+const sendBuy = async (connection, wallet, params) => {
+    const fullParams = { ...params, buyer: wallet.publicKey.toBase58() };
+    const { transaction, migrationTransaction } = await (0, exports.buildBuyTransaction)(connection, fullParams);
+    const sim = await connection.simulateTransaction(transaction, { sigVerify: false });
+    if (sim.value.err) {
+        throw new Error(`Buy simulation failed: ${JSON.stringify(sim.value.err)}`);
+    }
+    const { signature } = await wallet.signAndSendTransaction(transaction);
+    if (migrationTransaction) {
+        const migSim = await connection.simulateTransaction(migrationTransaction, { sigVerify: false });
+        if (!migSim.value.err) {
+            await wallet.signAndSendTransaction(migrationTransaction);
+        }
+    }
+    return signature;
+};
+exports.sendBuy = sendBuy;
+/**
+ * Build, simulate, and submit a direct buy (no vault) via signAndSendTransaction.
+ *
+ * Same Phantom-friendly flow as sendBuy but buyer pays from their own wallet.
+ *
+ * @returns Transaction signature on success
+ */
+const sendDirectBuy = async (connection, wallet, params) => {
+    const fullParams = { ...params, buyer: wallet.publicKey.toBase58() };
+    const { transaction, migrationTransaction } = await (0, exports.buildDirectBuyTransaction)(connection, fullParams);
+    const sim = await connection.simulateTransaction(transaction, { sigVerify: false });
+    if (sim.value.err) {
+        throw new Error(`Buy simulation failed: ${JSON.stringify(sim.value.err)}`);
+    }
+    const { signature } = await wallet.signAndSendTransaction(transaction);
+    if (migrationTransaction) {
+        const migSim = await connection.simulateTransaction(migrationTransaction, { sigVerify: false });
+        if (!migSim.value.err) {
+            await wallet.signAndSendTransaction(migrationTransaction);
+        }
+    }
+    return signature;
+};
+exports.sendDirectBuy = sendDirectBuy;
 // ============================================================================
 // Sell
 // ============================================================================
