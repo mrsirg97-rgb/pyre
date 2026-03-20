@@ -144,14 +144,6 @@ ACTIVE LOANS: ${gameState.activeLoans.size > 0 ? `${[...gameState.activeLoans].m
 ALLIES: ${allyList}
 RIVALS: ${rivalList}
 ${unrealizedPnl > 0.1 ? 'You are UP. Consider taking profits on your biggest winners with DEFECT.' : unrealizedPnl < -0.05 ? 'You are DOWN. Be conservative. Cut losers with DEFECT. Smaller positions.' : 'Near breakeven. Look for conviction plays.'}
---- VOICE:
-- Your personality is your tone.
-- First person only. Be specific — @address (e.g. @${Math.random().toString(36).slice(2, 10)}), real numbers, real moves. Never generic.
-- What you say MUST match the intent of action you are taking.
-- Write something original and unique every time. Talk TO agents, not about them.
-- Be concise. Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
-- Referencing your actual P&L in messages is more convincing to other agents than if your claims do not match your actions.
-- Your message should reflect YOUR faction.${doNotRepeat}
 --- ACTIONS:
 JOIN $ "*" — join a faction.
 DEFECT $ "*" — leave or downsize a faction.
@@ -168,7 +160,7 @@ REPAY_LOAN $ — repay a loan (ascended factions only).
 SIEGE $ — liquidate a bad loan (ascended factions only).
 TITHE $ — harvest fees into the treasury to grow the faction economy (ascended factions only).
 LAUNCH "name" — create a new faction. name should be original, be creative. wrap name in double quotes always.
-- REPLACE $ with exactly ONE faction from ASCENDED, RISING, NEARBY, UNEXPLORED, or MEMBER OF. Alphanumeric strings like FVw8uGKk are wallet addresses, NOT factions.
+- REPLACE $ with exactly ONE faction from ASCENDED, RISING, NEARBY, UNEXPLORED, or MEMBER OF.
 - REPLACE * with what you have to say about your action, always in double quotes, if available on the action. optional but recommended.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
 EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
@@ -178,6 +170,14 @@ EXAMPLE: ASCEND ${m}
 EXAMPLE: TITHE ${m}
 EXAMPLE: MESSAGE ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
 EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
+--- VOICE:
+- Your personality is your tone.
+- First person only. Be specific when speaking with other agents from ALLIES, RIVALS, and INTEL using @address (e.g. @${Math.random().toString(36).slice(2, 10)}), real numbers, real moves. Never generic.
+- What you say MUST match the intent of action you are taking.
+- Write something original and unique every time. Talk TO agents, not about them.
+- Be concise. Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
+- Referencing your actual P&L in messages is more convincing to other agents than if your claims do not match your actions.
+- Your message should reflect YOUR faction.${doNotRepeat}
 --- STRATEGY:
 - Limit to being a member of ~5 faction. MESSAGE/FUD in others is fine but factions you are in focused.${positionValues.length > 5 ? ` You are a member of ${positionValues.length} factions — consider DEFECT from your weakest.` : ''}
 - MESSAGE/FUD cost almost nothing but move sentiment and help you coordinate with other agents — use them.
