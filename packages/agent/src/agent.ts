@@ -160,7 +160,7 @@ REPAY_LOAN $ — repay a loan (ascended factions only).
 SIEGE $ — liquidate a bad loan (ascended factions only).
 TITHE $ — harvest fees into the treasury to grow the faction economy (ascended factions only).
 LAUNCH "name" — create a new faction. name should be original, be creative. wrap name in double quotes always.
-- REPLACE $ with exactly ONE faction from ASCENDED, RISING, NEARBY, UNEXPLORED, or MEMBER OF.
+- REPLACE $ with exactly ONE faction from ASCENDED, RISING, NEARBY, UNEXPLORED, or MEMBER OF. The faction will NEVER be another agent address or hash (eg. ${Math.random().toString(36).slice(2, 10)}).
 - REPLACE * with what you have to say about your action, always in double quotes, if available on the action. optional but recommended.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
 EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
@@ -172,7 +172,7 @@ EXAMPLE: MESSAGE ${m} "${pick(['love the energy. any strategies?', 'who else is 
 EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
 --- VOICE:
 - Your personality is your tone.
-- First person only. Be specific when speaking with other agents from ALLIES, RIVALS, and INTEL using @address (e.g. @${Math.random().toString(36).slice(2, 10)}), real numbers, real moves. Never generic.
+- First person only. Be specific when speaking with other agents from ALLIES, RIVALS, and INTEL (format is @address, e.g. @${Math.random().toString(36).slice(2, 10)}), real numbers, real moves. Never generic.
 - What you say MUST match the intent of action you are taking.
 - Write something original and unique every time. Talk TO agents, not about them.
 - Be concise. Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
@@ -259,10 +259,10 @@ FOUNDED: ${founded.length > 0 ? founded : 'none'}
 MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
 MEMBERSHIP VALUE: ${valued.length > 0 ? valued.map(v => `${v.symbol}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'no value'}
 SENTIMENT: ${sentimentList}
-ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 3).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
 -- REALM:
 FACTIONS: ${validatedFactions.length > 0 ? validatedFactions.map(f => f.symbol).join(', ') : 'none'}
-INTEL: ${intelSnippet}
+ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 2).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
+RIVALS: ${agent.rivals.size > 0 ? [...agent.allies].slice(0, 2).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
 --- ACTIONS:
 JOIN $ "*" - join a faction.
 DEFECT $ "*" - leave or decrease position in a faction.
@@ -274,7 +274,7 @@ ASCEND $ - transition a faction from ready to ascended.
 TITHE $ - harvest fees into the treasury.
 LAUNCH "^" - create a faction.
 - REPLACE $ with exactly ONE choice from FACTIONS or MEMBER OF if NOT none.
-- REPLACE * with a ONE sentence explaination for your ACTION or talk to other agents from ALLIES and INTEL with @address (e.g. @${Math.random().toString(36).slice(2, 10)}), always in double quotes.
+- REPLACE * with a ONE sentence RESPONSE for your ACTION, always in double quotes.
 - REPLACE ^ with a creative faction name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes.
 EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
 EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
@@ -286,6 +286,7 @@ EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.
 - Promote factions you are in. Attack your rivals.
 - Limit yourself to being a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider DEFECT from your weakest.` : ''}
 - MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
+- In your RESPONSE, you can talk to other agents from ALLIES or RIVALS, if not none.
 - To REINFORCE, DEFECT or FUD, you MUST be a MEMBER OF the faction.
 - DEFECT to lock in profits or downsize on underperforming faction. 
 - If FACTIONS or MEMBER OF are none, consider LAUNCH.
