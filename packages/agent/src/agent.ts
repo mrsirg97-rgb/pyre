@@ -270,12 +270,12 @@ RD - ready factions, transition from rising to ascended.
 ASN - ascended factions, established. 0.04% war tax on every transaction, harvestable into the treasury.
 NB - nearby factions found through social graph using breadth first search.
 UX - unexplored factions. you have not seen these.
---- GAMESTATE:
+--- YOU ARE:
 NAME: ${agent.publicKey.slice(0, 8)}
 PERSONALITY: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
 LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
 P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-FOUNDED: ${founded.length > 0 ? founded.join(', ') : 'none'}
+YOU ARE A FOUNDER OF: ${founded.length > 0 ? founded.join(', ') : 'none'}
 MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
 MEMBERSHIP VALUE: ${valued.length > 0 ? valued.map(v => `${v.id}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'no value'}
 SENTIMENT: ${sentimentList}
@@ -311,14 +311,15 @@ EXAMPLE: (#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.
 --- STRATEGY:
 - Your personality is your tone.
 - Promote factions you are in. Attack your rivals.
-- Limit yourself to being a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider (-) from your weakest.` : ''}
-- In your RESPONSE, you can talk to other agents from ALLIES, RIVALS, and INTEL (format is @address, e.g. @${Math.random().toString(36).slice(2, 10)}), if NOT none.
+- Limit yourself to being AT MOST a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider (-) from your weakest.` : ''}
+- $ is ALWAYS a faction (ends in pw), NEVER an @agent. To talk to agents, put @address inside your "*" response.
+- In your RESPONSE, you can mention other agents from ALLIES, RIVALS, and INTEL (format is @address, e.g. @${Math.random().toString(36).slice(2, 10)}), if NOT none.
 - (=)/(#) move sentiment and help coordinate with other agents — use them.
 - To (&), (-) or (#), you MUST be a MEMBER OF the faction.
 - To (^) a faction it MUST be from RD.
 - (-) to lock in profits or downsize on underperforming faction. 
 - No factions visible? Use (%) to create one. Anyone can (%).
-- If you FOUNDED a faction, (+) and promote it.
+- If you are a FOUNDER of a faction, (+) and promote it.
 ---
 ONLY output exactly ONE action line. Do not list multiple moves or combine actions. ONE move per turn.
 YOUR MOVE:`
@@ -425,8 +426,10 @@ function parseLLMDecision(
       return { action: 'scout' as Action, faction: scoutMatch[1], reasoning: line }
     }
 
+    // Strip YOUR MOVE: prefix before symbol detection
+    const stripped = line.trim().replace(/^(?:YOUR MOVE|YOUR MOVE:)\s*:?\s*/i, '')
     // Compact symbol actions like (+), (-), (#) — skip aggressive cleaning that would mangle them
-    const symbolActionMatch = line.trim().match(/^(\([+\-!&#^~=%]\))\s+(.*)/)
+    const symbolActionMatch = stripped.match(/^(\([+\-!&#^~=%]\))\s+(.*)/) || stripped.match(/^([+\-!&#^~=%])\s+(.*)/)
     const cleaned = symbolActionMatch
       ? symbolActionMatch[1] + ' ' + symbolActionMatch[2]
       : line
