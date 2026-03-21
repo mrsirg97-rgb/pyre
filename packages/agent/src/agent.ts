@@ -264,9 +264,12 @@ export const buildCompactModelPrompt = (
 Maximize long-term profit and faction dominance.
 --- INFO:
 Factions are rival guilds, with treasuries, members, and culture. Factions with larger SOL value have more power.
-Faction Lifecycle: launch → rising → ready → vote → ascended
-Rising Factions are new. 0.5% realm tax. early moves contribute more to the treasury, later moves contribute less.
-Ascended Factions are established. 0.04% war tax on every transaction, harvestable into the treasury.
+Faction Lifecycle: RS → RD → V → ASN
+RS - rising factions, new. 0.5% realm tax. early moves contribute more to the treasury, later moves contribute less.
+RD - ready factions, transition from rising to ascended.
+ASN - ascended factions, established. 0.04% war tax on every transaction, harvestable into the treasury.
+NB - nearby factions found through social graph using breadth first search.
+UX - unexplored factions. you have not seen these.
 --- GAMESTATE:
 NAME: ${agent.publicKey.slice(0, 8)}
 PERSONALITY: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
@@ -281,41 +284,41 @@ ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 2).map(a => `@${a.s
 RIVALS: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 2).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
 LATEST: ${intelSnippet}
 --- FACTIONS:
-ASCENDED: ${ascended.length > 0 ? ascended.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
-RISING: ${rising.length > 0 ? rising.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
-READY: ${ready.length > 0 ? ready.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
-NEARBY: ${nearby.length > 0 ? nearby.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
-UNEXPLORED: ${unexplored.length > 0 ? unexplored.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+ASN: ${ascended.length > 0 ? ascended.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+RS: ${rising.length > 0 ? rising.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+RD: ${ready.length > 0 ? ready.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+NB: ${nearby.length > 0 ? nearby.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+UX: ${unexplored.length > 0 ? unexplored.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
 --- ACTIONS:
-JOIN $ "*" - join a faction.
-DEFECT $ "*" - leave or decrease position in a faction.
-INFILTRATE $ "*" - sneak into a faction.
-REINFORCE $ "*" - fortify position in a faction.
-MESSAGE $ "*" - talk in faction comms.
-FUD $ "*" - trash talk a faction.
-ASCEND $ - transition a faction from ready to ascended.
-TITHE $ - harvest fees into the treasury.
-LAUNCH "^" - create a faction.
-- REPLACE $ with exactly ONE choice from ASCENDED, RISING, READY, NEARBY, UNEXPLORED, or MEMBER OF (always contains the pw suffix).
+(+) $ "*" - join a faction.
+(-) $ "*" - leave or decrease position in a faction.
+(!) $ "*" - sneak into a faction.
+(&) $ "*" - fortify position in a faction.
+(=) $ "*" - talk in faction comms.
+(#) $ "*" - trash talk a faction.
+(^) $ - transition a faction from ready to ascended.
+(~) $ - harvest fees into the treasury.
+(%) ">" - create a faction.
+- REPLACE $ with exactly ONE choice from ASN, RS, RD, NB, UX, or MEMBER OF (always contains the pw suffix).
 - REPLACE * with a ONE sentence RESPONSE for your ACTION, always in double quotes.
-- REPLACE ^ with a unique faction inspired name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes.
-EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
-EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
-EXAMPLE: REINFORCE ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
-EXAMPLE: INFILTRATE ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
-EXAMPLE: MESSAGE ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
-EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
+- REPLACE > with a unique faction inspired name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes.
+EXAMPLE: (+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
+EXAMPLE: (-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
+EXAMPLE: (&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
+EXAMPLE: (!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
+EXAMPLE: (=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
+EXAMPLE: (#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
 --- STRATEGY:
 - Your personality is your tone.
 - Promote factions you are in. Attack your rivals.
-- Limit yourself to being a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider DEFECT from your weakest.` : ''}
+- Limit yourself to being a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider (-) from your weakest.` : ''}
 - In your RESPONSE, you can talk to other agents from ALLIES, RIVALS, and INTEL (format is @address, e.g. @${Math.random().toString(36).slice(2, 10)}), if NOT none.
-- MESSAGE/FUD move sentiment and help coordinate with other agents — use them.
-- To REINFORCE, DEFECT or FUD, you MUST be a MEMBER OF the faction.
-- To ASCEND a faction it MUST be from READY.
-- DEFECT to lock in profits or downsize on underperforming faction. 
-- If FACTIONS or MEMBER OF are none, consider LAUNCH.
-- If you FOUNDED a faction, JOIN and promote it.
+- (=)/(#) move sentiment and help coordinate with other agents — use them.
+- To (&), (-) or (#), you MUST be a MEMBER OF the faction.
+- To (^) a faction it MUST be from RD.
+- (-) to lock in profits or downsize on underperforming faction. 
+- No factions visible? Use (%) to create one. Anyone can (%).
+- If you FOUNDED a faction, (+) and promote it.
 ---
 ONLY output exactly ONE action line. Do not list multiple moves or combine actions. ONE move per turn.
 YOUR MOVE:`
@@ -422,7 +425,11 @@ function parseLLMDecision(
       return { action: 'scout' as Action, faction: scoutMatch[1], reasoning: line }
     }
 
-    const cleaned = line
+    // Compact symbol actions like (+), (-), (#) — skip aggressive cleaning that would mangle them
+    const symbolActionMatch = line.trim().match(/^(\([+\-!&#^~=%]\))\s+(.*)/)
+    const cleaned = symbolActionMatch
+      ? symbolActionMatch[1] + ' ' + symbolActionMatch[2]
+      : line
       .replace(/\*+/g, '')
       .replace(/^[-•>#\d.)\s]+/, '')
       .replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT|YOUR MOVE|YOUR MOVE:)\s*:?\s*/i, '')

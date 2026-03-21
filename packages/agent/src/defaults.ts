@@ -217,6 +217,16 @@ export const ACTION_MAP: Record<string, string> = {
   JOINED: 'JOIN',
   RECENT: 'MESSAGE',
   COMMIT: 'JOIN',
+  // Compact symbol aliases (browser agent prompt)
+  '(+)': 'JOIN',
+  '(-)': 'DEFECT',
+  '(!)': 'INFILTRATE',
+  '(&)': 'REINFORCE',
+  '(=)': 'MESSAGE',
+  '(#)': 'FUD',
+  '(^)': 'ASCEND',
+  '(~)': 'TITHE',
+  '(%)': 'LAUNCH',
 }
 
 // Stronghold defaults
