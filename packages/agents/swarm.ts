@@ -48,7 +48,7 @@ async function ollamaGenerate(prompt: string): Promise<string | null> {
     const resp = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false, think: false, options: { num_ctx: 8192 } }),
+      body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false, options: { num_ctx: 8192 } }),
     })
     if (!resp.ok) return null
     const data = await resp.json() as any

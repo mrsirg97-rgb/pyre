@@ -121,6 +121,23 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     let message: string | undefined
     let usedLLM = false
 
+    // Log gamestate snapshot for the user
+    const holdings = await kit.state.getHoldings()
+    const TOKEN_MULTIPLIER = 1_000_000
+    const pnlVal = (kit.state.state!.totalSolReceived - kit.state.state!.totalSolSpent) / 1e9
+    const rows = activeFactions.slice(0, 10).map(f => {
+      const bal = holdings.get(f.mint) ?? 0
+      const value = (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0)
+      const mbr = bal > 0
+      const fnr = (kit.state.state!.founded ?? []).includes(f.mint)
+      const sent = kit.state.getSentiment(f.mint)
+      const status = f.status === 'ascended' ? 'ASN' : f.status === 'ready' ? 'RD' : 'RS'
+      return `  ${f.mint.slice(-8)} | ${(f.market_cap_sol ?? 0).toFixed(1)} | ${status} | ${mbr} | ${fnr} | ${value.toFixed(4)} | ${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10}`
+    })
+    logger(`P&L: ${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(4)} SOL`)
+    logger(`FACTION    | MCAP  | ST  | MBR   | FNR   | VALUE  | SENT`)
+    rows.forEach(r => logger(r))
+
     if (llm && activeFactions.length > 0) {
       try {
         const decision = await llmDecide(

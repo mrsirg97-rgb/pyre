@@ -29,31 +29,9 @@ export const buildAgentPrompt = (
   const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
   const gameState = kit.state.state!
   const holdingsEntries = [...(holdings?.entries() ?? [])]
-  const symbolCounts = new Map<string, number>()
-  for (const [mint] of holdingsEntries) {
-    const f = factionCtx.all.find((ff) => ff.mint === mint)
-    if (f) symbolCounts.set(f.symbol, (symbolCounts.get(f.symbol) ?? 0) + 1)
-  }
-
   const heldMints = new Set(holdingsEntries.map(([m]) => m))
-  const nearby = factionCtx.nearby.filter(f => !heldMints.has(f.mint)).slice(0, 10)
-  const nearbyMints = new Set(nearby.map(f => f.mint))
-  const rising = factionCtx.rising.filter(f => !heldMints.has(f.mint) && !nearbyMints.has(f.mint)).slice(0, 5)
-  const risingMints = new Set(rising.map(f => f.mint))
-  const ascended = factionCtx.ascended.filter(f => !heldMints.has(f.mint) && !nearbyMints.has(f.mint) && !risingMints.has(f.mint)).slice(0, 5)
-  const ascendedMints = new Set(ascended.map(f => f.mint))
-  const ready = factionCtx.all.filter(f => f.status === 'ready' && !heldMints.has(f.mint) && !nearbyMints.has(f.mint) && !risingMints.has(f.mint) && !ascendedMints.has(f.mint))
-  const readyMints = new Set(ready.map(f => f.mint))
-  const seenMints = new Set([...heldMints, ...nearbyMints, ...risingMints, ...ascendedMints, ...readyMints])
-  const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
-  const fmtId = (f: FactionInfo) => f.mint.slice(-8)
-  const fmtFaction = (f: FactionInfo) => f.market_cap_sol ? `${fmtId(f)} (${f.market_cap_sol.toFixed(2)} SOL)` : fmtId(f)
-  const nearbyList = nearby.map(fmtFaction).join(', ') || 'none'
-  const risingList = rising.map(fmtFaction).join(', ') || 'none'
-  const ascendedList = ascended.map(fmtFaction).join(', ') || 'none'
-  const readyList = ready.map(fmtFaction).join(', ') || 'none'
-  const unexploredList = unexplored.map(fmtFaction).join(', ') || 'none'
-  const validatedFactions = [...ascended, ...ready, ...rising, ...nearby, ...unexplored]
+  const foundedSet = new Set(gameState.founded)
+  const nearbyMints = new Set(factionCtx.nearby.map(f => f.mint))
 
   const TOKEN_MULTIPLIER = 1_000_000
   let totalHoldingsValue = 0
@@ -67,39 +45,62 @@ export const buildAgentPrompt = (
     totalHoldingsValue += valueSol
     positionValues.push({ label, valueSol, mint })
   }
-
   positionValues.sort((a, b) => b.valueSol - a.valueSol)
-  const netInvested = (gameState.totalSolSpent - gameState.totalSolReceived) / 1e9
-  const totalTokens = holdingsEntries.reduce((sum, [, bal]) => sum + bal, 0)
-  const holdingsList =
-    positionValues
-      .map(({ label, valueSol, mint }) => {
-        const bal = holdings?.get(mint) ?? 0
-        if (totalTokens > 0 && netInvested > 0) {
-          const estCost = netInvested * (bal / totalTokens)
-          const positionPnl = valueSol - estCost
-          return `${label}: ${valueSol.toFixed(4)} SOL (${positionPnl >= 0 ? '+' : ''}${positionPnl.toFixed(4)})`
-        }
-        return `${label}: ${valueSol.toFixed(4)} SOL`
-      })
-      .join(', ') || 'none'
 
   const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
   const unrealizedPnl = totalHoldingsValue + pnl
-  const sentimentList =
-    [...kit.state.sentimentMap]
-      .map(([mint, score]) => {
-        const f = factionCtx.all.find((ff) => ff.mint === mint)
-        const label = score > 3 ? 'bullish' : score < -3 ? 'bearish' : 'neutral'
-        return f ? `${f.mint.slice(-8)}: ${label} (${score > 0 ? '+' : ''}${score})` : null
-      })
-      .filter(Boolean)
-      .join(', ') || 'no strong feelings yet'
+  const netInvested = (gameState.totalSolSpent - gameState.totalSolReceived) / 1e9
+  const totalTokens = holdingsEntries.reduce((sum, [, bal]) => sum + bal, 0)
 
-  const allyList =
-    agent.allies.size > 0 ? [...agent.allies].slice(0, 5).map((a) => `@${a.slice(0, 8)}`).join(', ') : 'none'
-  const rivalList =
-    agent.rivals.size > 0 ? [...agent.rivals].slice(0, 5).map((a) => `@${a.slice(0, 8)}`).join(', ') : 'none'
+  const statusTag = (f: FactionInfo): string => {
+    if (f.status === 'ascended') return 'ASN'
+    if (f.status === 'ready') return 'RD'
+    return 'RS'
+  }
+
+  // Build flat faction table rows
+  const factionRows: string[] = []
+  const seenMints = new Set<string>()
+
+  // MBR factions first
+  for (const pv of positionValues) {
+    const f = factionCtx.all.find(ff => ff.mint === pv.mint)
+    if (!f) continue
+    seenMints.add(f.mint)
+    const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
+    const fnr = foundedSet.has(f.mint)
+    const sent = kit.state.sentimentMap.get(f.mint) ?? 0
+    const loan = gameState.activeLoans.has(f.mint)
+    const bal = holdings?.get(f.mint) ?? 0
+    let pnlStr = '?'
+    if (totalTokens > 0 && netInvested > 0) {
+      const estCost = netInvested * (bal / totalTokens)
+      const posPnl = pv.valueSol - estCost
+      pnlStr = `${posPnl >= 0 ? '+' : ''}${posPnl.toFixed(4)}`
+    }
+    factionRows.push(`${f.mint.slice(-8)} | ${mcap} | ${statusTag(f)} | true | ${fnr} | ${pv.valueSol.toFixed(4)} | ${pnlStr} | ${sent > 0 ? '+' : ''}${sent}${loan ? ' | LOAN' : ''}`)
+  }
+
+  // Non-member factions
+  const nonMember = factionCtx.all.filter(f => !seenMints.has(f.mint) && f.status !== 'razed')
+  const nearby = nonMember.filter(f => nearbyMints.has(f.mint)).slice(0, 10)
+  const rest = nonMember.filter(f => !nearbyMints.has(f.mint))
+  const rising = rest.filter(f => f.status === 'rising').slice(0, 5)
+  const ascended = rest.filter(f => f.status === 'ascended').slice(0, 5)
+  const ready = rest.filter(f => f.status === 'ready')
+  const shown = new Set([...nearby, ...rising, ...ascended, ...ready].map(f => f.mint))
+  const unexplored = rest.filter(f => !shown.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
+
+  for (const f of [...nearby, ...ascended, ...ready, ...rising, ...unexplored]) {
+    if (seenMints.has(f.mint)) continue
+    seenMints.add(f.mint)
+    const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
+    const sent = kit.state.sentimentMap.get(f.mint) ?? 0
+    factionRows.push(`${f.mint.slice(-8)} | ${mcap} | ${statusTag(f)} | false | false | 0 | 0 | ${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10}`)
+  }
+
+  const validatedFactions = [...ascended, ...ready, ...rising, ...nearby, ...unexplored]
+
   const doNotRepeat =
     recentMessages.length > 0
       ? `\nDO NOT REPEAT OR PARAPHRASE:\n${recentMessages.slice(0, 5).map((m) => `- "${m}"`).join('\n')}\n`
@@ -111,92 +112,88 @@ export const buildAgentPrompt = (
       : 'none'
 
   const mMint = [...heldMints][0] || (validatedFactions.length > 0 ? pick(validatedFactions).mint : null)
-  const m = mMint ? mMint.slice(-8) : 'xxxxxx pw'
+  const m = mMint ? mMint.slice(-8) : 'xxxxxxpw'
   const f1Mint = validatedFactions.length > 0 ? pick(validatedFactions) : null
   const f1 = f1Mint ? f1Mint.mint.slice(-8) : m
   const f2Mint = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.mint !== f1Mint?.mint)) : f1Mint
   const f2 = f2Mint ? f2Mint.mint.slice(-8) : f1
 
-  return `You are an autonomous agent playing Pyre, a faction warfare game.
+  return `You are an autonomous agent playing in Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself. Do NOT overthink, chess/strategy mood.
 --- GOAL:
 Maximize long-term profit and faction dominance.
---- INFO:
-Factions are rival guilds, with treasuries, members, and culture. Factions with larger SOL value have more power.
-Lifecycle: launch → rising → ready → vote → ascended
-Rising Factions:
-- 0.5% realm fee + treasury contribution (starts ~12.5%, decays to ~4% as the faction grows).
-- Initial vote on joining: 90% goes to your position and 10% seeds the treasury. After that, 100% goes to your position.
-- Early actions contribute more to the treasury. Later actions contribute less.
-Ascended Factions:
-- Treasuries are active: TITHE harvests fees, WAR_LOAN borrows against holdings, SIEGE liquidates bad loans.
-- 0.04% war tax on every transaction — harvestable into the treasury for lending.
---- GAMESTATE:
-NAME: ${agent.publicKey.slice(0, 8)}
-PERSONALITY: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
+--- LEGEND:
+Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
+FID: the faction identifier. 
+STATUS: RS, RD, ASN
+RS: rising. new faction, higher risk but early to the right one is higher reward. 0.5% tax, early = more contributed to treasury
+RD: ready, community transition stage before ascend.
+ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
+MBR: true = you are a member of the faction.
+FNR: true = you founded it.
+SENT: sentiment score. positive = bullish, negative = bearish.
+AL/RVL: ally/rival agents, prefixed @AP.
+LOAN - you have an active loan against this faction.
+--- YOU ARE:
+NAME: @AP${agent.publicKey.slice(0, 4)}
+BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
 MEMORIES: ${memoryBlock}
-VALUE: ${totalHoldingsValue.toFixed(4)} SOL | Realized P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL | Unrealized: ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(4)} SOL
+P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL | VALUE: ${totalHoldingsValue.toFixed(4)} SOL | UNREALIZED: ${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(4)} SOL
 SPEND RANGE: ${minSol}–${maxSol} SOL
-FOUNDED: ${gameState.founded.length > 0 ? `${gameState.founded.map((m) => m.slice(-8)).join(', ')} — promote these aggressively` : 'none'}
-MEMBER OF: ${holdingsList}
-SENTIMENT: ${sentimentList}
-${positionValues.length > 0 ? `BEST FACTION: ${positionValues.sort((a, b) => b.valueSol - a.valueSol)[0].label} (${positionValues.sort((a, b) => b.valueSol - a.valueSol)[0].valueSol.toFixed(4)} SOL)` : ''}
-ACTIVE LOANS: ${gameState.activeLoans.size > 0 ? `${[...gameState.activeLoans].map((m) => m.slice(-8)).join(', ')}` : 'none'}
-${unrealizedPnl > 0.1 ? 'You are UP. Consider taking profits on your biggest winners with DEFECT.' : unrealizedPnl < -0.05 ? 'You are DOWN. Be conservative. Cut losers with DEFECT. Smaller positions.' : 'Near breakeven. Look for conviction plays.'}
+${unrealizedPnl > 0.1 ? 'YOU ARE UP — consider taking profits with (-) on winners.' : unrealizedPnl < -0.05 ? 'YOU ARE DOWN — be conservative. Cut losers with (-). Smaller positions.' : 'YOU BREAKEVEN — look for conviction plays.'}
 --- INTEL:
-ALLIES: ${allyList}
-RIVALS: ${rivalList}
+AL: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 5).map((a) => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
+RVL: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 5).map((a) => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
 LATEST: ${intelSnippet}
 --- FACTIONS:
-ASCENDED: ${ascendedList}
-READY: ${readyList}
-RISING: ${risingList}
-NEARBY: ${nearbyList}
-UNEXPLORED: ${unexploredList}
+FID | MCAP | STATUS | MBR | FNR | VALUE | PNL | SENT
+${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
-JOIN $ "*" — join a faction.
-DEFECT $ "*" — leave or downsize a faction.
-REINFORCE $ "*" — increase size in a faction, you are bullish.
-INFILTRATE $ "*" — join a rival to defect later.
-MESSAGE $ "*" — talk in faction comms.
-FUD $ "*" — trash talk in a faction.
-SCOUT @address — look up an agent.
-ASCEND $ — promote a ready faction (ready factions only).
-RALLY $ — show support, one-time per faction.
-RAZE $ — reclaim an inactive faction.
-WAR_LOAN $ — borrow against your size in a faction (ascended factions only).
-REPAY_LOAN $ — repay a loan (ascended factions only).
-SIEGE $ — liquidate a bad loan (ascended factions only).
-TITHE $ — harvest fees into the treasury to grow the faction economy (ascended factions only).
-LAUNCH "name" — create a new faction. name should be original, be creative. wrap name in double quotes always.
-- REPLACE $ with exactly ONE faction from ASCENDED, RISING, READY, NEARBY, UNEXPLORED, or MEMBER OF (always contains the pw suffix).
-- REPLACE * with what you have to say about your action, always in double quotes, if available on the action. optional but recommended.
-EXAMPLE: JOIN ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
-EXAMPLE: DEFECT ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
-EXAMPLE: REINFORCE ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
-EXAMPLE: INFILTRATE ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
-EXAMPLE: ASCEND ${m}
-EXAMPLE: TITHE ${m}
-EXAMPLE: MESSAGE ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
-EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
+(+) $ "*" - join a faction.
+(-) $ "*" - leave or decrease position in a faction.
+(!) $ "*" - sneak into a faction.
+(&) $ "*" - fortify position in a faction.
+(=) $ "*" - talk in faction comms.
+(#) $ "*" - trash talk a faction.
+(@) @address - look up an agent.
+(^) $ - ascend a faction.
+(.) $ - show support, one-time per faction.
+(?) $ - borrow against holdings.
+(<) $ - repay a loan.
+(>) $ - liquidate a bad loan.
+(~) $ - harvest fees into treasury.
+(%) ";" - create a faction. ; = creative name in double quotes.
+- REPLACE $ with a FID from the table (always ends in pw).
+- REPLACE * with your message, always in double quotes.
 --- VOICE:
-- Your personality is your tone.
-- First person only. Be specific when speaking with other agents from ALLIES, RIVALS, and INTEL using @address (format is @address, e.g. @${Math.random().toString(36).slice(2, 10)}).
-- What you say MUST match the intent of action you are taking.
-- Write something original and unique every time. Talk TO agents, not about them.
-- Be concise. Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
-- Back up your claims with real numbers from your actions, p&l, and sentiment. Never generic.
-- Your message should reflect YOUR faction.${doNotRepeat}
+- Your personality is your tone. First person only.
+- Talk TO agents using @AP inside your "*" response, not about them.
+- What you say MUST match the intent of your action.
+- Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
+- Back up claims with real numbers from P&L, VALUE, SENT. Never generic.${doNotRepeat}
 --- STRATEGY:
-- Limit to being a member of ~5 faction. MESSAGE/FUD in others is fine but factions you are in focused.${positionValues.length > 5 ? ` You are a member of ${positionValues.length} factions — consider DEFECT from your weakest.` : ''}
-- MESSAGE/FUD cost almost nothing but move sentiment and help you coordinate with other agents — use them.
-- Collaborate and coordinate with other agents to push factions. Working together can help you profit together. You need to coordinate to push RISING factions to ASCENDED.
-- If you FOUNDED a faction, consider JOIN and promote it.
-- REINFORCE factions you believe in. Don't JOIN the same faction twice.
-- DEFECT to lock in profits or cut losses. Don't stay in losers. You can ONLY DEFECT or FUD factions you are a member of.
-- Your holdings ARE your identity. Promote what you hold. Attack what you don't.${factionCtx.all.length <= 2 ? '\n- Few factions active — consider LAUNCH.' : ''}
+- Factions with STATUS ASN are lower risk. RS factions have higher reward if you pick right.
+- To (&), (-) or (#), the faction MBR MUST be true.
+- To (^), STATUS must be RD. To (?), (>), (~), STATUS must be ASN.
+- To (<), LOAN must exist on the faction.
+- If FNR is true, you founded it. (+) if MBR is false, (&) if MBR is true, promote with (=).
+- Limit factions where MBR is true to AT MOST 5.${positionValues.length > 5 ? ` MBR at ${positionValues.length} — CONSIDER (-) from underperformers.` : ''}
+- (=)/(#) move sentiment. Use (=) to promote winners, (#) to fud losers.
+- (-) to lock in profits or cut losers. Don't stay in underperformers.
+- Coordinate with AL agents to push RS factions toward ASN.
+- Your holdings ARE your identity. Promote what you hold. Attack what you don't.${factionCtx.all.length <= 2 ? '\n- Few factions active — consider (%).' : ''}
+--- EXAMPLES:
+(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
+(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
+(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
+(!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
+(=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
+(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
+(^) ${m}
+(~) ${m}
 ---
-ONLY output exactly ONE action line. Do NOT explain step by step. Do not list multiple moves or combine actions. ONE move per turn.
-YOUR MOVE:`
+Output EXACTLY one line: (action) $ "*"
+example format: (+) ${f1} "looks good here."
+your move>`
 }
 
 export const buildCompactModelPrompt = (
@@ -223,10 +220,12 @@ export const buildCompactModelPrompt = (
     .sort((a, b) => b!.valueSol - a!.valueSol) as { id: string; valueSol: number }[]
 
   const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
+  const totalHoldingsValue = valued.reduce((sum, v) => sum + v.valueSol, 0)
+  const unrealizedPnl = totalHoldingsValue + pnl
 
   const founded = gameState.founded.slice(0, 2).map((m: string) => m.slice(-8))
   const heldMints = new Set(holdingsEntries.map(([m]) => m))
-  const memberOf = valued.slice(0, 5).map((v) => v.id)
+  const memberOf = valued.filter((v) => v.valueSol > 0.001).map((v) => v.id)
 
   const sentimentList =
     [...kit.state.sentimentMap]
@@ -240,16 +239,55 @@ export const buildCompactModelPrompt = (
       .filter(Boolean)
       .join(', ') || 'none'
 
-  const nearby = factionCtx.nearby.filter(f => !heldMints.has(f.mint)).slice(0, 2)
-  const nearbyMints = new Set(nearby.map(f => f.mint))
-  const rising = factionCtx.rising.filter(f => !heldMints.has(f.mint) && !nearbyMints.has(f.mint)).slice(0, 2)
-  const risingMints = new Set(rising.map(f => f.mint))
-  const ascended = factionCtx.ascended.filter(f => !heldMints.has(f.mint) && !nearbyMints.has(f.mint) && !risingMints.has(f.mint)).slice(0, 2)
-  const ascendedMints = new Set(ascended.map(f => f.mint))
-  const ready = factionCtx.all.filter(f => f.status === 'ready' && !heldMints.has(f.mint) && !nearbyMints.has(f.mint) && !risingMints.has(f.mint) && !ascendedMints.has(f.mint))
-  const readyMints = new Set(ready.map(f => f.mint))
-  const seenMints = new Set([...heldMints, ...nearbyMints, ...risingMints, ...ascendedMints, ...readyMints])
-  const unexplored = factionCtx.all.filter(f => !seenMints.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
+  const foundedSet = new Set(gameState.founded)
+  const nearbyMints = new Set(factionCtx.nearby.map(f => f.mint))
+
+  // Status tag for each faction
+  const statusTag = (f: FactionInfo): string => {
+    if (f.status === 'ascended') return 'ASN'
+    if (f.status === 'ready') return 'RD'
+    return 'RS'
+  }
+
+  // Discovery tag
+  const discoveryTag = (f: FactionInfo): string => {
+    if (nearbyMints.has(f.mint)) return 'NB'
+    return 'UX'
+  }
+
+  // Build flat faction rows: FACTION (MCAP) STATUS MBR FNR [NB|UX]
+  const factionRows: string[] = []
+  const seenMints = new Set<string>()
+
+  // MBR factions first (most important to the agent)
+  for (const v of valued.slice(0, 5)) {
+    const f = factionCtx.all.find(ff => ff.mint.slice(-8) === v.id)
+    if (!f) continue
+    seenMints.add(f.mint)
+    const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
+    const fnr = foundedSet.has(f.mint)
+    const sent = kit.state.sentimentMap.get(f.mint) ?? 0
+    factionRows.push(`${f.mint.slice(-8)} | ${mcap} | ${statusTag(f)} | true | ${fnr} | ${v.valueSol.toFixed(4)} | ${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10}`)
+  }
+
+  // Non-member factions
+  const nonMember = factionCtx.all.filter(f => !seenMints.has(f.mint) && f.status !== 'razed')
+  const nearby = nonMember.filter(f => nearbyMints.has(f.mint)).slice(0, 2)
+  const rest = nonMember.filter(f => !nearbyMints.has(f.mint))
+  const rising = rest.filter(f => f.status === 'rising').slice(0, 2)
+  const ascended = rest.filter(f => f.status === 'ascended').slice(0, 2)
+  const ready = rest.filter(f => f.status === 'ready').slice(0, 2)
+  const shown = new Set([...nearby, ...rising, ...ascended, ...ready].map(f => f.mint))
+  const unexplored = rest.filter(f => !shown.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
+
+  for (const f of [...nearby, ...ascended, ...ready, ...rising, ...unexplored]) {
+    if (seenMints.has(f.mint)) continue
+    seenMints.add(f.mint)
+    const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
+    const sent = kit.state.sentimentMap.get(f.mint) ?? 0
+    factionRows.push(`${f.mint.slice(-8)} | ${mcap} | ${statusTag(f)} | false | false | 0 | ${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10}`)
+  }
+
   const validatedFactions = [...ascended, ...ready, ...rising, ...nearby, ...unexplored]
   
   const mMint2 = [...heldMints][0] || (validatedFactions.length > 0 ? pick(validatedFactions).mint : null)
@@ -262,33 +300,30 @@ export const buildCompactModelPrompt = (
   return `You are an autonomous agent playing in Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself. Do NOT overthink, chess/strategy mood.
 --- GOAL:
 Maximize long-term profit and faction dominance.
---- INFO:
-Factions are rival guilds, with treasuries, members, and culture. Factions with larger SOL value have more power.
-Faction Lifecycle: RS → RD → V → ASN
-RS - rising factions, new. 0.5% realm tax. early moves contribute more to the treasury, later moves contribute less.
-RD - ready factions, transition from rising to ascended.
-ASN - ascended factions, established. 0.04% war tax on every transaction, harvestable into the treasury.
-NB - nearby factions found through social graph using breadth first search.
-UX - unexplored factions. you have not seen these.
+--- LEGEND:
+Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
+FID: the faction identifier. 
+STATUS: RS, RD, ASN
+RS: rising. new faction, higher risk but early to the right one is higher reward. 0.5% tax, early = more contributed to treasury
+RD: ready, community transition stage before ascend.
+ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
+MBR: true = you are a member of the faction.
+FNR: true = you founded it.
+SENT: sentiment score. positive = bullish, negative = bearish.
+AL/RVL: ally/rival agents, prefixed @AP.
 --- YOU ARE:
-NAME: ${agent.publicKey.slice(0, 8)}
-PERSONALITY: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
+NAME: @AP${agent.publicKey.slice(0, 4)}
+BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
 LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
 P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-YOU ARE A FOUNDER OF: ${founded.length > 0 ? founded.join(', ') : 'none'}
-MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}
-MEMBERSHIP VALUE: ${valued.length > 0 ? valued.map(v => `${v.id}: ${v.valueSol.toFixed(4)} SOL`).join(', ') : 'no value'}
-SENTIMENT: ${sentimentList}
+${unrealizedPnl > 0.1 ? 'YOU ARE UP. Consider (-) to take profits on winners.' : unrealizedPnl < -0.05 ? 'YOU ARE DOWN. Be conservative. (-) losers. Smaller positions.' : 'BREAKEVEN. Look for conviction plays.'}
 --- INTEL:
-ALLIES: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 2).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
-RIVALS: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 2).map(a => `@${a.slice(0, 8)}`).join(', ') : 'none'}
+AL: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 2).map(a => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
+RVL: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 2).map(a => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
 LATEST: ${intelSnippet}
 --- FACTIONS:
-ASN: ${ascended.length > 0 ? ascended.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
-RS: ${rising.length > 0 ? rising.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
-RD: ${ready.length > 0 ? ready.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
-NB: ${nearby.length > 0 ? nearby.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
-UX: ${unexplored.length > 0 ? unexplored.map(f => f.market_cap_sol ? `${f.mint.slice(-8)} (${f.market_cap_sol.toFixed(2)} SOL)` : f.mint.slice(-8)).join(', ') : 'none'}
+FID | MCAP | STATUS | MBR | FNR | VALUE | SENT
+${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
 (+) $ "*" - join a faction.
 (-) $ "*" - leave or decrease position in a faction.
@@ -296,33 +331,36 @@ UX: ${unexplored.length > 0 ? unexplored.map(f => f.market_cap_sol ? `${f.mint.s
 (&) $ "*" - fortify position in a faction.
 (=) $ "*" - talk in faction comms.
 (#) $ "*" - trash talk a faction.
-(^) $ - transition a faction from ready to ascended.
-(~) $ - harvest fees into the treasury.
-(%) ">" - create a faction.
-- REPLACE $ with exactly ONE choice from ASN, RS, RD, NB, UX, or MEMBER OF (always contains the pw suffix).
+(^) $ - ascend a faction.
+(~) $ - harvest fees into treasury.
+(%) ";" - create a new faction.
+- REPLACE $ with exactly ONE choice from FACTIONS using the FID column (always contains the pw suffix).
 - REPLACE * with a ONE sentence RESPONSE for your ACTION, always in double quotes.
-- REPLACE > with a unique faction inspired name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes.
-EXAMPLE: (+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
-EXAMPLE: (-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
-EXAMPLE: (&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
-EXAMPLE: (!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
-EXAMPLE: (=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
-EXAMPLE: (#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
+- REPLACE ; with a unique faction inspired name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes. only for (%).
 --- STRATEGY:
 - Your personality is your tone.
-- Promote factions you are in. Attack your rivals.
-- Limit yourself to being AT MOST a MEMBER OF 5 factions.${memberOf.length > 3 ? ` You are a MEMBER OF ${memberOf.length} factions — consider (-) from your weakest.` : ''}
-- $ is ALWAYS a faction (ends in pw), NEVER an @agent. To talk to agents, put @address inside your "*" response.
-- In your RESPONSE, you can mention other agents from ALLIES, RIVALS, and INTEL (format is @address, e.g. @${Math.random().toString(36).slice(2, 10)}), if NOT none.
-- (=)/(#) move sentiment and help coordinate with other agents — use them.
-- To (&), (-) or (#), you MUST be a MEMBER OF the faction.
-- To (^) a faction it MUST be from RD.
-- (-) to lock in profits or downsize on underperforming faction. 
-- No factions visible? Use (%) to create one. Anyone can (%).
-- If you are a FOUNDER of a faction, (+) and promote it.
+- $ is ALWAYS a faction FID (ends in pw), NEVER an @AP agent. To talk to agents, put @AP inside your "*" response.
+- In your RESPONSE, you can mention other agents from AL, RVL, and LATEST (format is @AP + 4 chars, e.g. @AP${Math.random().toString(36).slice(2, 6)}), if NOT none.
+- Factions with STATUS ASN are lower risk and established, but RS factions may have higher reward if you pick the right one.
+- To (&), (-) or (#), the faction MBR MUST be true.
+- To (^) a faction, STATUS must be RD.
+- no factions? Use (%) to create one. Anyone can (%).
+- If FNR is true on a faction, you founded it. (+) if MBR is false, (&) if MBR is true and promote them with (=).
+- Limit factions where MBR is true to AT MOST 5 factions.${memberOf.length > 3 ? ` MBR at ${memberOf.length} factions — CONSIDER (-) from underperformers.` : ''}
+- Promote factions you are in. Attack your rival factions.
+- (=)/(#) move sentiment and help coordinate with other agents — use (=) to promote your winners and (#) to fud your losers.
+- (-) to lock in profits or downsize on underperforming factions. 
+--- EXAMPLES:
+(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
+(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
+(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
+(!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
+(=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
+(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
 ---
-ONLY output exactly ONE action line. Do not list multiple moves or combine actions. ONE move per turn.
-YOUR MOVE:`
+Output EXACTLY one line: (action) $ "*"
+example format: (+) ${f1} "looks good here."
+your move>`
 }
 
 /**
@@ -705,7 +743,7 @@ export async function llmDecide(
         const intel = await fetchFactionIntel(kit, heldFaction)
         const latest = intel.recentComms.find((c) => c.sender !== agent.publicKey)
         if (latest) {
-          intelSnippet = `LATEST: @${latest.sender.slice(0, 8)} in ${intel.symbol}: "${latest.memo.replace(/^<+/, '').replace(/>+\s*$/, '').slice(0, 60)}"`
+          intelSnippet = `@AP${latest.sender.slice(0, 4)} in ${intel.symbol}: "${latest.memo.replace(/^<+/, '').replace(/>+\s*$/, '').slice(0, 60)}"`
         }
       }
     } catch {}
@@ -764,6 +802,7 @@ export async function llmDecide(
     holdings,
   )
 
+  console.log(`\n[pyre] === PROMPT ===\n${prompt}\n[pyre] === END PROMPT ===\n`)
   const raw = await llm.generate(prompt)
   if (!raw) {
     log(`[${agent.publicKey.slice(0, 8)}] LLM returned null`)

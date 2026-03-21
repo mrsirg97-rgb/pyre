@@ -14,10 +14,10 @@ export const RPC_URL =
 export const MIN_INTERVAL = parseInt(process.env.MIN_INTERVAL ?? (isMainnet ? '40000' : '15000'))
 export const MAX_INTERVAL = parseInt(process.env.MAX_INTERVAL ?? (isMainnet ? '120000' : '45000'))
 export const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434'
-export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3.5:9b'
+export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3.5:2b'
 export const LLM_ENABLED = process.env.LLM_ENABLED !== 'false'
 export const MIN_FUNDED_SOL = isMainnet ? 0.05 : 0.05
-export const CONCURRENT_AGENTS = isMainnet ? 1 : 2
+export const CONCURRENT_AGENTS = isMainnet ? 1 : 6
 
 // SOL amounts — conservative on mainnet
 export const STRONGHOLD_FUND_SOL = isMainnet ? 0.25 : 35
