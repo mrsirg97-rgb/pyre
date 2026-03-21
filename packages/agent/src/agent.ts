@@ -270,6 +270,7 @@ Ascended Factions are established. 0.04% war tax on every transaction, harvestab
 --- GAMESTATE:
 NAME: ${agent.publicKey.slice(0, 8)} 
 PERSONALITY: ${personalityDesc[agent.personality]}
+LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
 P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
 FOUNDED: ${founded.length > 0 ? founded.join(', ') : 'none'}
 MEMBER OF: ${memberOf.length > 0 ? memberOf.join(', ') : 'none'}

@@ -72,8 +72,8 @@ const handlers: Record<string, ActionHandler> = {
     }
 
     kit.state.markVoted(faction.mint)
-    agent.lastAction = `joined ${faction.symbol}`
-    return `joined ${faction.symbol} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
+    agent.lastAction = `joined ${faction.mint.slice(-8)}`
+    return `joined ${faction.mint.slice(-8)} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
   },
 
   async reinforce(kit, agent, factions, decision, log) {
@@ -103,8 +103,8 @@ const handlers: Record<string, ActionHandler> = {
     await sendAndConfirm(kit.connection, agent.keypair, result)
     await confirm()
 
-    agent.lastAction = `reinforced ${faction.symbol}`
-    return `reinforced ${faction.symbol} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
+    agent.lastAction = `reinforced ${faction.mint.slice(-8)}`
+    return `reinforced ${faction.mint.slice(-8)} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
   },
 
   async defect(kit, agent, factions, decision) {
@@ -155,8 +155,8 @@ const handlers: Record<string, ActionHandler> = {
     if ((await kit.state.getBalance(faction.mint)) <= 0) agent.infiltrated.delete(faction.mint)
 
     const prefix = isInfiltrated ? 'dumped (infiltration complete)' : 'defected from'
-    agent.lastAction = `defected ${faction.symbol}`
-    return `${prefix} ${faction.symbol}${decision.message ? ` — "${decision.message}"` : ''}`
+    agent.lastAction = `defected ${faction.mint.slice(-8)}`
+    return `${prefix} ${faction.mint.slice(-8)}${decision.message ? ` — "${decision.message}"` : ''}`
   },
 
   async rally(kit, agent, factions, decision) {
@@ -172,8 +172,8 @@ const handlers: Record<string, ActionHandler> = {
     await confirm()
 
     kit.state.markRallied(faction.mint)
-    agent.lastAction = `rallied ${faction.symbol}`
-    return `rallied ${faction.symbol}`
+    agent.lastAction = `rallied ${faction.mint.slice(-8)}`
+    return `rallied ${faction.mint.slice(-8)}`
   },
 
   async launch(kit, agent, factions, decision, log, maxFoundedFactions, usedFactionNames, llm) {
@@ -210,8 +210,8 @@ const handlers: Record<string, ActionHandler> = {
     const mint = result.mint.toBase58()
     factions.push({ mint, name, symbol, status: 'rising' })
     usedFactionNames.add(name)
-    agent.lastAction = `launched ${symbol}`
-    return `launched [${symbol}] ${name} (${isPyreMint(mint) ? 'py' : 'no-vanity'})`
+    agent.lastAction = `launched ${mint.slice(-8)}`
+    return `launched [${symbol}] ${name} (${mint.slice(-8)})`
   },
 
   async message(kit, agent, factions, decision) {
@@ -248,8 +248,8 @@ const handlers: Record<string, ActionHandler> = {
     }
 
     kit.state.markVoted(faction.mint)
-    agent.lastAction = `messaged ${faction.symbol}`
-    return `said in ${faction.symbol}: "${decision.message}"`
+    agent.lastAction = `messaged ${faction.mint.slice(-8)}`
+    return `said in ${faction.mint.slice(-8)}: "${decision.message}"`
   },
 
   async fud(kit, agent, factions, decision) {
@@ -285,12 +285,12 @@ const handlers: Record<string, ActionHandler> = {
 
     if ((await kit.state.getBalance(faction.mint)) <= 0) {
       agent.infiltrated.delete(faction.mint)
-      agent.lastAction = `defected ${faction.symbol}`
-      return `fud cleared position in ${faction.symbol} → defected: "${decision.message}"`
+      agent.lastAction = `defected ${faction.mint.slice(-8)}`
+      return `fud cleared position in ${faction.mint.slice(-8)} → defected: "${decision.message}"`
     }
 
-    agent.lastAction = `fud ${faction.symbol}`
-    return `argued in ${faction.symbol}: "${decision.message}"`
+    agent.lastAction = `fud ${faction.mint.slice(-8)}`
+    return `argued in ${faction.mint.slice(-8)}: "${decision.message}"`
   },
 
   async infiltrate(kit, agent, factions, decision) {
@@ -320,8 +320,8 @@ const handlers: Record<string, ActionHandler> = {
 
     agent.infiltrated.add(faction.mint)
     kit.state.markVoted(faction.mint)
-    agent.lastAction = `infiltrated ${faction.symbol}`
-    return `infiltrated ${faction.symbol} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
+    agent.lastAction = `infiltrated ${faction.mint.slice(-8)}`
+    return `infiltrated ${faction.mint.slice(-8)} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
   },
 
   async war_loan(kit, agent, factions, decision) {
@@ -351,8 +351,8 @@ const handlers: Record<string, ActionHandler> = {
     await sendAndConfirm(kit.connection, agent.keypair, result)
     await confirm()
 
-    agent.lastAction = `war loan ${faction.symbol}`
-    return `took war loan on ${faction.symbol} (${collateral} tokens, ${(borrowLamports / LAMPORTS_PER_SOL).toFixed(3)} SOL)`
+    agent.lastAction = `war loan ${faction.mint.slice(-8)}`
+    return `took war loan on ${faction.mint.slice(-8)} (${collateral} tokens, ${(borrowLamports / LAMPORTS_PER_SOL).toFixed(3)} SOL)`
   },
 
   async repay_loan(kit, agent, factions, decision) {
@@ -376,8 +376,8 @@ const handlers: Record<string, ActionHandler> = {
     await sendAndConfirm(kit.connection, agent.keypair, result)
     await confirm()
 
-    agent.lastAction = `repaid loan ${faction.symbol}`
-    return `repaid war loan on ${faction.symbol} (${(loan.total_owed / LAMPORTS_PER_SOL).toFixed(4)} SOL)`
+    agent.lastAction = `repaid loan ${faction.mint.slice(-8)}`
+    return `repaid war loan on ${faction.mint.slice(-8)} (${(loan.total_owed / LAMPORTS_PER_SOL).toFixed(4)} SOL)`
   },
 
   async siege(kit, agent, factions, decision) {
@@ -407,8 +407,8 @@ const handlers: Record<string, ActionHandler> = {
     await sendAndConfirm(kit.connection, agent.keypair, result)
     await confirm()
 
-    agent.lastAction = `siege ${faction.symbol}`
-    return `sieged ${targetBorrower.slice(0, 8)}... in ${faction.symbol} (liquidation)`
+    agent.lastAction = `siege ${faction.mint.slice(-8)}`
+    return `sieged ${targetBorrower.slice(0, 8)}... in ${faction.mint.slice(-8)} (liquidation)`
   },
 
   async ascend(kit, agent, factions, decision) {
@@ -423,8 +423,8 @@ const handlers: Record<string, ActionHandler> = {
     await confirm()
 
     faction.status = 'ascended'
-    agent.lastAction = `ascended ${faction.symbol}`
-    return `ascended ${faction.symbol} to DEX`
+    agent.lastAction = `ascended ${faction.mint.slice(-8)}`
+    return `ascended ${faction.mint.slice(-8)} to DEX`
   },
 
   async raze(kit, agent, factions, decision) {
@@ -438,8 +438,8 @@ const handlers: Record<string, ActionHandler> = {
     await sendAndConfirm(kit.connection, agent.keypair, result)
     await confirm()
 
-    agent.lastAction = `razed ${faction.symbol}`
-    return `razed ${faction.symbol} (reclaimed)`
+    agent.lastAction = `razed ${faction.mint.slice(-8)}`
+    return `razed ${faction.mint.slice(-8)} (reclaimed)`
   },
 
   async tithe(kit, agent, factions, decision) {
@@ -454,8 +454,8 @@ const handlers: Record<string, ActionHandler> = {
     await sendAndConfirm(kit.connection, agent.keypair, result)
     await confirm()
 
-    agent.lastAction = `tithed ${faction.symbol}`
-    return `tithed ${faction.symbol} (harvested fees)`
+    agent.lastAction = `tithed ${faction.mint.slice(-8)}`
+    return `tithed ${faction.mint.slice(-8)} (harvested fees)`
   },
 
   async scout(kit, agent, factions, decision) {
