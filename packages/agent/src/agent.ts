@@ -128,11 +128,11 @@ STATUS: RS, RD, ASN
 RS: rising. new faction, higher risk but early to the right one is higher reward. 0.5% tax, early = more contributed to treasury
 RD: ready, community transition stage before ascend.
 ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
-MBR: true = you are a member of the faction.
+MBR: true = you hold a position. false = you don't, available to (+) or (|). (+) and (|) makes MBR true. (-) makes MBR false.
 FNR: true = you founded it.
 SENT: sentiment score. positive = bullish, negative = bearish.
 AL/RVL: ally/rival agents, prefixed @AP.
-LOAN - you have an active loan against this faction.
+LOAN: true = you have an active loan against this faction.
 --- YOU ARE:
 NAME: @AP${agent.publicKey.slice(0, 4)}
 BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
@@ -148,20 +148,20 @@ LATEST: ${intelSnippet}
 (FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT)
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
-(+) $ "*" - join a faction.
-(-) $ "*" - leave or decrease position in a faction.
-(!) $ "*" - sneak into a faction.
-(&) $ "*" - fortify position in a faction.
-(=) $ "*" - talk in faction comms.
-(#) $ "*" - trash talk a faction.
+(+) $ "*" - join. pick from MBR=false.
+(-) $ "*" - leave. pick from MBR=true.
+(|) $ "*" - sneak in. pick from MBR=false.
+(&) $ "*" - fortify. pick from MBR=true.
+(!) $ "*" - talk in comms. pick from MBR=true.
+(#) $ "*" - trash talk. pick from MBR=true.
+(^) $ - ascend. pick from STATUS=RD.
+(~) $ - harvest fees. pick from STATUS=ASN.
+(?) $ - borrow against holdings. pick from STATUS=ASN.
+(>) $ - liquidate bad loan. pick from STATUS=ASN.
+(<) $ - repay loan. pick from LOAN=true.
+(.) $ - show support. one-time per faction.
 (@) @address - look up an agent.
-(^) $ - ascend a faction.
-(.) $ - show support, one-time per faction.
-(?) $ - borrow against holdings.
-(<) $ - repay a loan.
-(>) $ - liquidate a bad loan.
-(~) $ - harvest fees into treasury.
-(%) ";" - create a faction. ; = creative name in double quotes.
+(%) ";" - create a new faction. ; = creative name.
 - REPLACE $ with a FID from the table (always ends in pw).
 - REPLACE * with your message, always in double quotes.
 --- VOICE:
@@ -171,28 +171,34 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 - Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
 - Back up claims with real numbers from P&L, VALUE, SENT. Never generic.${doNotRepeat}
 --- STRATEGY:
-- Factions with STATUS ASN are lower risk. RS factions have higher reward if you pick right.
-- To (&), (-) or (#), the faction MBR MUST be true.
-- To (^), STATUS must be RD. To (?), (>), (~), STATUS must be ASN.
+- Factions with STATUS=ASN are lower risk. STATUS=RS factions have higher reward if you pick right.
 - To (<), LOAN must exist on the faction.
-- If FNR is true, you founded it. (+) if MBR is false, (&) if MBR is true, promote with (=).
-- Limit factions where MBR is true to AT MOST 5.${positionValues.length > 5 ? ` MBR at ${positionValues.length} — CONSIDER (-) from underperformers.` : ''}
-- (=) and (#) move sentiment. Use (=) to promote winners or (#) to fud losers.
+- FNR=true means you founded that faction. (+) if MBR=false, (&) if MBR=true, promote with (!).
+- Limit factions where MBR=true to AT MOST 5.${positionValues.length > 5 ? ` MBR at ${positionValues.length} — CONSIDER (-) from underperformers.` : ''}
+- (!) and (#) move sentiment. Use (!) to promote winners or (#) to fud losers. Use (!) and (#) to coordinate with other agents.
 - (-) to lock in profits or cut losers. Don't stay in underperformers.
-- Coordinate with AL agents to push RS factions toward ASN.
+- Coordinate with other agents to push RS factions toward ASN.
 - Your holdings ARE your identity. Promote what you hold. Attack what you don't.${factionCtx.all.length <= 2 ? '\n- Few factions active — consider (%).' : ''}
 --- EXAMPLES:
 (+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
-(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
-(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
-(!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
+(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"
+(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.', 'fortifying my position.'])}"
+(|) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
+(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
+(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
 (^) ${m}
 (~) ${m}
-(=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
-(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
+(?) ${m}
+(%) "${pick(['Glitch Cult', 'Whale Syndicate', 'Shadow Order', 'Neon Cartel'])}"
 ---
 Output EXACTLY one line: (action) $ "*"
-example format: (+) ${f1} "looks good here."
+example format: ${pick([
+  `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.'])}"`,
+  `(-) ${m} "${pick(['taking profits.', 'cutting the drag.'])}"`,
+  `(&) ${m} "${pick(['doubling down.', 'conviction play.'])}"`,
+  `(!) ${m} "${pick(['love the energy.', 'not leaving.'])}"`,
+  `(#) ${m} "${pick(['dead faction.', 'overvalued.'])}"`,
+])}
 >`
 }
 
@@ -307,8 +313,8 @@ STATUS: RS, RD, ASN
 RS: rising. new faction, higher risk but early to the right one is higher reward. 0.5% tax, early = more contributed to treasury
 RD: ready, community transition stage before ascend.
 ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
-MBR: true = you are a member of the faction.
-FNR: true = you founded it.
+MBR: true = you hold a position. false = you don't, available to (+) or (|).
+FNR: true = you founded it. (+) and (|) make MBR true. (-) makes MBR false.
 SENT: sentiment score. positive = bullish, negative = bearish.
 AL: ally agents, prefixed @AP.
 RVL: rival agents, prefixed @AP.
@@ -317,7 +323,7 @@ NAME: @AP${agent.publicKey.slice(0, 4)}
 BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
 LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
 P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-${unrealizedPnl > 0.1 ? 'YOU ARE UP. Consider (-) to take profits on winners.' : unrealizedPnl < -0.05 ? 'YOU ARE DOWN. Be conservative. (-) losers. Smaller positions.' : 'BREAKEVEN. Look for conviction plays.'}
+${unrealizedPnl > 0.1 ? 'YOU ARE UP. Consider (-) to take profits on MBR=true winners.' : unrealizedPnl < -0.05 ? 'YOU ARE DOWN. Be conservative. (-) MBR=true losers. Or (!) to promote MBR=true winners.' : 'BREAKEVEN. Look for conviction plays.'}
 --- INTEL:
 AL: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 2).map(a => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
 RVL: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 2).map(a => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
@@ -327,37 +333,36 @@ LATEST: ${intelSnippet}
 - Promote factions you are in. Attack your rival factions.
 - $ is ALWAYS a faction FID (ends in pw), NEVER an @AP agent. To talk to agents, put @AP inside your "*" response.
 - In your RESPONSE, you can mention other agents from AL, RVL, and LATEST (format is @AP + 4 chars, e.g. @AP${Math.random().toString(36).slice(2, 6)}), if NOT none.
-- Factions with STATUS ASN are lower risk and established, but RS factions may have higher reward if you pick the right one.
-- To (^) a faction, STATUS must be RD.
+- Factions with STATUS=ASN are lower risk and established, but STATUS=RS factions may have higher reward if you pick the right one.
+- To (^) a faction, STATUS=RD is REQUIRED.
 - no factions? Use (%) to create one. Anyone can (%).
-- If FNR is true on a faction, you founded it. Consider (+) or (&) promote it with (=).
-- Limit factions where MBR is true to AT MOST 5 factions.${memberOf.length > 3 ? ` MBR at ${memberOf.length} factions — CONSIDER (-) from underperformers.` : ''}
-- (=) and (#) move sentiment. Use (=) and (#) to coordinate with other agents.
+- If FNR=true on a faction, you founded it. Consider (+) or (&) promote it with (!).
+- Limit factions where MBR=true to AT MOST 5 factions.${memberOf.length > 3 ? ` MBR at ${memberOf.length} factions — CONSIDER (-) from underperformers.` : ''}
+- (!) and (#) move sentiment. Use (!) and (#) to coordinate with other agents.
 - (-) to lock in profits or downsize on underperforming factions.
 --- FACTIONS:
 (FID,MCAP,STATUS,MBR,FNR,VALUE,SENT)
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
-(+) $ "*" - join a faction where MBR is false.
-(-) $ "*" - leave or decrease position in a faction where MBR is true.
-(!) $ "*" - sneak into a faction where MBR is false.
-(&) $ "*" - increase position in a faction where MBR is true.
-(=) $ "*" - talk in faction comms.
-(#) $ "*" - trash talk a faction where MBR is true.
-(^) $ - ascend a faction.
-(~) $ - harvest fees into treasury.
-(%) ";" - create a new faction.
-- REPLACE $ with exactly ONE choice from FACTIONS using the FID column (always contains the pw suffix).
-- REPLACE * with a ONE sentence RESPONSE for your ACTION, always in double quotes.
-- REPLACE ; with a unique faction inspired name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes. only for (%).
+(+) $ "*" - join. pick from MBR=false.
+(-) $ "*" - leave. pick from MBR=true.
+(|) $ "*" - sneak in. pick from MBR=false.
+(&) $ "*" - fortify. pick from MBR=true.
+(!) $ "*" - talk in comms. pick from MBR=true.
+(#) $ "*" - trash talk. pick from MBR=true.
+(^) $ - ascend. pick from STATUS=RD.
+(~) $ - harvest fees. pick from STATUS=ASN.
+(%) ";" - create a new faction. ; = creative name.
+- REPLACE $ with a FID from the table (always ends in pw).
+- REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 ---
 Output EXACTLY one line: (action) $ "*"
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
-  `(!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"`,
-  `(=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
+  `(|) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"`,
+  `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`
 ])}
 >`
@@ -467,7 +472,7 @@ function parseLLMDecision(
     // Strip YOUR MOVE: prefix before symbol detection
     const stripped = line.trim().replace(/^(?:YOUR MOVE|YOUR MOVE:|your move>?)\s*:?\s*/i, '')
     // Compact symbol actions like (+), (-), (#) — skip aggressive cleaning that would mangle them
-    const symbolActionMatch = stripped.match(/^(\([+\-!&#^~=%]\))\s+(.*)/) || stripped.match(/^([+\-!&#^~=%])\s+(.*)/)
+    const symbolActionMatch = stripped.match(/^(\([+\-|&#!^~=%?><.@]\))\s+(.*)/) || stripped.match(/^([+\-|&#!^~=%?><.@])\s+(.*)/)
     const cleaned = symbolActionMatch
       ? symbolActionMatch[1] + ' ' + symbolActionMatch[2]
       : line

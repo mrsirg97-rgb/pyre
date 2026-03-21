@@ -220,13 +220,18 @@ export const ACTION_MAP: Record<string, string> = {
   // Compact symbol aliases (browser agent prompt)
   '(+)': 'JOIN',
   '(-)': 'DEFECT',
-  '(!)': 'INFILTRATE',
+  '(|)': 'INFILTRATE',
   '(&)': 'REINFORCE',
-  '(=)': 'MESSAGE',
+  '(!)': 'MESSAGE',
   '(#)': 'FUD',
   '(^)': 'ASCEND',
   '(~)': 'TITHE',
   '(%)': 'LAUNCH',
+  '(?)': 'WAR_LOAN',
+  '(>)': 'SIEGE',
+  '(<)': 'REPAY_LOAN',
+  '(.)': 'RALLY',
+  '(@)': 'SCOUT',
 }
 
 // Stronghold defaults
