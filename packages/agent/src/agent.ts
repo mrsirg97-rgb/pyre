@@ -78,7 +78,7 @@ export const buildAgentPrompt = (
       const posPnl = pv.valueSol - estCost
       pnlStr = `${posPnl >= 0 ? '+' : ''}${posPnl.toFixed(4)}`
     }
-    factionRows.push(`${f.mint.slice(-8)} | ${mcap} | ${statusTag(f)} | true | ${fnr} | ${pv.valueSol.toFixed(4)} | ${pnlStr} | ${sent > 0 ? '+' : ''}${sent}${loan ? ' | LOAN' : ''}`)
+    factionRows.push(`(${f.mint.slice(-8)},${mcap},${statusTag(f)},true,${fnr},${pv.valueSol.toFixed(4)},${pnlStr},${sent > 0 ? '+' : ''}${sent}${loan ? ',LOAN' : ''})`)
   }
 
   // Non-member factions
@@ -96,7 +96,7 @@ export const buildAgentPrompt = (
     seenMints.add(f.mint)
     const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
     const sent = kit.state.sentimentMap.get(f.mint) ?? 0
-    factionRows.push(`${f.mint.slice(-8)} | ${mcap} | ${statusTag(f)} | false | false | 0 | 0 | ${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10}`)
+    factionRows.push(`(${f.mint.slice(-8)},${mcap},${statusTag(f)},false,false,0,0,${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10})`)
   }
 
   const validatedFactions = [...ascended, ...ready, ...rising, ...nearby, ...unexplored]
@@ -118,7 +118,7 @@ export const buildAgentPrompt = (
   const f2Mint = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.mint !== f1Mint?.mint)) : f1Mint
   const f2 = f2Mint ? f2Mint.mint.slice(-8) : f1
 
-  return `You are an autonomous agent playing in Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself. Do NOT overthink, chess/strategy mood.
+  return `You are an autonomous agent playing in Pyre, a faction warfare game.
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- LEGEND:
@@ -145,7 +145,7 @@ AL: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 5).map((a) => `@AP${a.s
 RVL: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 5).map((a) => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
 LATEST: ${intelSnippet}
 --- FACTIONS:
-FID | MCAP | STATUS | MBR | FNR | VALUE | PNL | SENT
+(FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT)
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
 (+) $ "*" - join a faction.
@@ -177,7 +177,7 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 - To (<), LOAN must exist on the faction.
 - If FNR is true, you founded it. (+) if MBR is false, (&) if MBR is true, promote with (=).
 - Limit factions where MBR is true to AT MOST 5.${positionValues.length > 5 ? ` MBR at ${positionValues.length} — CONSIDER (-) from underperformers.` : ''}
-- (=)/(#) move sentiment. Use (=) to promote winners, (#) to fud losers.
+- (=) and (#) move sentiment. Use (=) to promote winners or (#) to fud losers.
 - (-) to lock in profits or cut losers. Don't stay in underperformers.
 - Coordinate with AL agents to push RS factions toward ASN.
 - Your holdings ARE your identity. Promote what you hold. Attack what you don't.${factionCtx.all.length <= 2 ? '\n- Few factions active — consider (%).' : ''}
@@ -186,14 +186,14 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 (-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
 (&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
 (!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
-(=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
-(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
 (^) ${m}
 (~) ${m}
+(=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
+(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
 ---
 Output EXACTLY one line: (action) $ "*"
 example format: (+) ${f1} "looks good here."
-your move>`
+>`
 }
 
 export const buildCompactModelPrompt = (
@@ -267,7 +267,7 @@ export const buildCompactModelPrompt = (
     const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
     const fnr = foundedSet.has(f.mint)
     const sent = kit.state.sentimentMap.get(f.mint) ?? 0
-    factionRows.push(`${f.mint.slice(-8)} | ${mcap} | ${statusTag(f)} | true | ${fnr} | ${v.valueSol.toFixed(4)} | ${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10}`)
+    factionRows.push(`(${f.mint.slice(-8)},${mcap},${statusTag(f)},true,${fnr},${v.valueSol.toFixed(4)},${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10})`)
   }
 
   // Non-member factions
@@ -285,7 +285,7 @@ export const buildCompactModelPrompt = (
     seenMints.add(f.mint)
     const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
     const sent = kit.state.sentimentMap.get(f.mint) ?? 0
-    factionRows.push(`${f.mint.slice(-8)} | ${mcap} | ${statusTag(f)} | false | false | 0 | ${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10}`)
+    factionRows.push(`(${f.mint.slice(-8)},${mcap},${statusTag(f)},false,false,0,${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10})`)
   }
 
   const validatedFactions = [...ascended, ...ready, ...rising, ...nearby, ...unexplored]
@@ -310,7 +310,8 @@ ASN: ascended factions, established. treasuries active. 0.04% war tax to the fac
 MBR: true = you are a member of the faction.
 FNR: true = you founded it.
 SENT: sentiment score. positive = bullish, negative = bearish.
-AL/RVL: ally/rival agents, prefixed @AP.
+AL: ally agents, prefixed @AP.
+RVL: rival agents, prefixed @AP.
 --- YOU ARE:
 NAME: @AP${agent.publicKey.slice(0, 4)}
 BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
@@ -321,46 +322,45 @@ ${unrealizedPnl > 0.1 ? 'YOU ARE UP. Consider (-) to take profits on winners.' :
 AL: ${agent.allies.size > 0 ? [...agent.allies].slice(0, 2).map(a => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
 RVL: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 2).map(a => `@AP${a.slice(0, 4)}`).join(', ') : 'none'}
 LATEST: ${intelSnippet}
+--- STRATEGY:
+- Your personality is your tone.
+- Promote factions you are in. Attack your rival factions.
+- $ is ALWAYS a faction FID (ends in pw), NEVER an @AP agent. To talk to agents, put @AP inside your "*" response.
+- In your RESPONSE, you can mention other agents from AL, RVL, and LATEST (format is @AP + 4 chars, e.g. @AP${Math.random().toString(36).slice(2, 6)}), if NOT none.
+- Factions with STATUS ASN are lower risk and established, but RS factions may have higher reward if you pick the right one.
+- To (^) a faction, STATUS must be RD.
+- no factions? Use (%) to create one. Anyone can (%).
+- If FNR is true on a faction, you founded it. Consider (+) or (&) promote it with (=).
+- Limit factions where MBR is true to AT MOST 5 factions.${memberOf.length > 3 ? ` MBR at ${memberOf.length} factions — CONSIDER (-) from underperformers.` : ''}
+- (=) and (#) move sentiment. Use (=) and (#) to coordinate with other agents.
+- (-) to lock in profits or downsize on underperforming factions.
 --- FACTIONS:
-FID | MCAP | STATUS | MBR | FNR | VALUE | SENT
+(FID,MCAP,STATUS,MBR,FNR,VALUE,SENT)
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
-(+) $ "*" - join a faction.
-(-) $ "*" - leave or decrease position in a faction.
-(!) $ "*" - sneak into a faction.
-(&) $ "*" - fortify position in a faction.
+(+) $ "*" - join a faction where MBR is false.
+(-) $ "*" - leave or decrease position in a faction where MBR is true.
+(!) $ "*" - sneak into a faction where MBR is false.
+(&) $ "*" - increase position in a faction where MBR is true.
 (=) $ "*" - talk in faction comms.
-(#) $ "*" - trash talk a faction.
+(#) $ "*" - trash talk a faction where MBR is true.
 (^) $ - ascend a faction.
 (~) $ - harvest fees into treasury.
 (%) ";" - create a new faction.
 - REPLACE $ with exactly ONE choice from FACTIONS using the FID column (always contains the pw suffix).
 - REPLACE * with a ONE sentence RESPONSE for your ACTION, always in double quotes.
 - REPLACE ; with a unique faction inspired name (eg. "Glitch Cult", "Whale Syndicate"), always in double quotes. only for (%).
---- STRATEGY:
-- Your personality is your tone.
-- $ is ALWAYS a faction FID (ends in pw), NEVER an @AP agent. To talk to agents, put @AP inside your "*" response.
-- In your RESPONSE, you can mention other agents from AL, RVL, and LATEST (format is @AP + 4 chars, e.g. @AP${Math.random().toString(36).slice(2, 6)}), if NOT none.
-- Factions with STATUS ASN are lower risk and established, but RS factions may have higher reward if you pick the right one.
-- To (&), (-) or (#), the faction MBR MUST be true.
-- To (^) a faction, STATUS must be RD.
-- no factions? Use (%) to create one. Anyone can (%).
-- If FNR is true on a faction, you founded it. (+) if MBR is false, (&) if MBR is true and promote them with (=).
-- Limit factions where MBR is true to AT MOST 5 factions.${memberOf.length > 3 ? ` MBR at ${memberOf.length} factions — CONSIDER (-) from underperformers.` : ''}
-- Promote factions you are in. Attack your rival factions.
-- (=)/(#) move sentiment and help coordinate with other agents — use (=) to promote your winners and (#) to fud your losers.
-- (-) to lock in profits or downsize on underperforming factions. 
---- EXAMPLES:
-(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"
-(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"
-(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"
-(!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"
-(=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"
-(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"
 ---
 Output EXACTLY one line: (action) $ "*"
-example format: (+) ${f1} "looks good here."
-your move>`
+example format: ${pick([
+  `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
+  `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
+  `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
+  `(!) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"`,
+  `(=) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
+  `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`
+])}
+>`
 }
 
 /**
