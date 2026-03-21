@@ -695,7 +695,7 @@ export async function llmDecide(
     kit.intel.getAscendedFactions().catch(() => ({ factions: [] })),
     compact
       ? Promise.resolve({ factions: [], allies: [] as string[] })
-      : kit.intel.getNearbyFactions(agent.publicKey, { depth: compact ? 2 : 4, limit: compact ? 7 : 15 }).catch(() => ({
+      : kit.intel.getNearbyFactions(agent.publicKey, { depth: 2, limit: compact ? 7 : 15 }).catch(() => ({
           factions: [],
           allies: [] as string[],
         })),

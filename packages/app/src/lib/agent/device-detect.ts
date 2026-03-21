@@ -9,21 +9,32 @@ export interface DeviceCapabilities {
   reason: string
 }
 
-// Try Qwen3.5-0.8B first, fall back to Qwen3-0.6B if not available in WebLLM
-const MODEL_IDS_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
-  smol: 'Qwen3.5-0.8B-q4f16_1-MLC',
+// Desktop: Qwen3-0.6B (thinking enabled)
+const DESKTOP_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
+  smol: 'Qwen3-0.6B-q4f16_1-MLC',
 }
-const MODEL_IDS_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
-  smol: 'Qwen3.5-0.8B-q0f32-MLC',
+const DESKTOP_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
+  smol: 'Qwen3-0.6B-q0f32-MLC',
+}
+
+// Mobile: Qwen2.5-0.5B (no thinking, proven on Phantom iOS)
+const MOBILE_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
+  smol: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
+}
+const MOBILE_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
+  smol: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
 }
 
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
-  smol: '~500 MB',
+  smol: '~400 MB',
 }
 
-/** Get the right model ID based on shader-f16 support */
-export function getModelId(tier: Exclude<ModelTier, 'rng'>, hasShaderF16: boolean): string {
-  return hasShaderF16 ? MODEL_IDS_F16[tier] : MODEL_IDS_F32[tier]
+/** Get the right model ID based on device and shader-f16 support */
+export function getModelId(tier: Exclude<ModelTier, 'rng'>, hasShaderF16: boolean, isMobile = false): string {
+  if (isMobile) {
+    return hasShaderF16 ? MOBILE_F16[tier] : MOBILE_F32[tier]
+  }
+  return hasShaderF16 ? DESKTOP_F16[tier] : DESKTOP_F32[tier]
 }
 
 // Ordered from highest to lowest tier
@@ -36,18 +47,6 @@ export function isTierAboveRecommended(tier: ModelTier, recommended: ModelTier):
 
 export async function detectDevice(): Promise<DeviceCapabilities> {
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-
-  // Mobile: RNG only for now (WASM solution coming)
-  if (isMobile) {
-    return {
-      hasWebGPU: false,
-      hasShaderF16: false,
-      isMobile,
-      maxBufferMB: 0,
-      recommendedTier: 'rng',
-      reason: 'Mobile — RNG only',
-    }
-  }
 
   if (!('gpu' in navigator)) {
     return {

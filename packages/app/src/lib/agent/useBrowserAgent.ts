@@ -233,6 +233,7 @@ export function useBrowserAgent(): BrowserAgentHook {
               }
             }
           })(),
+          deviceCaps?.isMobile ?? false,
         )
         llmRef.current = webllmAdapter
 

@@ -45,6 +45,7 @@ export function createWebLLMAdapter(
   hasShaderF16: boolean,
   onStatusChange: (state: WebLLMState) => void,
   onThinking?: (thinking: string) => void,
+  isMobile = false,
 ): LLMAdapter & { init: () => Promise<void>; destroy: () => void } {
   let engine: any = null
   let ready = false
@@ -56,7 +57,7 @@ export function createWebLLMAdapter(
       // Dynamic import — only loaded when user selects a model
       const webllm = await import('@mlc-ai/web-llm')
 
-      const modelId = getModelId(tier, hasShaderF16)
+      const modelId = getModelId(tier, hasShaderF16, isMobile)
 
       console.log(`[pyre] Loading model: ${modelId} (tier: ${tier}, f16: ${hasShaderF16})`)
 
@@ -84,14 +85,17 @@ export function createWebLLMAdapter(
     if (!ready || !engine) return null
 
     try {
-      const messages: { role: string; content: string }[] = [
-        { role: 'system', content: 'FOCUS. Be DECISIVE. Think briefly, then act.' },
-        { role: 'user', content: prompt },
-      ]
+      const messages: { role: string; content: string }[] = []
+      if (isMobile) {
+        messages.push({ role: 'system', content: '/no_think' })
+      } else {
+        messages.push({ role: 'system', content: 'FOCUS. Be DECISIVE. Think briefly, then act.' })
+      }
+      messages.push({ role: 'user', content: prompt })
 
       const stream = await engine.chat.completions.create({
         messages,
-        max_tokens: 2048,
+        max_tokens: isMobile ? 200 : 2048,
         temperature: 0.8,
         stream: true,
       })
