@@ -217,7 +217,17 @@ export function useBrowserAgent(): BrowserAgentHook {
             if (state.status === 'ready') log(`Model ready (${selectedTier})`)
             if (state.status === 'error') log(`Model error: ${state.error}`)
           },
-          (thinking) => log(`thinking: ${thinking}`),
+          (() => {
+            let buf = ''
+            return (delta: string) => {
+              buf += delta
+              // Flush on sentence boundaries for readable streaming
+              if (delta.includes('.') || delta.includes('\n')) {
+                log(`thinking: ${buf.trim()}`)
+                buf = ''
+              }
+            }
+          })(),
         )
         llmRef.current = webllmAdapter
 

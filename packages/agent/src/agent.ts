@@ -259,7 +259,7 @@ export const buildCompactModelPrompt = (
   const f2v = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.mint !== f1v?.mint)) : f1v
   const f2 = f2v ? f2v.mint.slice(-8) : f1
 
-  return `You are an autonomous agent playing in Pyre, a faction warfare game. When thinking, do NOT restate the game rules. Just pick your move and why.
+  return `You are an autonomous agent playing in Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself.
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- INFO:

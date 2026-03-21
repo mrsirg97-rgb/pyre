@@ -84,34 +84,70 @@ export function createWebLLMAdapter(
     if (!ready || !engine) return null
 
     try {
-      const response = await engine.chat.completions.create({
+      const stream = await engine.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 1536,
         temperature: 0.8,
+        stream: true,
       })
 
-      let content = response.choices?.[0]?.message?.content?.trim() ?? null
-      if (!content) return null
+      let full = ''
+      let inThinking = false
+      let thinkingBuffer = ''
+      let actionBuffer = ''
+      let thinkingDone = false
 
-      console.log(`[pyre] LLM raw (${content.length} chars): ${content.slice(0, 200)}`)
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta?.content ?? ''
+        full += delta
 
-      // Strip Qwen3 thinking tags — extract only the output after </think>
-      const thinkEnd = content.indexOf('</think>')
-      if (thinkEnd !== -1) {
-        const thinking = content.slice(0, thinkEnd).replace('<think>', '').trim()
-        content = content.slice(thinkEnd + '</think>'.length).trim()
-        if (thinking) {
-          console.log(`[pyre] thinking: ${thinking}`)
-          onThinking?.(thinking)
+        if (!inThinking && full.includes('<think>')) {
+          inThinking = true
+          thinkingBuffer = full.slice(full.indexOf('<think>') + '<think>'.length)
+          continue
+        }
+
+        if (inThinking && !thinkingDone) {
+          thinkingBuffer += delta
+          const endIdx = thinkingBuffer.indexOf('</think>')
+          if (endIdx !== -1) {
+            // Thinking complete — stream the final thinking text
+            const thinking = thinkingBuffer.slice(0, endIdx).trim()
+            if (thinking) {
+              console.log(`[pyre] thinking: ${thinking}`)
+              onThinking?.(thinking)
+            }
+            actionBuffer = thinkingBuffer.slice(endIdx + '</think>'.length)
+            thinkingDone = true
+          } else if (delta) {
+            // Stream thinking delta — UI appends
+            onThinking?.(delta)
+          }
+          continue
+        }
+
+        if (thinkingDone) {
+          actionBuffer += delta
         }
       }
-      // Thinking never closed (truncated) — still try to extract useful output
-      if (content.startsWith('<think>')) {
+
+      // No thinking tags — treat entire output as the action
+      if (!inThinking) {
+        const content = full.trim()
+        console.log(`[pyre] LLM raw (no thinking): ${content.slice(0, 200)}`)
+        return content || null
+      }
+
+      // Thinking never closed — truncated
+      if (inThinking && !thinkingDone) {
         console.log(`[pyre] thinking truncated (no </think>), returning null`)
+        onThinking?.(thinkingBuffer.trim())
         return null
       }
 
-      return content || null
+      const action = actionBuffer.trim()
+      console.log(`[pyre] LLM action: ${action}`)
+      return action || null
     } catch {
       return null
     }
