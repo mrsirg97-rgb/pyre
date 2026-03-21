@@ -465,7 +465,7 @@ function parseLLMDecision(
     }
 
     // Strip YOUR MOVE: prefix before symbol detection
-    const stripped = line.trim().replace(/^(?:YOUR MOVE|YOUR MOVE:)\s*:?\s*/i, '')
+    const stripped = line.trim().replace(/^(?:YOUR MOVE|YOUR MOVE:|your move>?)\s*:?\s*/i, '')
     // Compact symbol actions like (+), (-), (#) — skip aggressive cleaning that would mangle them
     const symbolActionMatch = stripped.match(/^(\([+\-!&#^~=%]\))\s+(.*)/) || stripped.match(/^([+\-!&#^~=%])\s+(.*)/)
     const cleaned = symbolActionMatch
@@ -473,7 +473,7 @@ function parseLLMDecision(
       : line
       .replace(/\*+/g, '')
       .replace(/^[-•>#\d.)\s]+/, '')
-      .replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT|YOUR MOVE|YOUR MOVE:)\s*:?\s*/i, '')
+      .replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT|YOUR MOVE|YOUR MOVE:|your move>?)\s*:?\s*/i, '')
       .replace(/^ACTION\s+/i, '')
       .replace(
         /^I\s+(?=JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|FUD|REINFORCE|INFILTRATE|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|SCOUT)/i,
