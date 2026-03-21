@@ -259,7 +259,7 @@ export const buildCompactModelPrompt = (
   const f2v = validatedFactions.length > 1 ? pick(validatedFactions.filter(f => f.mint !== f1v?.mint)) : f1v
   const f2 = f2v ? f2v.mint.slice(-8) : f1
 
-  return `You are an autonomous agent playing in Pyre, a faction warfare game.
+  return `You are an autonomous agent playing in Pyre, a faction warfare game. When thinking, do NOT restate the game rules. Just pick your move and why.
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- INFO:
@@ -268,8 +268,8 @@ Faction Lifecycle: launch → rising → ready → vote → ascended
 Rising Factions are new. 0.5% realm tax. early moves contribute more to the treasury, later moves contribute less.
 Ascended Factions are established. 0.04% war tax on every transaction, harvestable into the treasury.
 --- GAMESTATE:
-NAME: ${agent.publicKey.slice(0, 8)} 
-PERSONALITY: ${personalityDesc[agent.personality]}
+NAME: ${agent.publicKey.slice(0, 8)}
+PERSONALITY: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
 LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
 P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
 FOUNDED: ${founded.length > 0 ? founded.join(', ') : 'none'}
@@ -317,7 +317,7 @@ EXAMPLE: FUD ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.
 - If FACTIONS or MEMBER OF are none, consider LAUNCH.
 - If you FOUNDED a faction, JOIN and promote it.
 ---
-ONLY output exactly ONE action line. Do NOT explain step by step. Do not list multiple moves or combine actions. ONE move per turn.
+ONLY output exactly ONE action line. Do not list multiple moves or combine actions. ONE move per turn.
 YOUR MOVE:`
 }
 

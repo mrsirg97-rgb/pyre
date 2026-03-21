@@ -86,7 +86,7 @@ export function createWebLLMAdapter(
     try {
       const response = await engine.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 768,
+        max_tokens: 1536,
         temperature: 0.8,
       })
 
