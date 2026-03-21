@@ -802,7 +802,6 @@ export async function llmDecide(
     holdings,
   )
 
-  console.log(`\n[pyre] === PROMPT ===\n${prompt}\n[pyre] === END PROMPT ===\n`)
   const raw = await llm.generate(prompt)
   if (!raw) {
     log(`[${agent.publicKey.slice(0, 8)}] LLM returned null`)
