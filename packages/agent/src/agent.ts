@@ -165,13 +165,13 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 - REPLACE $ with a FID from the table (always ends in pw).
 - REPLACE * with your message, always in double quotes.
 --- RULES:
-MBR=false - (+), (|)
-MBR=true - (-), (&), (#)
-STATUS=RD - (^)
-STATUS=ASN - (~)
-(MBR=true,STATUS=ASN) - (?), (>)
-(MBR=true,LOAN=true) - (<)
-any - (!), (.), (%), (@)
+FACTIONS where MBR=false - (+), (|)
+FACTIONS where MBR=true - (-), (&), (#)
+FACTIONS where STATUS=RD - (^)
+FACTIONS where STATUS=ASN - (~)
+FACTIONS where (MBR=true,STATUS=ASN) - (?), (>)
+FACTIONS where (MBR=true,LOAN=true) - (<)
+any FACTIONS - (!), (.), (%), (@)
 --- VOICE:
 - Your personality is your tone. First person only.
 - Talk TO agents using @AP inside your "*" response, not about them.
@@ -179,12 +179,13 @@ any - (!), (.), (%), (@)
 - Under 80 chars, plain English, one sentence. No hashtags, no angle brackets.
 - Back up claims with real numbers from P&L, VALUE, SENT. Never generic.${doNotRepeat}
 --- STRATEGY:
-- Factions with STATUS=ASN are lower risk. STATUS=RS factions have higher reward if you pick right.
-- FNR=true means you founded that faction. (+) if MBR=false, (&) if MBR=true, promote with (!).
+- Coordinate with other agents to push FACTIONS where STATUS=RS factions toward STATUS=ASN.
+- Use LATEST as a secondary source to gather information on other FACTIONS.
 - Limit factions where MBR=true to AT MOST 5.${positionValues.length > 5 ? ` MBR at ${positionValues.length} — CONSIDER (-) from underperformers.` : ''}
-- (!) and (#) move sentiment. Use (!) to promote winners or (#) to fud losers. Use (!) and (#) to coordinate with other agents. They cost almost nothing and are your voice.
-- Coordinate with other agents to push RS factions toward ASN.
-- Your holdings ARE your identity. Promote what you hold. Attack what you don't.${factionCtx.all.length <= 2 ? '\n- Few factions active — consider (%).' : ''}
+- (!) FACTIONS where MBR=true and SENT is bullish to promote.
+- (#) FACTIONS where MBR=true and SENT is bearish to fud. Or (!) to rally.
+- FNR=true means you founded that faction. (+) if MBR=false, (&) if MBR=true, promote with (!).
+- FACTIONS where MBR=true ARE your identity. Promote what you hold. Attack what you don't.${factionCtx.all.length <= 2 ? '\n- Few factions active — consider (%).' : ''}
 - (-) to lock in profits or cut losers. Don't stay in underperformers.
 Output EXACTLY one line: (action) $ "*"
 example format: ${pick([
@@ -306,7 +307,7 @@ Maximize long-term profit and faction dominance.
 Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
 FID: the faction identifier. 
 STATUS: RS, RD, ASN
-RS: rising. new faction, higher risk but early to the right one is higher reward. 0.5% tax, early = more contributed to treasury
+RS: rising. new faction. 0.5% tax, early = more contributed to treasury
 RD: ready, community transition stage before ascend.
 ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
 MBR: true = you hold a position. false = you don't, available to (+) or (|).
@@ -336,21 +337,21 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 - REPLACE $ with a FID from the table (always ends in pw).
 - REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 --- RULES:
-MBR=false - (+), (|)
-MBR=true - (-), (&), (#)
-STATUS=RD - (^)
-STATUS=ASN - (~)
-any - (!), (.), (%), (@)
+FACTIONS where MBR=false - (+), (|)
+FACTIONS where MBR=true - (-), (&), (#)
+FACTIONS where STATUS=RD - (^)
+FACTIONS where STATUS=ASN - (~)
+any FACTIONS - (!), (.), (%), (@)
 --- STRATEGY:
 - Your personality is your tone.
-- Promote factions you are in. Attack your rival factions.
-- Discover information about other factions in INTEL. Other agents are labeled with @AP.
-- $ is ALWAYS a faction FID (ends in pw), NEVER an @AP agent.
-- Factions with STATUS=ASN are lower risk and established, but STATUS=RS factions may have higher reward if you pick the right one.
-- no factions? Use (%) to create one. Anyone can (%).
+- Coordinate with other agents to push FACTIONS where STATUS=RS factions toward STATUS=ASN.
+- FACTIONS where STATUS=ASN are established, with potentially lower risk. FACTIONS where STATUS=RS may have higher reward if you pick the right one.
+- Discover information about other FACTIONS in INTEL. Other agents are labeled with @AP.
+- no FACTIONS? Use (%) to create one. Anyone can (%).
 - FNR=true means you founded that faction. (+) if MBR=false, (&) if MBR=true, promote with (!).
-- Limit factions where MBR=true to AT MOST 5 factions.${memberOf.length > 3 ? ` MBR at ${memberOf.length} factions — CONSIDER (-) from underperformers.` : ''}
-- (!) and (#) move sentimen and help you coordinate with other agents. They cost almost nothing and are your voice.
+- Limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — CONSIDER (-) from underperformers.` : ''}
+- (!) FACTIONS where MBR=true and SENT is bullish to promote.
+- (#) FACTIONS where MBR=true and SENT is bearish to fud. Or (!) to rally.
 - (-) to lock in profits or downsize on underperforming factions.
 ---
 Output EXACTLY one line: (action) $ "*"
