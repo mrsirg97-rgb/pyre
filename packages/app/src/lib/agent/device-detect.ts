@@ -9,16 +9,16 @@ export interface DeviceCapabilities {
   reason: string
 }
 
-// Qwen3-0.6B — single model, thinking controlled via /no_think
+// Try Qwen3.5-0.8B first, fall back to Qwen3-0.6B if not available in WebLLM
 const MODEL_IDS_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
-  smol: 'Qwen3-0.6B-q4f16_1-MLC',
+  smol: 'Qwen3.5-0.8B-q4f16_1-MLC',
 }
 const MODEL_IDS_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
-  smol: 'Qwen3-0.6B-q0f32-MLC',
+  smol: 'Qwen3.5-0.8B-q0f32-MLC',
 }
 
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
-  smol: '~400 MB',
+  smol: '~500 MB',
 }
 
 /** Get the right model ID based on shader-f16 support */

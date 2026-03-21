@@ -197,7 +197,7 @@ async function fund() {
 }
 
 async function swarm() {
-  const keypairs = loadKeys()
+  const keypairs = loadKeys().slice(0, AGENT_COUNT)
   if (keypairs.length === 0) {
     console.log('No keys found. Run `pnpm run keygen` first.')
     process.exit(1)
