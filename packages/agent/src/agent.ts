@@ -425,7 +425,7 @@ function parseLLMDecision(
     const cleaned = line
       .replace(/\*+/g, '')
       .replace(/^[-•>#\d.)\s]+/, '')
-      .replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT)\s*:?\s*/i, '')
+      .replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT|YOUR MOVE|YOUR MOVE:)\s*:?\s*/i, '')
       .replace(/^ACTION\s+/i, '')
       .replace(
         /^I\s+(?=JOIN|DEFECT|RALLY|LAUNCH|MESSAGE|FUD|REINFORCE|INFILTRATE|WAR_LOAN|REPAY_LOAN|SIEGE|ASCEND|RAZE|TITHE|SCOUT)/i,
