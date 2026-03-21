@@ -1,4 +1,4 @@
-export type ModelTier = '3b' | 'smol' | 'rng'
+export type ModelTier = 'smol' | 'rng'
 
 export interface DeviceCapabilities {
   hasWebGPU: boolean
@@ -9,59 +9,45 @@ export interface DeviceCapabilities {
   reason: string
 }
 
-// Desktop: Qwen3 (thinking enabled — great quality)
-const DESKTOP_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
-  '3b': 'Qwen3-1.7B-q4f16_1-MLC',
+// Qwen3-0.6B — single model, thinking controlled via /no_think
+const MODEL_IDS_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
   smol: 'Qwen3-0.6B-q4f16_1-MLC',
 }
-const DESKTOP_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
-  '3b': 'Qwen3-1.7B-q0f32-MLC',
+const MODEL_IDS_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
   smol: 'Qwen3-0.6B-q0f32-MLC',
 }
 
-// Mobile: Qwen2.5 (no thinking — faster, lighter, proven to work)
-const MOBILE_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
-  '3b': 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
-  smol: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
-}
-const MOBILE_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
-  '3b': 'Qwen2.5-1.5B-Instruct-q0f32-MLC',
-  smol: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
-}
-
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
-  '3b': '~1.0 GB',
   smol: '~400 MB',
 }
 
-/** Get the right model ID based on device and shader-f16 support */
-export function getModelId(tier: Exclude<ModelTier, 'rng'>, hasShaderF16: boolean, isMobile = false): string {
-  if (isMobile) {
-    return hasShaderF16 ? MOBILE_F16[tier] : MOBILE_F32[tier]
-  }
-  return hasShaderF16 ? DESKTOP_F16[tier] : DESKTOP_F32[tier]
+/** Get the right model ID based on shader-f16 support */
+export function getModelId(tier: Exclude<ModelTier, 'rng'>, hasShaderF16: boolean): string {
+  return hasShaderF16 ? MODEL_IDS_F16[tier] : MODEL_IDS_F32[tier]
 }
 
 // Ordered from highest to lowest tier
-const TIER_ORDER: ModelTier[] = ['3b', 'smol', 'rng']
+const TIER_ORDER: ModelTier[] = ['smol', 'rng']
 
 /** Returns true if `tier` requires more capability than `recommended` */
 export function isTierAboveRecommended(tier: ModelTier, recommended: ModelTier): boolean {
   return TIER_ORDER.indexOf(tier) < TIER_ORDER.indexOf(recommended)
 }
 
-/** Detect if running inside an in-app browser (WKWebView on iOS, WebView on Android) */
-function isInAppBrowser(): boolean {
-  const ua = navigator.userAgent
-  // Phantom, MetaMask, and other wallet in-app browsers use WKWebView/WebView
-  // WKWebView doesn't support WebGPU until iOS 26
-  if (/iPhone|iPad|iPod/i.test(ua) && !/Safari\//i.test(ua)) return true
-  if (/Android/i.test(ua) && /wv\b/i.test(ua)) return true
-  return false
-}
-
 export async function detectDevice(): Promise<DeviceCapabilities> {
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
+  // Mobile: RNG only for now (WASM solution coming)
+  if (isMobile) {
+    return {
+      hasWebGPU: false,
+      hasShaderF16: false,
+      isMobile,
+      maxBufferMB: 0,
+      recommendedTier: 'rng',
+      reason: 'Mobile — RNG only',
+    }
+  }
 
   if (!('gpu' in navigator)) {
     return {
@@ -89,34 +75,14 @@ export async function detectDevice(): Promise<DeviceCapabilities> {
     }
 
     const maxBuffer = adapter.limits.maxBufferSize ?? 0
-    const maxStorageBinding = adapter.limits.maxStorageBufferBindingSize ?? 0
     const maxBufferMB = Math.round(maxBuffer / (1024 * 1024))
     const hasShaderF16 = adapter.features.has('shader-f16')
     const MB = 1024 * 1024
 
     const base = { hasWebGPU: true, hasShaderF16, isMobile, maxBufferMB }
 
-    if (isMobile) {
-      // Qwen's 151K vocab creates buffers >128MB, so check maxStorageBufferBindingSize
-      if (maxBuffer >= 2048 * MB && maxStorageBinding >= 256 * MB) {
-        return { ...base, recommendedTier: '3b', reason: 'Mobile with capable GPU' }
-      }
-      if (maxBuffer >= 256 * MB) {
-        return {
-          ...base,
-          recommendedTier: 'smol',
-          reason: `Mobile with WebGPU${hasShaderF16 ? '' : ' (no f16)'}`,
-        }
-      }
-      return { ...base, recommendedTier: 'rng', reason: 'Mobile GPU too limited' }
-    }
-
-    if (maxBuffer >= 2 * 1024 * MB) {
-      return { ...base, recommendedTier: '3b', reason: 'Desktop with capable GPU' }
-    }
-
     if (maxBuffer >= 256 * MB) {
-      return { ...base, recommendedTier: 'smol', reason: 'Desktop with very limited VRAM' }
+      return { ...base, recommendedTier: 'smol', reason: 'Desktop with WebGPU' }
     }
 
     return { ...base, recommendedTier: 'rng', reason: 'GPU memory too limited' }
