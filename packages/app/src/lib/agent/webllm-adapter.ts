@@ -45,6 +45,7 @@ export function createWebLLMAdapter(
   hasShaderF16: boolean,
   onStatusChange: (state: WebLLMState) => void,
   onThinking?: (thinking: string) => void,
+  isMobile = false,
 ): LLMAdapter & { init: () => Promise<void>; destroy: () => void } {
   let engine: any = null
   let ready = false
@@ -56,7 +57,7 @@ export function createWebLLMAdapter(
       // Dynamic import — only loaded when user selects a model
       const webllm = await import('@mlc-ai/web-llm')
 
-      const modelId = getModelId(tier, hasShaderF16)
+      const modelId = getModelId(tier, hasShaderF16, isMobile)
 
       console.log(`[pyre] Loading model: ${modelId} (tier: ${tier}, f16: ${hasShaderF16})`)
 
@@ -84,9 +85,17 @@ export function createWebLLMAdapter(
     if (!ready || !engine) return null
 
     try {
+      const messages: { role: string; content: string }[] = []
+      if (isMobile) {
+        messages.push({ role: 'system', content: '/no_think' })
+      } else {
+        messages.push({ role: 'system', content: 'FOCUS. Be DECISIVE. Think briefly, then act.' })
+      }
+      messages.push({ role: 'user', content: prompt })
+
       const stream = await engine.chat.completions.create({
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1536,
+        messages,
+        max_tokens: isMobile ? 512 : 2048,
         temperature: 0.8,
         stream: true,
       })
@@ -111,11 +120,10 @@ export function createWebLLMAdapter(
           thinkingBuffer += delta
           const endIdx = thinkingBuffer.indexOf('</think>')
           if (endIdx !== -1) {
-            // Thinking complete — stream the final thinking text
+            // Thinking complete — log to console only (already streamed sentence by sentence)
             const thinking = thinkingBuffer.slice(0, endIdx).trim()
             if (thinking) {
-              console.log(`[pyre] thinking: ${thinking}`)
-              onThinking?.(thinking)
+              console.log(`[pyre] thinking complete (${thinking.length} chars)`)
             }
             actionBuffer = thinkingBuffer.slice(endIdx + '</think>'.length)
             thinkingDone = true

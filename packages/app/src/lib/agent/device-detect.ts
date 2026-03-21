@@ -9,15 +9,24 @@ export interface DeviceCapabilities {
   reason: string
 }
 
-// WebLLM model IDs — f16 variants are faster, f32 variants work without shader-f16
-const MODEL_IDS_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
+// Desktop: Qwen3 (thinking enabled — great quality)
+const DESKTOP_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': 'Qwen3-1.7B-q4f16_1-MLC',
   smol: 'Qwen3-0.6B-q4f16_1-MLC',
 }
-
-const MODEL_IDS_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
+const DESKTOP_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
   '3b': 'Qwen3-1.7B-q0f32-MLC',
   smol: 'Qwen3-0.6B-q0f32-MLC',
+}
+
+// Mobile: Qwen2.5 (no thinking — faster, lighter, proven to work)
+const MOBILE_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
+  '3b': 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+  smol: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
+}
+const MOBILE_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
+  '3b': 'Qwen2.5-1.5B-Instruct-q0f32-MLC',
+  smol: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
 }
 
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
@@ -25,9 +34,12 @@ export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
   smol: '~400 MB',
 }
 
-/** Get the right model ID based on device shader-f16 support */
-export function getModelId(tier: Exclude<ModelTier, 'rng'>, hasShaderF16: boolean): string {
-  return hasShaderF16 ? MODEL_IDS_F16[tier] : MODEL_IDS_F32[tier]
+/** Get the right model ID based on device and shader-f16 support */
+export function getModelId(tier: Exclude<ModelTier, 'rng'>, hasShaderF16: boolean, isMobile = false): string {
+  if (isMobile) {
+    return hasShaderF16 ? MOBILE_F16[tier] : MOBILE_F32[tier]
+  }
+  return hasShaderF16 ? DESKTOP_F16[tier] : DESKTOP_F32[tier]
 }
 
 // Ordered from highest to lowest tier

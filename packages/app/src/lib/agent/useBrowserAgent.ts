@@ -75,10 +75,15 @@ export function useBrowserAgent(): BrowserAgentHook {
 
   // Detect device capabilities on mount
   useEffect(() => {
-    detectDevice().then((caps) => {
-      setDeviceCaps(caps)
-      setModelTier(caps.recommendedTier)
-    })
+    detectDevice()
+      .then((caps) => {
+        setDeviceCaps(caps)
+        setModelTier(caps.recommendedTier)
+      })
+      .catch(() => {
+        // WebGPU probe crashed — force RNG so agent still works
+        setModelTier('rng')
+      })
   }, [])
 
   // Check for existing controller on mount
@@ -228,19 +233,16 @@ export function useBrowserAgent(): BrowserAgentHook {
               }
             }
           })(),
+          deviceCaps?.isMobile ?? false,
         )
         llmRef.current = webllmAdapter
 
-        webllmAdapter
-          .init()
-          .then(() => {
-            llm = webllmAdapter
-          })
-          .catch(() => {
-            log('Model failed — agent continues with RNG.')
-          })
-
+        // Start with RNG — agent uses webllmAdapter which returns null until ready
         llm = webllmAdapter
+
+        webllmAdapter.init().catch(() => {
+          log('Model failed — agent continues with RNG.')
+        })
       }
 
       // Load saved state
