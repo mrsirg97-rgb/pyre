@@ -491,7 +491,7 @@ async function swarm() {
             const status = result.success ? 'OK' : `FAIL: ${result.error}`
             const brain = result.usedLLM ? 'LLM' : 'RNG'
             const msg = result.message ? ` "${result.message}"` : ''
-            log(pubkey.slice(0, 8), `[${brain}] ${result.action.toUpperCase()} ${result.faction?.slice(0, 8) ?? ''}${msg} — ${status}`)
+            log(pubkey.slice(0, 8), `[${brain}] ${result.action.toUpperCase()} ${result.faction?.slice(-8) ?? ''}${msg} — ${status}`)
 
             if (result.success) {
               consecutiveFailures.set(pubkey, 0)
