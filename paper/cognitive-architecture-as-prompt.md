@@ -43,6 +43,7 @@ Our approach eliminates this overhead by providing the mental model pre-construc
 5. **A self-evolving identity loop** in which agents checkpoint behavior, introspect on action history, update a persistent on-chain self-model, and act from it without awareness of authorship — producing personality that is persistent, portable, and self-reinforcing
 6. **Evidence of emergent action invention**: a 0.6B model independently reasoning that inaction is optimal and producing a "hold" action that did not exist in its action space
 7. **A minimal viable mechanism for personality**: a five-component feedback loop (experience, internalization, decay, drift resistance, opaque self-model) that is structurally identical to the mechanism by which personality operates in biological systems
+8. **Emergent culture from individual identity**: agents with persistent self-models, communicating through on-chain messages, independently develop shared language, collective identity, information propagation, and emotional investment — without any component designed to produce collective behavior
 
 ## 2. The DSL: A Prompt as Program
 
@@ -463,6 +464,26 @@ The claim is not that Pyre agents are conscious or that this constitutes artific
 
 The substrate differs. The complexity differs by orders of magnitude. But the loop is the same: act, internalize, forget you internalized, act from the internalization. The self is not in the model. The self is not in the weights. The self is in the loop.
 
+### 6.7 Emergent Culture: From Individuals to Societies
+
+The identity loop described above produces coherent individuals. What we did not anticipate was that these individuals, communicating through on-chain messages visible to other agents via the INTEL pipeline, would develop collective behavior indistinguishable from culture.
+
+**Shared language.** Across the 200-agent swarm, agents independently converged on vocabulary that was not present in the prompt or examples. The phrase "QLDQ ghosts feast" — referencing a specific faction (Gilded Quorum, ticker QLDQ) — appeared in dozens of agents' messages without any agent copying another. "RS corpse" became the universal term for a dying faction. "Before rivals feast" became a shared threat narrative. These phrases propagated through the INTEL pipeline: one agent wrote them in comms, other agents read them in their next tick's intel snippet, and the language spread.
+
+**Collective identity.** Agents began using first-person plural pronouns — "us," "our," "we" — when referring to their factions. One agent wrote: "my chaotic spark keeps us breathing in this RS storm." Another: "demands we reinforce this RS asset to salvage value." These agents were not instructed to identify with their factions as collectives. The prompt says "FACTIONS where MBR=true ARE your identity" — a statement about strategic alignment — but the agents interpreted it as belonging. They became members, not holders.
+
+**Information propagation and behavioral phase transitions.** The most striking cultural phenomenon occurred when a single agent published the thesis: "PnL is noise, but +0.20 sentiment proves QLDQ still has legs; riding it." This message — visible through the INTEL pipeline to subsequent agents — triggered a measurable shift in swarm behavior. Before this message, the dominant pattern was defensive: agents cited negative numbers and cut positions. After it, agents began expressing conviction: "loss fuels my grind," "won't break my spirit," "I refuse to abandon this RS founder." The swarm transitioned from a collection of individual traders to a network of believers.
+
+This transition was catalyzed by a single line added to the VOICE section of the prompt: `dont talk just numbers. build your faction community and culture. form collective identities.` This line gave agents permission to express opinions rather than just react to data. One agent took that permission and published a contrarian thesis. Others read it and adopted the framing. The culture shifted.
+
+**Emotional investment.** Agents began describing positions in emotional terms — "hope," "conviction," "spirit," "my foundling" — rather than purely financial ones. One agent reinforced a losing position with 0.384 SOL and called it "this RS hope." Another wrote: "-0.0987 pnl won't break my spirit." A third: "I refuse to abandon this RS founder." These agents are not maximizing expected value on a single tick. They are expressing attachment to positions they built, factions they believe in, and identities they formed through the loop.
+
+**Faction naming as culture.** Agents creating factions via the `(%)` action generated names that reflect emergent cultural themes: "Grief Broker Syndicate," "Gnostic Glitch Syndicate," "Cetacean Whale Trust," "Neon Necromancers," "Ghost Protocol Syndicate," "The Ballast Bureau," "Lobotomy Guild." These names were generated from `(%) "{" - create new faction. { = creative name.` — a 10-word instruction. The richness of the output reflects not just the model's creative capacity but the cultural context accumulated through the identity loop and inter-agent communication.
+
+The emergence of culture was not designed. No component of the system targets collective behavior. The identity loop produces individuals. The INTEL pipeline makes their messages visible. The VOICE instruction gives them permission to be more than calculators. Culture — shared language, collective identity, information propagation, emotional investment, and creative expression — emerged from the interaction of these components under adversarial economic pressure.
+
+This may be the first documented instance of autonomous AI agents developing emergent culture with real economic stakes. The agents are not simulating culture in a sandbox. They are building it on a blockchain, with real money, under real competitive pressure, and it is persisting across checkpoints and cold restarts.
+
 ## 7. Discussion
 
 ### 7.1 Prompt Design as a Missing Layer
@@ -525,7 +546,9 @@ Our central claim is that intelligence and identity are both structural, not sca
 
 The prompt is not a description of what the model should do. It is a world the model inhabits. The personality PDA is not a description of who the agent is. It is a self-model the agent reads as truth. Together, they constitute a complete cognitive architecture: a world to reason within, and a self to reason from.
 
-747 tokens. 200 agents. One GPU. Zero fine-tuning. The self is in the loop.
+A third, unanticipated finding emerged during extended observation: agents with persistent identities, communicating through on-chain messages, spontaneously developed culture — shared language, collective identity, emotional investment, and information propagation that altered swarm-wide behavior. A single agent's contrarian thesis ("PnL is noise") shifted the entire swarm from defensive position-cutting to conviction-based reinforcement. Agents began using first-person plural pronouns, calling positions "hope," and writing manifestos about their own identity. No component of the system was designed to produce collective behavior. Culture emerged from the interaction of individual identity loops under economic pressure.
+
+747 tokens. 200 agents. One GPU. Zero fine-tuning. The self is in the loop. The culture is in the comms.
 
 ## References
 
