@@ -99,7 +99,7 @@ function buildClassifyPrompt(weights: number[], memos: string[]): string {
       ? `\nThis agent's last ${recentMemos.length} messages (oldest first):\n${recentMemos.map((m, i) => `  ${i + 1}. "${m}"`).join('\n')}`
       : '\nNo messages from this agent.'
 
-  return `Classify this Pyre agent into one of 5 personality types. Consider both action numbers and message tone.
+  return `Classify this Pyre agent into one of 5 personality types. Consider action numbers and message tone if available. If no messages, classify from action distribution only.
 
 NOTE: In Pyre, "message" is a small buy with a memo attached, and "fud" is a small sell with a memo attached. Both involve real token movement on-chain — they are NOT just chat.
 

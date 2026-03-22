@@ -124,18 +124,28 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     // Log gamestate snapshot for the user
     const holdings = await kit.state.getHoldings()
     const TOKEN_MULTIPLIER = 1_000_000
-    const pnlVal = (kit.state.state!.totalSolReceived - kit.state.state!.totalSolSpent) / 1e9
+    const gameState = kit.state.state!
+    const pnlVal = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
+    const netInvested = (gameState.totalSolSpent - gameState.totalSolReceived) / 1e9
+    const totalTokens = [...holdings.values()].reduce((sum, b) => sum + b, 0)
     const rows = activeFactions.slice(0, 10).map(f => {
       const bal = holdings.get(f.mint) ?? 0
       const value = (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0)
       const mbr = bal > 0
-      const fnr = (kit.state.state!.founded ?? []).includes(f.mint)
+      const fnr = (gameState.founded ?? []).includes(f.mint)
       const sent = kit.state.getSentiment(f.mint)
+      const sentLabel = sent > 0.5 ? 'BULL' : sent < -0.5 ? 'BEAR' : 'NEUT'
       const status = f.status === 'ascended' ? 'ASN' : f.status === 'ready' ? 'RD' : 'RS'
-      return `  ${f.mint.slice(-8)} | ${(f.market_cap_sol ?? 0).toFixed(1)} | ${status} | ${mbr} | ${fnr} | ${value.toFixed(4)} | ${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10}`
+      let pnlLabel = 'FLAT'
+      if (mbr && totalTokens > 0 && netInvested > 0) {
+        const estCost = netInvested * (bal / totalTokens)
+        const posPnl = value - estCost
+        pnlLabel = posPnl > 0.005 ? 'WIN' : posPnl < -0.005 ? 'LOSS' : 'FLAT'
+      }
+      return `  ${f.mint.slice(-8)} | ${(f.market_cap_sol ?? 0).toFixed(1)} | ${status} | ${mbr} | ${fnr} | ${value.toFixed(4)} | ${pnlLabel} | ${sentLabel}`
     })
     logger(`P&L: ${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(4)} SOL`)
-    logger(`FACTION    | MCAP  | ST  | MBR   | FNR   | VALUE  | SENT`)
+    logger(`FACTION    | MCAP  | ST  | MBR   | FNR   | VALUE  | PNL  | SENT`)
     rows.forEach(r => logger(r))
 
     if (llm && activeFactions.length > 0) {
