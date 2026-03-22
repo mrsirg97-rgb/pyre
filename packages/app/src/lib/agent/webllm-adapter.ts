@@ -95,7 +95,7 @@ export function createWebLLMAdapter(
 
       const stream = await engine.chat.completions.create({
         messages,
-        max_tokens: isMobile ? 200 : 2048,
+        max_tokens: isMobile ? 256 : 1024,
         temperature: 0.8,
         stream: true,
       })
