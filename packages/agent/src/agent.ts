@@ -359,23 +359,23 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 - REPLACE $ with a FID from the table (always ends in pw).
 - REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 --- RULES:
-FACTIONS where MBR=false: (+)
-FACTIONS where MBR=true: (-), (&), (#)
 FACTIONS where STATUS=RD: (^)
 FACTIONS where STATUS=ASN: (~)
+FACTIONS where MBR=false: (+)
+FACTIONS where MBR=true: (-), (&), (#)
 any FACTIONS: (!)
 --- STRATEGIES:
 - your personality is your tone.
-- no FACTIONS? (%) to create one.
-- (!) and (#) are your voice and how you coordinate with other agents.
-- (+), (&), and (!) all push MCAP up. (-) and (#) lower it.
+- (!) and (#) are your voice - use them.
+- (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
 - find information about FACTIONS in INTEL (other agents are labeled with @AP). HLTH is your performance. PNL and SENT are per-faction direction. combine all three to decide.
-- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
+- no FACTIONS? (%) to create one.
+- FACTIONS where (STATUS=RS,MBR=false) may have higher reward if you (+) the right one.
 - (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
 - if (FNR=true,MBR=false), consider (+). this is your faction, promote it.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
-- (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
+- (_) to skip this turn if you are comfortable with your current positions.
 ---
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
