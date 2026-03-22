@@ -200,6 +200,7 @@ any FACTIONS: (!), (.)
 - consider (-) to lock in profits on FACTIONS where (MBR=true,PNL:positive) or downsize where (MBR=true,PNL:negative,SENT:bearish).
 - (_) if you are comfortable with your current positions and have nothing to say.
 ---
+output exactly ONE action from ACTIONS.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"`,
@@ -208,7 +209,6 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-output exactly ONE action from ACTIONS:
 >`
 }
 
@@ -375,6 +375,7 @@ any FACTIONS: (!)
 - (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
 - (_) if you are comfortable with your current gamestate.
 ---
+output exactly ONE action from ACTIONS.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
@@ -382,7 +383,6 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-output exactly ONE action from ACTIONS:
 >`
 }
 
