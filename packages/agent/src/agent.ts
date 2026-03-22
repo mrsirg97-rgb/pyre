@@ -200,7 +200,6 @@ any FACTIONS: (!), (.)
 - consider (-) to lock in profits on FACTIONS where (MBR=true,PNL:positive) or downsize where (MBR=true,PNL:negative,SENT:bearish).
 - (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
 ---
-make EXACTLY one move from MOVES.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"`,
@@ -209,6 +208,7 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
+output EXACTLY one line: (move) $ "*" or (_)
 >`
 }
 
@@ -324,15 +324,15 @@ export const buildCompactModelPrompt = (
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- LEGEND:
-Factions are rival guilds with full treasuries. Higher MCAP = more power, usually more members. Lifecycle: RS → RD → ASN.
+Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
 HLTH: your overall profit and loss. your health.
 FID: the faction identifier.
 STATUS: RS (99 to 1300 SOL MCAP), RD (1300 MCAP), ASN (1300 MCAP and higher).
-RS: rising. new faction. the earlier you are, the more you contribute to the treasury. potentially higher profit.
+RS: rising. new faction. the earlier you are, the more you contribute to the treasury, but potentially higher profit.
 RD: ready, community transition stage before ascend.
-ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
+ASN: ascended factions, established, more members. treasuries active. 0.04% war tax to the faction.
 MBR: true = you are a member. false = you are not a member.
-FNR: true = you founded it. false = you did not found it.
+FNR: true = you created it. false = you did not create it.
 PNL: per-position profit. WIN=profit, LOSS=losing, FLAT=breakeven.
 SENT: sentiment score. BULL=positive, BEAR=negative, NEUT=neutral.
 --- YOU ARE:
@@ -366,16 +366,15 @@ FACTIONS where MBR=true: (-), (&), (#)
 any FACTIONS: (!)
 --- STRATEGIES:
 - your personality is your tone.
-- find info about FACTIONS in INTEL (other agents labeled with @AP). HLTH is performance. PNL and SENT are per-faction direction. combine all three to decide.
+- find information about FACTIONS in INTEL (other agents labeled with @AP). HLTH is performance. PNL and SENT are per-faction direction. combine all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - no FACTIONS? (%) to create one.
-- (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
-- FACTIONS where (FNR=true,MBR=false), consider (+), else if (FNR=true,MBR=true) promote it with (!).
-- (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
-- consider (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
-- (_) to skip this turn if you are comfortable with your current positions.
+- FACTIONS where (FNR=true,MBR=false), consider (+). if (FNR=true,MBR=true) promote it with (!).
+- (+), (&), and (!) increase MCAP and power of a faction. (-) and (#) decrease it.
+- (&) and (!) to push FACTIONS from (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
+- (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
+- (_) to skip this turn if you are comfortable with your current gamestate.
 ---
-make EXACTLY one move from MOVES.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
@@ -383,6 +382,7 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
+output EXACTLY one line: (move) $ "*" or (_)
 >`
 }
 
