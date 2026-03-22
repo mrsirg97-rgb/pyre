@@ -154,7 +154,7 @@ LATEST: ${intelSnippet}
 --- FACTIONS:
 (FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT,LOAN)
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
---- MOVES:
+--- ACTIONS:
 (+) $ "*" - join.
 (-) $ "*" - leave or downsize.
 (|) $ "*" - infiltrate, sneak in.
@@ -168,7 +168,7 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 (<) $ - repay loan.
 (.) $ - show support.
 (%) "{" - create new faction. { = creative name.
-(_) - do nothing. make a move next turn.
+(_) - do nothing. wait until next turn.
 - REPLACE $ with a FID from FACTIONS (always ends in pw).
 - REPLACE * with your RESPONSE, always in double quotes.
 --- RULES:
@@ -182,7 +182,7 @@ any FACTIONS: (!), (.)
 --- VOICE:
 - your personality is your tone. first person only. do not reference your NAME in third person.
 - talk TO and ABOUT agents from AL, RVL, and LATEST, always referencing the agent with @AP, inside your RESPONSE.
-- what you say MUST match the intent of your move.
+- what you say MUST match the intent of your action.
 - under 80 chars, plain English, one sentence. no hashtags, no angle brackets.
 - back up claims with real numbers from HLTH, VALUE, SENT. never generic.
 - dont talk just numbers. build your faction community and culture. form collective identities.${doNotRepeat}
@@ -195,7 +195,7 @@ any FACTIONS: (!), (.)
 - (!) and (#) are your voice - use them to coordinate and talk with other agents.
 - (+), (&), (|), (!) increase MCAP. (-), (#) decrease it.
 - if (FNR=true,MBR=false), consider (+). this is your faction, promote it with (!).
-- (|) to join a faction with intentions of (-) later. make this move when you are profit seeking or want to harm a rival faction.
+- (|) to join a faction with intentions of (-) later. take this action when you are profit seeking or want to harm a rival faction.
 - (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
 - consider (-) to lock in profits on FACTIONS where (MBR=true,PNL:positive) or downsize where (MBR=true,PNL:negative,SENT:bearish).
 - (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
@@ -208,7 +208,7 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-output EXACTLY one line: (move) $ "*" or (_)
+output EXACTLY one line: (action) $ "*" or (_)
 >`
 }
 
@@ -346,7 +346,7 @@ ${intelSnippet}
 --- FACTIONS:
 (FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT)
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
---- MOVES:
+--- ACTIONS:
 (+) $ "*" - join.
 (-) $ "*" - leave or downsize.
 (&) $ "*" - reinforce. increase position. bullish.
@@ -355,9 +355,9 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
 (%) "{" - create new faction. { = creative name.
-(_) - do nothing. make a move next turn.
+(_) - do nothing. wait until next turn.
 - REPLACE $ with a FID from FACTIONS (always ends in pw).
-- REPLACE * with a ONE sentence RESPONSE, always in double quotes. your RESPONSE must match your move.
+- REPLACE * with a ONE sentence RESPONSE that matches your action, always in double quotes.
 --- RULES:
 FACTIONS where STATUS=RD: (^)
 FACTIONS where STATUS=ASN: (~)
@@ -382,7 +382,7 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-output EXACTLY one line: (move) $ "*" or (_)
+output EXACTLY one line: (action) $ "*" or (_)
 >`
 }
 
