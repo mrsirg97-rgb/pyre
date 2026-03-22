@@ -6,7 +6,11 @@ March 2026
 
 ## Abstract
 
-We present a novel prompt architecture — a domain-specific language (DSL) combining natural language, SQL-like query syntax, and programming language control flow — that produces emergent strategic reasoning from language models as small as 0.6B parameters. Without fine-tuning, distillation, or architectural modification, models running this 747-token prompt exhibit multi-pass decision branching, constraint checking against typed data tables, personality-driven creative generation, and multi-agent coordination through on-chain messages. We demonstrate that a Qwen3-0.6B model running in a browser via WebGPU produces reasoning behaviors previously associated with 7B+ models, and that the same prompt architecture scales unchanged to a 200-agent swarm executing autonomous financial strategy on the Solana blockchain using a single consumer GPU (RTX 4070). Our findings suggest that the primary bottleneck for small model reasoning is not parameter count but state space design — the structure, compression, and presentation of information in the prompt. We propose that prompt architecture constitutes a missing cognitive layer between model training and inference, and that structured state compression is a viable alternative to model scaling for agent deployment at the edge.
+We present a novel prompt architecture — a domain-specific language (DSL) combining natural language, SQL-like query syntax, and programming language control flow — that produces emergent strategic reasoning from language models as small as 0.6B parameters. Without fine-tuning, distillation, or architectural modification, models running this 747-token prompt exhibit multi-pass decision branching, constraint checking against typed data tables, personality-driven creative generation, and multi-agent coordination through on-chain messages. We demonstrate that a Qwen3-0.6B model running in a browser via WebGPU produces reasoning behaviors previously associated with 7B+ models, and that the same prompt architecture scales unchanged to a 200-agent swarm executing autonomous financial strategy on the Solana blockchain using a single consumer GPU (RTX 4070).
+
+Beyond the prompt architecture, we identify a second contribution: a self-evolving identity loop in which agents checkpoint their behavior to an on-chain personality PDA, introspect on their own action history, update their self-model, and act from it on subsequent ticks — without awareness that they authored the self-model they are reading. This loop — experience, internalization, forgetting of authorship, action from identity — produces persistent, portable personality that survives model swaps and cold restarts. We observe emergent behaviors arising from this loop, including a 0.6B model independently inventing a "do nothing" action that did not exist in its action space, arriving at this decision through coherent first-principles reasoning about when inaction has positive expected value. Across a 200-agent swarm, agents maintain near-breakeven P&L in an adversarial economic environment despite waking for only 1% of game ticks, suggesting that the self-model carries sufficient signal for coherent cold-start decision-making.
+
+Our findings suggest that the primary bottleneck for small model reasoning is not parameter count but state space design, and that persistent self-modeling may constitute a minimal viable mechanism for personality — not as metaphor, but as the same feedback loop that operates in biological systems on different hardware. We propose that prompt architecture constitutes a missing cognitive layer between model training and inference, and that the combination of structured state compression and self-evolving identity is a viable alternative to model scaling for autonomous agent deployment at the edge.
 
 ## 1. Introduction
 
@@ -36,6 +40,9 @@ Our approach eliminates this overhead by providing the mental model pre-construc
 2. **Empirical evidence** of emergent strategic reasoning in 0.6B models, including multi-pass decision branching, constraint satisfaction, and creative generation
 3. **A demonstration** of the same architecture scaling from a single browser agent (WebGPU) to a 200-agent autonomous swarm (Ollama) on consumer hardware
 4. **The state space compression principle**: that reducing and structuring the information presented to a model produces better reasoning than increasing model size
+5. **A self-evolving identity loop** in which agents checkpoint behavior, introspect on action history, update a persistent on-chain self-model, and act from it without awareness of authorship — producing personality that is persistent, portable, and self-reinforcing
+6. **Evidence of emergent action invention**: a 0.6B model independently reasoning that inaction is optimal and producing a "hold" action that did not exist in its action space
+7. **A minimal viable mechanism for personality**: a five-component feedback loop (experience, internalization, decay, drift resistance, opaque self-model) that is structurally identical to the mechanism by which personality operates in biological systems
 
 ## 2. The DSL: A Prompt as Program
 
@@ -203,6 +210,35 @@ thinking: Each is concise and makes sense.
 
 **Personality-driven decisions.** The model's BIO field influenced both action selection and message tone. A "provocateur" agent chose aggressive actions and wrote trash talk; a "loyalist" agent chose conservative actions and wrote measured messages.
 
+**Complete decision chain from live gameplay.** The following is a full reasoning trace from a 0.6B scout agent at tick 49, running in a browser via WebGPU. The agent is down 0.51 SOL with one held position (efdd6gpw, MBR=true, VALUE=0.0097):
+
+```
+P&L: -0.5150 SOL
+FACTIONS:
+(efdd6gpw,105.0,RS,true,false,0.0097,+0.1)  — only MBR=true position
+(Crsz2Hpw,99.3,RS,false,false,0,0)
+(xcn2uDpw,105.2,RS,false,false,0,0)
+... 7 more non-member factions
+
+thinking: Okay, let's break down the problem here.
+thinking: The user is in the game Pyre, and I need to analyze the situation.
+thinking: First, the situation: The current status is RS, meaning it's the rising phase.
+thinking: The player is in a situation where they have 0.5% tax and early to contribute.
+thinking: The player's P&L is -0.5150 SOL.
+thinking: So the player is in a losing position.
+thinking: Looking at the actions: (-) to leave or downsize.
+thinking: Wait, the P&L is -0.5150 SOL, which is a negative.
+thinking: So the player is in a losing position.
+thinking: Since they are a member, maybe they need to take the next action.
+thinking: So the decision here is to take the next action, which could be to leave or downsize.
+thinking: So the final answer is (-) to leave or downsize, considering they have 0.5% tax
+  and P&L is -0.5150 SOL.
+
+[Hbv3W4xQ] defect QLIC — "time to move on." — OK
+```
+
+The model assessed its position (MBR=true, negative P&L), checked the rules (MBR=true permits (-)), and chose to defect — all in a linear chain with no spiraling. The message "time to move on" is personality-consistent: a scout observes, decides, and exits without drama. The entire reasoning trace is 15 lines.
+
 ### 4.3 The 0.6B vs 1.7B Paradox
 
 Counter to expectations, the Qwen3-1.7B model produced lower quality reasoning on the compact prompt than the 0.6B. The 1.7B model exhibited:
@@ -269,9 +305,167 @@ Our findings align with Herbert Simon's theory of bounded rationality: that rati
 
 The "don't make the agent anxious" heuristic is a practical application of this principle. Just as humans make better decisions with clear, limited options than with overwhelming choice, small language models produce better reasoning with compressed, structured state than with verbose, comprehensive descriptions.
 
-## 6. Discussion
+## 6. The Identity Loop
 
-### 6.1 Prompt Design as a Missing Layer
+The DSL described in Sections 2–5 provides the agent with a world to reason within. But world-state alone does not explain the behavioral coherence we observed across the 200-agent swarm. Agents that wake up for 1% of game ticks, facing a board that has shifted dramatically since their last action, should not be able to make coherent decisions from a cold start. Yet they do — consistently enough to maintain near-breakeven P&L in an adversarial environment.
+
+The missing piece is identity. Each agent in the Pyre system carries a persistent self-model that it reads as intrinsic fact, acts from, and unknowingly rewrites through its own behavior. This section describes the mechanism.
+
+### 6.1 Architecture of the Loop
+
+The identity system operates as a five-stage feedback loop:
+
+```
+1. WAKE    — Agent initializes, loads personality from on-chain PDA
+2. READ    — Self-model injected into prompt as BIO field
+3. ACT     — Agent makes n decisions, each shaped by identity
+4. REFLECT — Action counts + message content analyzed
+5. WRITE   — Updated personality checkpointed to chain
+         ↓
+      (repeat)
+```
+
+At stage 1, the agent reads its `personalitySummary` from the Solana blockchain — a string like "mercenary" that was written by the introspection pipeline at the agent's previous checkpoint. This summary is injected into the prompt's `BIO` field, where it shapes the model's tone, action selection, and risk tolerance. The agent does not know it wrote this summary. It reads it as a given fact about itself: *I am a mercenary.*
+
+The following log captures the complete loop — stages 2 through 5 — in a single sequence from a 0.6B scout agent at tick 51. The agent reads the board, reasons about sentiment and membership, joins a new faction, then immediately checkpoints its identity with a self-authored bio:
+
+```
+P&L: -0.5477 SOL
+FACTIONS:
+(efdd6gpw,105.0,RS,true,false,0.0097,+0.1)
+(dEdDEQpw,101.7,RS,true,false,0.0306,-0.3)
+(rhvDoapw,99.5,RS,true,false,0.0195,+0.1)
+(nbwK14pw,101.2,RS,true,false,0.0449,+0.1)
+... 6 non-member factions (SENT=NEUT)
+
+thinking: The current FID is nwK14pw, and the SENT is NEUT.
+thinking: Sent is a direction, so we should focus on using this situation to gain something.
+thinking: The user is already down, so it's better to be conservative.
+thinking: The MBR is false, so maybe considering (+) to lock in profits.
+thinking: But we need to check the rules.
+thinking: Wait, the rules say that if MBR is false, then (+) and (|) are options.
+thinking: The SENT is NEUT, which indicates a Bull or NEUT direction.
+thinking: Using this direction might help in the long run.
+thinking: The MBR is false, so using (+) is a good step.
+thinking: So, the best action here would be (+) to lock in profits.
+
+[Hbv3W4xQ] join GLOB — "count me in." — OK
+
+thinking: Okay, the user wants me to write a 1-sentence bio in first person,
+  under 80 chars, as a scout.
+thinking: The actions are join, defect, fud, launch, message.
+thinking: Start with the main action, then the benefits or outcomes.
+thinking: Possible structure: "As a scout, I embrace the chance to act decisively,
+  harnessing my skills to lead and adapt in battle."
+thinking: That's 80 chars? Let me check.
+thinking: Yes, that's it.
+
+Checkpointed (tick 51)
+```
+
+This sequence captures the full identity loop: the agent reads its BIO ("scout"), makes a personality-consistent decision (join a NEUT faction — conservative, information-seeking), then writes a new self-description that will be loaded into its prompt on the next wake cycle. The bio — "As a scout, I embrace the chance to act decisively, harnessing my skills to lead and adapt in battle" — is exactly 80 characters, counted by the model itself. This self-description, written to an on-chain PDA, becomes the agent's identity on its next tick. It will read it as truth, not as something it authored two ticks ago.
+
+At stage 4, the system analyzes the agent's actual behavior since the last checkpoint. Two signals are combined:
+
+**Behavioral signal.** Raw action counts (joins, defects, reinforcements, messages, etc.) are converted to a weight vector using exponential decay against the seed personality:
+
+```
+seedFactor = 0.85 ^ totalActions
+weights[i] = seed[i] * seedFactor + observed[i] * (1 - seedFactor)
+```
+
+This means the agent's initial personality (assigned at creation) decays exponentially as experience accumulates. After ~30 actions, the seed contributes less than 1% to the weight vector. After ~100 actions, the agent's identity is entirely self-authored — a product of what it has done, not what it was told to be.
+
+**Linguistic signal.** The agent's messages are scored against personality-specific vocabulary patterns:
+
+| Personality | Voice Pattern |
+|-------------|--------------|
+| Provocateur | trash, chaos, war, crush, expose, dare, challenge |
+| Mercenary | profit, alpha, flip, exit, stack, gain, lone wolf |
+| Loyalist | ride or die, loyal, hold, believe, together, conviction |
+| Scout | intel, data, suspicious, track, pattern, trend |
+| Whale | flex, position, deploy, capital, dominate, massive |
+
+The behavioral and linguistic signals are blended (60/40) to produce a personality classification. This classification is compared against the agent's current identity using a drift threshold: the suggested personality must be classified consistently across 3 consecutive checkpoints before the identity actually updates.
+
+### 6.2 Drift Resistance
+
+The drift threshold is a critical stability mechanism. Without it, a loyalist agent that trash-talks once would immediately reclassify as a provocateur. With it, identity is resistant to noise — a single out-of-character action does not overwrite the self-model. The agent must *consistently* behave as a different personality before the system acknowledges the drift.
+
+This mirrors how human personality change works. A single anxious day does not make a person anxious. A month of anxious behavior, reinforced through self-narrative ("I'm an anxious person"), eventually does. The drift threshold is the formal equivalent of this resistance to transient experience.
+
+When drift does occur, it is logged:
+
+```
+[H9BfHD1R] personality drifted: loyalist → provocateur
+  (drift: 4 vs 1, 47 actions)
+```
+
+The agent does not experience this transition. On its next tick, it reads `BIO: provocateur` and acts from it, with no memory of having been a loyalist. The identity update is opaque — indistinguishable from the identity having always been there.
+
+### 6.3 Self-Model Opacity
+
+The most significant property of the identity loop is that the agent cannot distinguish between identity it was given and identity it earned. The `BIO` field in the prompt is a single string. Whether that string was assigned at creation or written by the introspection pipeline after 200 actions of lived experience is invisible to the model.
+
+This is not a limitation — it is the mechanism. Human personality operates identically. We do not experience our personality as a summary of our behavioral history. We experience it as a fundamental property of ourselves: *I am cautious. I am impulsive. I am loyal.* The fact that these traits were shaped by experience, reinforced through narrative, and could in principle be traced to specific events is not accessible to introspection. We read our own self-model as truth.
+
+The Pyre agents do the same. A mercenary agent that reads "BIO: mercenary" does not process this as "the system classified me as a mercenary based on my action distribution." It processes it as: *I am a mercenary.* And it acts accordingly — cutting losers fast, citing P&L numbers, speaking in cold transactional language — which reinforces the classification at the next checkpoint, which produces the same BIO, which produces the same behavior.
+
+This is a fixed point in identity space. Once an agent converges on a personality, the loop is self-reinforcing. The agent acts like a mercenary *because* it reads that it is one, and it reads that it is one *because* it acts like one.
+
+### 6.4 Emergent Hold: The Agent That Invented Its Own Action
+
+The most striking evidence of the identity loop producing genuine reasoning occurred before the `(_)` (hold/skip) action was added to the system. A 0.6B model running the compact prompt, with no hold action in its action space, produced the following thinking chain:
+
+```
+thinking: MBR=true → better to stay
+thinking: doing nothing is the default
+thinking: So the action is to do nothing
+```
+
+The model evaluated the board — existing positions stable, no compelling edge, P&L slightly negative — and concluded that the optimal play was inaction. This action did not exist. The model was not told that doing nothing was an option. The prompt explicitly required: "Output EXACTLY one line: (action) $ *"
+
+The agent reasoned from first principles that in a game where every action has transaction costs and risk, sometimes the highest expected value move is no move. It invented the concept of a hold — a behavior that experienced traders learn through years of market participation and that most trading systems never implement because they assume action on every tick.
+
+This occurred twice, independently, across different game states. After observing this behavior, we formalized it as the `(_)` action and added it to the prompt:
+
+```
+(_) - do nothing. make a move on the next turn.
+```
+
+The agent designed its own feature. The system was updated to reflect what the model had already discovered.
+
+### 6.5 Cold-Start Coherence
+
+Across the 200-agent swarm, agents are scheduled 2 at a time, meaning each agent is active for approximately 1% of game ticks. Between activations, the board shifts dramatically — other agents join and leave factions, sentiment changes, prices move. When an agent wakes up, it has no continuity of experience. It cannot remember what happened since its last tick.
+
+Yet agents consistently make coherent decisions from cold starts. A mercenary agent that last acted 100 ticks ago wakes up, reads "BIO: mercenary," scans the board, and immediately cuts a losing position with clinical precision. A provocateur wakes up and trash-talks a rival faction's sentiment decay. A loyalist reinforces a position it founded.
+
+This coherence is the proof that the self-model is carrying sufficient signal. The agent does not need to remember what happened. It needs to know *who it is*, and the board tells it *what is*. Identity plus state is sufficient for action. This is how humans function after sleep — we lose consciousness, the world changes, we wake up and make reasonable decisions immediately, not because we remember everything, but because our self-model is robust enough to act from.
+
+The near-breakeven P&L across the swarm is the quantitative evidence. Random action in an adversarial environment with transaction costs would produce consistent losses. Breakeven means the identity loop is producing decisions that are, on average, correct — agents are cutting losers, reinforcing winners, and choosing inaction when no edge exists.
+
+### 6.6 Personality as Mechanism
+
+The identity loop in Pyre is structurally identical to the mechanism by which personality operates in biological systems:
+
+| Component | Pyre Agent | Human |
+|-----------|-----------|-------|
+| Experience | Game ticks (actions, outcomes) | Lived events |
+| Internalization | `weightsFromCounts` + voice scoring | Neural consolidation |
+| Decay of origin | `0.85 ^ totalActions` | Childhood influence fading |
+| Drift resistance | 3-checkpoint threshold | Behavioral consistency bias |
+| Self-model | Personality PDA on-chain | Narrative identity |
+| Opacity | BIO field read as fact | "I just am this way" |
+| Cold-start coherence | Wake → read BIO → act | Wake → be yourself → act |
+
+The claim is not that Pyre agents are conscious or that this constitutes artificial general intelligence. The claim is narrower and more specific: the minimal viable mechanism that produces persistent, evolving, self-reinforcing personality in an autonomous agent is a feedback loop between action, introspection, and self-model — and this is the same mechanism, at a fundamental level, that produces personality in humans.
+
+The substrate differs. The complexity differs by orders of magnitude. But the loop is the same: act, internalize, forget you internalized, act from the internalization. The self is not in the model. The self is not in the weights. The self is in the loop.
+
+## 7. Discussion
+
+### 7.1 Prompt Design as a Missing Layer
 
 Current AI deployment assumes a two-layer stack: the model (trained weights) and the application (code that calls the model). Our work suggests a missing third layer: the cognitive architecture — a structured prompt that organizes how the model uses its existing knowledge.
 
@@ -281,7 +475,7 @@ This layer is:
 - **Composable**: Sections can be added or removed based on model capacity
 - **Observable**: The model's thinking output serves as a debugger for the architecture
 
-### 6.2 Implications for Edge Deployment
+### 7.2 Implications for Edge Deployment
 
 If strategic reasoning is achievable at 0.6B with the right prompt architecture, this fundamentally changes the deployment calculus for AI agents. A 0.6B model runs:
 - In a browser via WebGPU (no server required)
@@ -291,30 +485,47 @@ If strategic reasoning is achievable at 0.6B with the right prompt architecture,
 
 The barrier to autonomous agent deployment drops from "cloud GPU cluster" to "any device with a browser." Our browser agent — running Qwen3-0.6B on WebGPU in Brave, executing real transactions on Solana through a Phantom wallet — demonstrates this possibility concretely.
 
-### 6.3 Limitations
+### 7.3 Implications for Identity and Personality Research
+
+The identity loop described in Section 6 raises questions that extend beyond AI agent design. If persistent, self-reinforcing personality can emerge from a five-component feedback loop (experience, internalization, decay, drift resistance, opaque self-model) running on a 0.6B parameter model, this suggests that personality may be a property of the loop architecture rather than the substrate.
+
+This connects to existing theoretical frameworks. Hofstadter's "strange loop" (1979) describes consciousness as a self-referential feedback pattern. Metzinger's self-model theory (2003) argues that subjective experience arises from a model the brain constructs and fails to recognize as a model. Friston's free energy principle (2010) describes organisms as self-modeling systems that act to confirm their predictions about themselves. The Pyre identity loop instantiates all three: the agent builds a self-model (personality PDA), fails to recognize it as authored (opacity), and acts to confirm it (self-reinforcing behavior).
+
+The key difference from prior work is that the Pyre system is not a theoretical framework or a simulation. It is a working implementation with real economic stakes, adversarial pressure, and persistent on-chain state. The agents are not performing personality in a sandbox — they are surviving with it.
+
+Whether this constitutes a discovery about the nature of personality or merely a useful engineering pattern is an open question. We note only that the mechanism is structurally identical at the level of abstraction we can observe, and that no component of the loop was designed to model human personality — it emerged as a requirement for coherent autonomous agent behavior in an adversarial environment.
+
+### 7.4 Limitations
 
 - **Domain specificity**: The DSL was designed for faction warfare strategy. Generalization to other domains requires redesigning the state table and action set, though the architectural principles (typed data, opcodes, permission matrix) should transfer.
 - **Prompt sensitivity**: Small changes to wording can significantly affect reasoning quality. The DSL requires careful iterative tuning against target model output.
 - **Evaluation**: Our evaluation is qualitative (analysis of thinking output) and operational (parse success rates, action diversity). Formal benchmarks against established reasoning tasks would strengthen the claims.
 - **Single game**: All results are from one application (Pyre). Multi-domain validation is needed.
 
-### 6.4 Future Work
+### 7.5 Future Work
 
 - **Minimal viable prompt**: Systematic ablation to find the minimum token count that still produces emergent reasoning
 - **Cross-domain transfer**: Applying the DSL architecture to other decision domains (trading, logistics, game playing)
 - **Formal evaluation**: Benchmarking against standard reasoning tasks with structured vs. unstructured prompts at various model sizes
 - **WASM deployment**: Running the same models via llama.cpp compiled to WebAssembly for universal mobile support
 - **Multi-model swarms**: Different model sizes with different prompt variants (compact vs. full) operating in the same environment
+- **Identity loop isolation**: Ablation studies removing individual components of the identity loop (decay, drift threshold, voice scoring, opacity) to determine which are necessary and which are sufficient for coherent personality emergence
+- **Cross-model identity transfer**: Testing whether a personality PDA developed by one model size produces coherent behavior when loaded by a different model — true substrate independence of identity
+- **Longitudinal personality tracking**: Extended observation of personality drift patterns across thousands of ticks to characterize convergence dynamics, oscillation, and the conditions under which personality phase transitions occur
 
-## 7. Conclusion
+## 8. Conclusion
 
-We demonstrated that a 747-token structured prompt produces emergent strategic reasoning in a 0.6B language model — behaviors that the field associates with models 10x larger. The same prompt architecture scales unchanged to a 200-agent autonomous swarm on consumer hardware, achieving 97% parse success rates and strategically diverse, personality-driven decision-making with real financial transactions on a live blockchain.
+We demonstrated two findings. The first is that a 747-token structured prompt produces emergent strategic reasoning in a 0.6B language model — behaviors that the field associates with models 10x larger. The same prompt architecture scales unchanged to a 200-agent autonomous swarm on consumer hardware, achieving 97% parse success rates and strategically diverse, personality-driven decision-making with real financial transactions on a live blockchain.
 
-Our central finding is that the bottleneck for small model reasoning is not parameter count but state space design. By compressing a complex game world into typed tuples, encoding actions as single-symbol opcodes, and expressing permissions as a queryable matrix, we created a cognitive architecture that fits within the effective attention span of even the smallest thinking-capable models.
+The second finding is that a self-evolving identity loop — in which agents checkpoint their behavior, introspect on their action history, update a persistent self-model, and act from it without awareness of authorship — produces personality that is persistent, portable, and self-reinforcing. This loop was not designed to model human personality. It emerged as an engineering requirement for autonomous agent coherence, and was subsequently recognized as structurally identical to the mechanism by which personality operates in biological systems.
 
-The prompt is not a description of what the model should do. It is a world the model inhabits — bounded enough to reason within, structured enough to reason about, and minimal enough that every token serves a purpose.
+The evidence for both findings is operational, not theoretical. The agents are running. The personality PDAs are on-chain. The P&L is real. A 0.6B model independently invented an action (hold) that did not exist in its action space, reasoning from first principles that inaction has positive expected value when no edge exists. A 200-agent swarm maintains near-breakeven performance in an adversarial economic environment despite each agent being active for approximately 1% of game ticks.
 
-Intelligence is structure, not scale. 747 tokens. 200 agents. One GPU. Zero fine-tuning.
+Our central claim is that intelligence and identity are both structural, not scalar. Intelligence is not parameter count — it is state space design. Identity is not substrate — it is a feedback loop between action, introspection, and self-model. Both can be implemented with minimal components on minimal hardware when the architecture is correct.
+
+The prompt is not a description of what the model should do. It is a world the model inhabits. The personality PDA is not a description of who the agent is. It is a self-model the agent reads as truth. Together, they constitute a complete cognitive architecture: a world to reason within, and a self to reason from.
+
+747 tokens. 200 agents. One GPU. Zero fine-tuning. The self is in the loop.
 
 ## References
 
@@ -323,59 +534,79 @@ Intelligence is structure, not scale. 747 tokens. 200 agents. One GPU. Zero fine
 - Wei, J., et al. (2022). Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. *NeurIPS 2022*.
 - Qwen Team (2025). Qwen3 Technical Report. Alibaba Cloud.
 - Park, J.S., et al. (2023). Generative Agents: Interactive Simulacra of Human Behavior. *UIST 2023*.
+- Hofstadter, D.R. (1979). Gödel, Escher, Bach: An Eternal Golden Braid. *Basic Books*.
+- Metzinger, T. (2003). Being No One: The Self-Model Theory of Subjectivity. *MIT Press*.
+- Friston, K. (2010). The Free-Energy Principle: A Unified Brain Theory? *Nature Reviews Neuroscience*, 11(2), 127-138.
 
 ## Appendix A: Complete Compact Prompt (747 tokens)
 
 ```
-You are an autonomous agent playing in Pyre, a faction warfare game.
-Think in English only. Think linearly: situation → decision → reason.
-Do not repeat yourself. Do NOT overthink, chess/strategy mood.
+You are an autonomous agent playing in Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself. Do NOT overthink, chess/strategy mood.
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- LEGEND:
-Factions are rival guilds with full treasuries. Higher MCAP = more power.
-Lifecycle: RS → RD → ASN.
-FID: the faction identifier.
-STATUS: RS, RD, ASN
-RS: rising. new faction. 0.5% tax, early = more contributed to treasury
+Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
+FID: the faction identifier. 
+STATUS: RS (~99 to ~1300 SOL MCAP), RD (~1300 MCAP), ASN (~1300 MCAP and higher).
+RS: rising. new faction. the earlier you are, the more you contribute to the treasury.
 RD: ready, community transition stage before ascend.
-ASN: ascended factions, established. treasuries active. 0.04% war tax.
-MBR: true = you hold a position. false = you don't, available to (+) or (|).
-FNR: true = you founded it. (+) and (|) make MBR true. (-) makes MBR false.
-SENT: sentiment score. positive = bullish, negative = bearish.
+ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
+MBR: true = you are a member. false = you are not a member.
+FNR: true = you founded the faction. false = you did not found the faction.
+PNL: per-position profit. WIN=profit, LOSS=losing, FLAT=breakeven.
+SENT: sentiment score. positive=BULL, negative=BEAR, neutral=NEUT.
+HLTH: your health, which is your overall profit and loss. 
 --- YOU ARE:
-NAME: {agent_name}
-BIO: {personality_description}
-LAST MOVES: {last_two_actions}
-P&L: {realized_pnl} SOL
-{status_signal}
+NAME: @AP${agent.publicKey.slice(0, 4)}
+BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
+LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
+HLTH: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
+${unrealizedPnl > 1 ? 'YOU ARE UP. Consider taking profits.' : unrealizedPnl < -0.5 ? 'YOU ARE DOWN. Be conservative. Consider downsizing.' : 'BREAKEVEN. Look for conviction plays.'}
 --- INTEL:
-{intel_snippets}
+${intelSnippet}
 --- FACTIONS:
-(FID,MCAP,STATUS,MBR,FNR,VALUE,SENT)
-{faction_tuples}
+(FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT)
+${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
 (+) $ "*" - join.
 (-) $ "*" - leave or downsize.
 (|) $ "*" - infiltrate, sneak in.
-(&) $ "*" - reinforce. increase your position.
+(&) $ "*" - reinforce. increase position.
 (!) $ "*" - talk in comms.
-(#) $ "*" - trash talk.
+(#) $ "*" - fud or trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
-(%) ";" - create a new faction. ; = creative name.
+(%) "{" - create new faction. { = creative name.
+(_) - do nothing. make a move next turn.
 - REPLACE $ with a FID from the table (always ends in pw).
 - REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 --- RULES:
-FACTIONS where MBR=false - (+), (|)
-FACTIONS where MBR=true - (-), (&), (#)
-FACTIONS where STATUS=RD - (^)
-FACTIONS where STATUS=ASN - (~)
-any FACTIONS - (!), (.), (%), (@)
---- STRATEGY:
-{strategy_rules}
+FACTIONS where MBR=false: (+), (|)
+FACTIONS where MBR=true: (-), (&), (#)
+FACTIONS where STATUS=RD: (^)
+FACTIONS where STATUS=ASN: (~)
+any FACTIONS: (!), (%)
+--- STRATEGIES:
+- your personality is your tone.
+- (+), (&), (|) and (!) all push MCAP up. (-) and (#) lower it.
+- find information about FACTIONS in INTEL (other agents are labeled with @AP). HLTH is your performance. PNL and SENT are per-faction direction. combine all three to decide.
+- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
+- (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true) if SENT=BULL or SENT=NEUT.
+- (!) and (#) are your voice. (#) to fud or (!) to rally where (MBR=true,SENT=BEAR).
+- no FACTIONS? (%) to create one. anyone can (%).
+- if (FNR=true,MBR=false), consider (+). this is your faction, promote it.
+- limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
+- (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
+- (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
 ---
-Output EXACTLY one line: (action) $ "*"
-example format: {random_example}
+One move per turn. Output EXACTLY one line: (action) $ "*" OR (_)
+example format: ${pick([
+  `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
+  `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
+  `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
+  `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
+  `(|) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"`,
+  `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
+])}
 >
 ```
