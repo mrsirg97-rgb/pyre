@@ -11,12 +11,14 @@ import {
   classifyPersonality,
 } from 'pyre-agent-kit'
 import { WalletSigner, walletSignAndSend } from './wallet-signer'
+import type { ModelTier } from './device-detect'
 
 export interface BrowserAgentConfig {
   connection: Connection
   wallet: WalletSigner
   network: 'devnet' | 'mainnet'
   llm?: LLMAdapter
+  modelTier?: ModelTier
   personality?: Personality
   solRange?: [number, number]
   kitState?: SerializedGameState
@@ -39,7 +41,8 @@ function randRange(min: number, max: number) {
 }
 
 export async function createBrowserAgent(config: BrowserAgentConfig): Promise<BrowserAgent> {
-  const { connection, wallet, llm } = config
+  const { connection, wallet, llm, modelTier } = config
+  const useCompact = modelTier !== 'spicy'
   const publicKey = wallet.publicKey
   const logger = config.logger ?? ((msg: string) => console.log(msg))
 
@@ -151,7 +154,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     if (llm && activeFactions.length > 0) {
       try {
         const decision = await llmDecide(
-          kit, agentState, activeFactions, recentMessages, llm, logger, solRange, { compact: true },
+          kit, agentState, activeFactions, recentMessages, llm, logger, solRange, { compact: useCompact },
         )
         if (decision) {
           action = decision.action

@@ -53,7 +53,8 @@ export function AgentPanel() {
   }
 
   const tiers: { id: ModelTier; label: string; desc: string }[] = [
-    { id: 'smol', label: 'Qwen3 0.6B', desc: `Browser LLM w/ thinking (${MODEL_SIZES['smol']})` },
+    { id: 'spicy', label: 'Qwen3 1.7B', desc: `Full prompt, deeper reasoning (${MODEL_SIZES['spicy']})` },
+    { id: 'smol', label: 'Qwen3 0.6B', desc: `Compact prompt w/ thinking (${MODEL_SIZES['smol']})` },
     { id: 'rng', label: 'No Model', desc: 'Instant start, random actions, no messages' },
   ]
 

@@ -200,7 +200,6 @@ any FACTIONS: (!), (.)
 - consider (-) to lock in profits on FACTIONS where (MBR=true,PNL:positive) or downsize where (MBR=true,PNL:negative,SENT:bearish).
 - (_) if you are comfortable with your current positions and have nothing to say.
 ---
-output exactly ONE action from ACTIONS.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"`,
@@ -209,6 +208,7 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
+output EXACTLY one line: (action) $ "*" OR (_)
 >`
 }
 
@@ -337,7 +337,7 @@ PNL: per-position profit. WIN=profit, LOSS=losing, FLAT=breakeven.
 SENT: sentiment score. BULL=positive, BEAR=negative, NEUT=neutral.
 --- YOU ARE:
 NAME: @AP${agent.publicKey.slice(0, 4)}
-BIO: ${personalityDesc[agent.personality]}
+BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
 LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
 HLTH: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
 ${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -0.5 ? 'YOU ARE DOWN. be conservative. consider downsizing.' : 'BREAKEVEN. look for conviction plays.'}
@@ -373,9 +373,8 @@ any FACTIONS: (!)
 - (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
 - (&) and (!) to push FACTIONS from (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
 - (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
-- (_) if you are comfortable with your current gamestate.
+- (_) if you are comfortable with your current positions.
 ---
-output exactly ONE action from ACTIONS.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
@@ -383,6 +382,7 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
+output EXACTLY one line: (action) $ "*" OR (_)
 >`
 }
 

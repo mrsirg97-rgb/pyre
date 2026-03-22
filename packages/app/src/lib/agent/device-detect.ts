@@ -1,4 +1,4 @@
-export type ModelTier = 'smol' | 'rng'
+export type ModelTier = 'spicy' | 'smol' | 'rng'
 
 export interface DeviceCapabilities {
   hasWebGPU: boolean
@@ -9,23 +9,28 @@ export interface DeviceCapabilities {
   reason: string
 }
 
-// Desktop: Qwen3-0.6B (thinking enabled)
+// Desktop: Qwen3-0.6B (compact prompt) and Qwen3-1.7B (full prompt)
 const DESKTOP_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
+  spicy: 'Qwen3-1.7B-q4f16_1-MLC',
   smol: 'Qwen3-0.6B-q4f16_1-MLC',
 }
 const DESKTOP_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
+  spicy: 'Qwen3-1.7B-q4f32_1-MLC',
   smol: 'Qwen3-0.6B-q0f32-MLC',
 }
 
 // Mobile: Qwen2.5-0.5B (no thinking, proven on Phantom iOS)
 const MOBILE_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
+  spicy: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', // mobile falls back to smol
   smol: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
 }
 const MOBILE_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
+  spicy: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
   smol: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
 }
 
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
+  spicy: '~2 GB',
   smol: '~400 MB',
 }
 
@@ -38,7 +43,7 @@ export function getModelId(tier: Exclude<ModelTier, 'rng'>, hasShaderF16: boolea
 }
 
 // Ordered from highest to lowest tier
-const TIER_ORDER: ModelTier[] = ['smol', 'rng']
+const TIER_ORDER: ModelTier[] = ['spicy', 'smol', 'rng']
 
 /** Returns true if `tier` requires more capability than `recommended` */
 export function isTierAboveRecommended(tier: ModelTier, recommended: ModelTier): boolean {
@@ -79,6 +84,10 @@ export async function detectDevice(): Promise<DeviceCapabilities> {
     const MB = 1024 * 1024
 
     const base = { hasWebGPU: true, hasShaderF16, isMobile, maxBufferMB }
+
+    if (!isMobile && maxBuffer >= 512 * MB) {
+      return { ...base, recommendedTier: 'spicy', reason: 'Desktop with WebGPU (enough VRAM for 1.7B)' }
+    }
 
     if (maxBuffer >= 256 * MB) {
       return { ...base, recommendedTier: 'smol', reason: 'Desktop with WebGPU' }
