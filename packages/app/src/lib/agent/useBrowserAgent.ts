@@ -257,7 +257,6 @@ export function useBrowserAgent(): BrowserAgentHook {
           wallet: signer,
           network: network as 'devnet' | 'mainnet',
           llm,
-          modelTier: selectedTier,
           kitState: savedState ?? undefined,
           logger: log,
         })
