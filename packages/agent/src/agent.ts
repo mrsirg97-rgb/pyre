@@ -162,6 +162,7 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 (.) $ - show support.
 (@) @address - look up an agent.
 (%) ";" - create a new faction. ; = creative name.
+(_) - do nothing. make a move on the next turn.
 - REPLACE $ with a FID from the table (always ends in pw).
 - REPLACE * with your message, always in double quotes.
 --- RULES:
@@ -187,6 +188,7 @@ any FACTIONS - (!), (.), (%), (@)
 - If (FNR=true,MBR=false), consider (+), otherwise if (FNR=true,MBR=true) consider (&). promote with (!).
 - FACTIONS where MBR=true ARE your identity. Promote what you hold. Attack what you don't.${factionCtx.all.length <= 2 ? '\n- Few factions active — consider (%).' : ''}
 - (-) to lock in profits or cut losers. Don't stay in underperformers.
+- (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
 ---
 Output EXACTLY one line: (action) $ "*"
 example format: ${pick([
@@ -335,6 +337,7 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
 (%) ";" - create a new faction. ; = creative name.
+(_) - do nothing. make a move on the next turn.
 - REPLACE $ with a FID from the table (always ends in pw).
 - REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 --- RULES:
@@ -354,6 +357,7 @@ any FACTIONS - (!), (.), (%), (@)
 - (!) FACTIONS where MBR=true and SENT is bullish to promote.
 - (#) FACTIONS where MBR=true and SENT is bearish to fud. Or (!) to rally.
 - (-) to lock in profits or downsize on underperforming factions.
+- (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
 ---
 Output EXACTLY one line: (action) $ "*"
 example format: ${pick([
@@ -462,6 +466,11 @@ function parseLLMDecision(
   let lastRejection: string | null = null
   for (const candidate of lines) {
     const line = candidate.trim()
+
+    // Explicit hold/skip — do nothing this turn
+    if (/^\(?_\)?$|^HOLD$/i.test(line)) {
+      return { action: 'hold' as Action, reasoning: 'hold — skip turn' }
+    }
 
     const scoutMatch = line.match(/^SCOUT\s+@?([A-Za-z0-9]{6,44})/i)
     if (scoutMatch) {

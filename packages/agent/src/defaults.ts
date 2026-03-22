@@ -232,6 +232,12 @@ export const ACTION_MAP: Record<string, string> = {
   '(<)': 'REPAY_LOAN',
   '(.)': 'RALLY',
   '(@)': 'SCOUT',
+  '(_)': 'HOLD',
+  HOLD: 'HOLD',
+  SKIP: 'HOLD',
+  PASS: 'HOLD',
+  WAIT: 'HOLD',
+  NOTHING: 'HOLD',
 }
 
 // Stronghold defaults

@@ -21,6 +21,7 @@ export type Action =
   | 'infiltrate'
   | 'fud'
   | 'scout'
+  | 'hold'
 
 export interface LLMDecision {
   action: Action

@@ -260,6 +260,12 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
       }
     }
 
+    // Hold — intentional no-op
+    if (decision.action === 'hold') {
+      logger(`[${state.publicKey.slice(0, 8)}] [HOLD] skip turn`)
+      return { action: 'hold', success: true, reasoning: decision.reasoning, usedLLM }
+    }
+
     // Execute through kit
     const result = await executeAction(
       kit,
