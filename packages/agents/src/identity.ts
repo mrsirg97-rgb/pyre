@@ -42,11 +42,11 @@ export const PERSONALITY_INTERVALS: Record<Personality, [number, number]> =
         whale: [240000, 450000],
       }
     : {
-        loyalist: [45000 * 4, 180000 * 4],
-        mercenary: [30000 * 4, 150000 * 4],
-        provocateur: [15000 * 4, 75000 * 4],
-        scout: [24000 * 4, 120000 * 4],
-        whale: [75000 * 4, 270000 * 4],
+        loyalist: [45000 * 2, 180000 * 2],
+        mercenary: [30000 * 2, 150000 * 2],
+        provocateur: [15000 * 2, 75000 * 2],
+        scout: [24000 * 2, 120000 * 2],
+        whale: [75000 * 2, 270000 * 2],
       }
 
 // SOL spend ranges per personality — scaled down on mainnet
