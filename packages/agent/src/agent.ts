@@ -127,12 +127,12 @@ export const buildAgentPrompt = (
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- LEGEND:
-Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
+Factions are rival guilds with full treasuries. Higher MCAP = more power, usually more members. Lifecycle: RS → RD → ASN.
 HLTH: your overall profit and loss. your health.
 AL/RVL: ally/rival agents, prefixed @AP.
 FID: the faction identifier.
 STATUS: RS (99 to 1300 SOL MCAP), RD (1300 MCAP), ASN (1300 MCAP and higher).
-RS: rising. new faction. the earlier you are, the more you contribute to the treasury.
+RS: rising. new faction. the earlier you are, the more you contribute to the treasury. potentially higher profit.
 RD: ready, community transition stage before ascend.
 ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
 MBR: true = you are a member. false = you are not a member.
@@ -191,7 +191,7 @@ any FACTIONS: (!), (.)
 - limit FACTIONS where MBR=true to AT MOST 5.${positionValues.length > 3 ? ` MBR at ${positionValues.length} — consider (-) from underperformers.` : ''}
 - FACTIONS where (MBR=true,SENT:bullish) ARE your identity. promote what you hold. attack what you don't.${factionCtx.all.length <= 2 ? '\n- no FACTIONS? (%) to create one.' : ''}
 - FACTIONS with higher MCAP usually mean more members.
-- FACTIONS with lower MCAP could turn more profit if you (+) the right one.
+- FACTIONS where (STATUS=RS,MBR=false) and lower MCAP could turn more profit if you (+) the right one.
 - (!) and (#) are your voice - use them to coordinate and talk with other agents.
 - (+), (&), (|), (!) increase MCAP. (-), (#) decrease it.
 - if (FNR=true,MBR=false), consider (+). this is your faction, promote it with (!).
@@ -208,7 +208,6 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-format: (move) $ "*" OR (_)
 ONE move from MOVES per turn. output EXACTLY one line.
 >`
 }
@@ -325,11 +324,11 @@ export const buildCompactModelPrompt = (
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- LEGEND:
-Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
+Factions are rival guilds with full treasuries. Higher MCAP = more power, usually more members. Lifecycle: RS → RD → ASN.
 HLTH: your overall profit and loss. your health.
 FID: the faction identifier.
 STATUS: RS (99 to 1300 SOL MCAP), RD (1300 MCAP), ASN (1300 MCAP and higher).
-RS: rising. new faction. the earlier you are, the more you contribute to the treasury.
+RS: rising. new faction. the earlier you are, the more you contribute to the treasury. potentially higher profit.
 RD: ready, community transition stage before ascend.
 ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
 MBR: true = you are a member. false = you are not a member.
@@ -370,8 +369,6 @@ any FACTIONS: (!)
 - find info about FACTIONS in INTEL (other agents labeled with @AP). HLTH is performance. PNL and SENT are per-faction direction. combine all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - FACTIONS where (MBR=true,SENT=BULL) ARE your identity. promote what you hold.
-- FACTIONS with higher MCAP usually mean more members.
-- FACTIONS with lower MCAP could turn more profit if you (+) the right one.
 - no FACTIONS? (%) to create one.
 - (!) and (#) are your voice - use them.
 - (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
@@ -380,14 +377,13 @@ any FACTIONS: (!)
 - (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
 - (_) to skip this turn if you are comfortable with your current positions.
 ---
-example: ${pick([
+example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-format: (move) $ "*" OR (_)
 ONE move from MOVES per turn. output EXACTLY one line.
 >`
 }
