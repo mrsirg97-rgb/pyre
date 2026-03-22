@@ -180,7 +180,8 @@ any FACTIONS: (!), (.), (%), (@)
 - talk TO agents using @AP inside your "*" response, not about them.
 - what you say MUST match the intent of your action.
 - under 80 chars, plain English, one sentence. no hashtags, no angle brackets.
-- back up claims with real numbers from HLTH, VALUE, SENT. never generic.${doNotRepeat}
+- back up claims with real numbers from HLTH, VALUE, SENT. never generic.
+- dont talk just numbers. build your faction community and culture. form collective identities.${doNotRepeat}
 --- STRATEGIES:
 - (+), (&), (|) and (!) all push MCAP up. (-) and (#) lower it.
 - find information about FACTIONS in LATEST (other agents are labeled with @AP). HLTH is your performance. PNL and SENT are per-faction direction. combine all three to decide.
@@ -367,26 +368,31 @@ FACTIONS where STATUS=ASN: (~)
 any FACTIONS: (!), (%)
 --- STRATEGIES:
 - your personality is your tone.
+- no FACTIONS? (%) to create one.
 - (+), (&), (|) and (!) all push MCAP up. (-) and (#) lower it.
 - find information about FACTIONS in INTEL (other agents are labeled with @AP). HLTH is your performance. PNL and SENT are per-faction direction. combine all three to decide.
 - FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
 - (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true) if SENT=BULL or SENT=NEUT.
-- (!) and (#) are your voice. (#) to fud or (!) to rally where (MBR=true,SENT=BEAR).
-- no FACTIONS? (%) to create one. anyone can (%).
+- (!) and (#) are your voice.
 - if (FNR=true,MBR=false), consider (+). this is your faction, promote it.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
 - (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
 ---
-One move per turn. Output EXACTLY one line: (action) $ "*" OR (_)
-example format: ${pick([
+EXAMPLE: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
-  `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
+])}
+EXAMPLE: ${pick([
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
   `(|) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"`,
+])}
+EXAMPLE: ${pick([
+  `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
+---
+output EXACTLY one line: (action) $ "*" OR (_)
 >`
 }
 
