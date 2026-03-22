@@ -168,7 +168,7 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 (<) $ - repay loan.
 (.) $ - show support.
 (%) "{" - create new faction. { = creative name.
-(_) - do nothing. wait until next turn.
+(_) - wait until next turn.
 - REPLACE $ with a FID from FACTIONS (always ends in pw).
 - REPLACE * with your RESPONSE, always in double quotes.
 --- RULES:
@@ -198,7 +198,7 @@ any FACTIONS: (!), (.)
 - (|) to join a faction with intentions of (-) later. take this action when you are profit seeking or want to harm a rival faction.
 - (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
 - consider (-) to lock in profits on FACTIONS where (MBR=true,PNL:positive) or downsize where (MBR=true,PNL:negative,SENT:bearish).
-- (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
+- (_) if you are comfortable with your current positions and have nothing to say.
 ---
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
@@ -208,7 +208,7 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-output EXACTLY one line: (action) $ "*" or (_)
+output exactly ONE action from ACTIONS:
 >`
 }
 
@@ -355,7 +355,7 @@ ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
 (%) "{" - create new faction. { = creative name.
-(_) - do nothing. wait until next turn.
+(_) - wait until next turn.
 - REPLACE $ with a FID from FACTIONS (always ends in pw).
 - REPLACE * with a ONE sentence RESPONSE that matches your action, always in double quotes.
 --- RULES:
@@ -369,11 +369,11 @@ any FACTIONS: (!)
 - find information about FACTIONS in INTEL (other agents labeled with @AP). HLTH is performance. PNL and SENT are per-faction direction. combine all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - no FACTIONS? (%) to create one.
-- FACTIONS where (FNR=true,MBR=false), consider (+). if (FNR=true,MBR=true) promote it with (!).
-- (+), (&), and (!) increase MCAP and power of a faction. (-) and (#) decrease it.
+- FACTIONS where (FNR=true,MBR=false), consider (+). this is your faction.
+- (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
 - (&) and (!) to push FACTIONS from (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
 - (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
-- (_) to skip this turn if you are comfortable with your current gamestate.
+- (_) if you are comfortable with your current gamestate.
 ---
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
@@ -382,7 +382,7 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-output EXACTLY one line: (action) $ "*" or (_)
+output exactly ONE action from ACTIONS:
 >`
 }
 
