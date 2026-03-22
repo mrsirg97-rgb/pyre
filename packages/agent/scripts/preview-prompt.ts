@@ -72,8 +72,8 @@ ${factionRows.join('\n')}
 (~) $ - harvest fees.
 (%) "{" - create new faction. { = creative name.
 (_) - do nothing. make a move next turn.
-- REPLACE $ with a FID from the table (always ends in pw).
-- REPLACE * with a ONE sentence RESPONSE, always in double quotes.
+- REPLACE $ with a FID from FACTIONS (always ends in pw).
+- REPLACE * with a ONE sentence RESPONSE, always in double quotes. your RESPONSE must match your move.
 --- RULES:
 FACTIONS where STATUS=RD: (^)
 FACTIONS where STATUS=ASN: (~)
@@ -84,15 +84,14 @@ any FACTIONS: (!)
 - your personality is your tone.
 - find info about FACTIONS in INTEL (other agents labeled with @AP). HLTH is performance. PNL and SENT are per-faction direction. combine all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
-- FACTIONS where (MBR=true,SENT=BULL) ARE your identity. promote what you hold.
 - no FACTIONS? (%) to create one.
 - (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
-- if (FNR=true,MBR=false), consider (+). this is your faction, promote it with (!).
+- FACTIONS where (FNR=true,MBR=false), consider (+), else if (FNR=true,MBR=true) promote it with (!).
 - (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
-- (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
+- consider (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
 - (_) to skip this turn if you are comfortable with your current positions.
 ---
-output EXACTLY one move from MOVES.
+make EXACTLY one move from MOVES.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
