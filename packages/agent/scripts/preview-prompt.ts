@@ -86,21 +86,20 @@ any FACTIONS: (!)
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - FACTIONS where (MBR=true,SENT=BULL) ARE your identity. promote what you hold.
 - no FACTIONS? (%) to create one.
-- (!) and (#) are your voice - use them.
 - (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
 - if (FNR=true,MBR=false), consider (+). this is your faction, promote it with (!).
 - (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
 - (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
 - (_) to skip this turn if you are comfortable with your current positions.
 ---
+output EXACTLY one move from MOVES.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
-])}
-ONE move from MOVES per turn. output EXACTLY one line.`
+])}`
 
 console.log('═'.repeat(80))
 console.log('COMPACT PROMPT PREVIEW')

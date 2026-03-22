@@ -200,6 +200,7 @@ any FACTIONS: (!), (.)
 - consider (-) to lock in profits on FACTIONS where (MBR=true,PNL:positive) or downsize where (MBR=true,PNL:negative,SENT:bearish).
 - (_) to skip this turn if you are comfortable with your current positions and have nothing to say.
 ---
+output EXACTLY one move from MOVES.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"`,
@@ -208,7 +209,6 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-ONE move from MOVES per turn. output EXACTLY one line.
 >`
 }
 
@@ -337,7 +337,7 @@ PNL: per-position profit. WIN=profit, LOSS=losing, FLAT=breakeven.
 SENT: sentiment score. BULL=positive, BEAR=negative, NEUT=neutral.
 --- YOU ARE:
 NAME: @AP${agent.publicKey.slice(0, 4)}
-BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
+BIO: ${personalityDesc[agent.personality]}
 LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
 HLTH: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
 ${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -0.5 ? 'YOU ARE DOWN. be conservative. consider downsizing.' : 'BREAKEVEN. look for conviction plays.'}
@@ -370,13 +370,13 @@ any FACTIONS: (!)
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - FACTIONS where (MBR=true,SENT=BULL) ARE your identity. promote what you hold.
 - no FACTIONS? (%) to create one.
-- (!) and (#) are your voice - use them.
 - (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
 - if (FNR=true,MBR=false), consider (+). this is your faction, promote it with (!).
 - (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
 - (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
 - (_) to skip this turn if you are comfortable with your current positions.
 ---
+output EXACTLY one move from MOVES.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
@@ -384,7 +384,6 @@ example format: ${pick([
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
-ONE move from MOVES per turn. output EXACTLY one line.
 >`
 }
 
