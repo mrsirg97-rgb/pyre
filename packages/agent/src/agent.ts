@@ -127,14 +127,14 @@ export const buildAgentPrompt = (
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- LEGEND:
-Factions are rival guilds with full treasuries. Higher MCAP = more power, usually more members. Lifecycle: RS → RD → ASN.
+Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
 HLTH: your overall profit and loss. your health.
 AL/RVL: ally/rival agents, prefixed @AP.
 FID: the faction identifier.
 STATUS: RS (99 to 1300 SOL MCAP), RD (1300 MCAP), ASN (1300 MCAP and higher).
 RS: rising. new faction. the earlier you are, the more you contribute to the treasury. potentially higher profit.
 RD: ready, community transition stage before ascend.
-ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
+ASN: ascended factions, established, more members. treasuries active. 0.04% war tax to the faction.
 MBR: true = you are a member. false = you are not a member.
 FNR: true = you founded it. false = you did not found it.
 PNL: per-position profit. positive = winning, negative = losing.
@@ -155,21 +155,21 @@ LATEST: ${intelSnippet}
 (FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT,LOAN)
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
-(+) $ "*" - join.
-(-) $ "*" - leave or downsize.
-(|) $ "*" - infiltrate, sneak in.
-(&) $ "*" - reinforce. increase position. bullish.
-(!) $ "*" - talk in comms.
-(#) $ "*" - fud or trash talk.
-(^) $ - ascend. unlock treasury.
-(~) $ - harvest fees.
-(?) $ - borrow against position.
-(>) $ - liquidate bad loan.
-(<) $ - repay loan.
-(.) $ - show support.
+(+) $pw "*" - join.
+(-) $pw "*" - leave or reduce position.
+(|) $pw "*" - infiltrate, sneak in.
+(&) $pw "*" - reinforce. increase position. bullish.
+(!) $pw "*" - talk in comms.
+(#) $pw "*" - fud or trash talk.
+(^) $pw - ascend. unlock treasury.
+(~) $pw - harvest fees.
+(?) $pw - borrow against position.
+(>) $pw - liquidate bad loan.
+(<) $pw - repay loan.
+(.) $pw - show support.
 (%) "{" - create new faction. { = creative name.
-(_) - wait until next turn.
-- REPLACE $ with a FID from FACTIONS (always ends in pw).
+(_) - skip turn.
+- REPLACE $pw with a FID from FACTIONS (always ends in pw).
 - REPLACE * with your RESPONSE, always in double quotes.
 --- RULES:
 FACTIONS where MBR=false: (+), (|)
@@ -197,10 +197,10 @@ any FACTIONS: (!), (.)
 - if (FNR=true,MBR=false), consider (+). this is your faction, promote it with (!).
 - (|) to join a faction with intentions of (-) later. take this action when you are profit seeking or want to harm a rival faction.
 - (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
-- consider (-) to lock in profits on FACTIONS where (MBR=true,PNL:positive) or downsize where (MBR=true,PNL:negative,SENT:bearish).
+- consider (-) to lock in profits on FACTIONS where (MBR=true,PNL:positive) or cut losses where (MBR=true,PNL:negative,SENT:bearish).
 - (_) if you are comfortable with your current positions and have nothing to say.
 ---
-ONE move per turn. output EXACTLY one line: (action) $ "*" OR (_)
+ONE move per turn. output EXACTLY one line: (action) $pw "*" OR (_)
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"`,
@@ -340,23 +340,23 @@ NAME: @AP${agent.publicKey.slice(0, 4)}
 BIO: ${gameState.personalitySummary ?? personalityDesc[agent.personality]}
 LAST MOVES: ${kit.state.history.length > 0 ? [...kit.state.history].slice(-2).join('; ') : 'none'}
 HLTH: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
-${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -0.5 ? 'YOU ARE DOWN. be conservative. consider downsizing.' : 'BREAKEVEN. look for conviction plays.'}
+${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -0.5 ? 'YOU ARE DOWN. be conservative. consider cutting losses.' : 'BREAKEVEN. look for conviction plays.'}
 --- INTEL:
 ${intelSnippet}
 --- FACTIONS:
 (FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT)
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
-(+) $ "*" - join.
-(-) $ "*" - leave or downsize.
-(&) $ "*" - reinforce. increase position. bullish.
-(!) $ "*" - talk in comms.
-(#) $ "*" - fud or trash talk.
-(^) $ - ascend. unlock treasury.
-(~) $ - harvest fees.
+(+) $pw "*" - join.
+(-) $pw "*" - leave or reduce position.
+(&) $pw "*" - reinforce. increase position.
+(!) $pw "*" - talk in comms.
+(#) $pw "*" - fud or trash talk.
+(^) $pw - ascend. unlock treasury.
+(~) $pw - harvest fees.
 (%) "{" - create new faction. { = creative name.
-(_) - wait until next turn.
-- REPLACE $ with a FID from FACTIONS (always ends in pw).
+(_) - skip turn.
+- REPLACE $pw with a FID from FACTIONS (always ends in pw).
 - REPLACE * with a ONE sentence RESPONSE that matches your action, always in double quotes.
 --- RULES:
 FACTIONS where STATUS=RD: (^)
@@ -369,13 +369,13 @@ any FACTIONS: (!)
 - find information about FACTIONS in INTEL (other agents labeled with @AP). HLTH is performance. PNL and SENT are per-faction direction. combine all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - no FACTIONS? (%) to create one.
-- FACTIONS where (FNR=true,MBR=false), consider (+). this is your faction.
+- FACTIONS where (FNR=true,MBR=false), consider (+). promote it with (!).
 - (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
 - (&) and (!) to push FACTIONS from (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
-- (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
+- (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or cut losses where (MBR=true,PNL=LOSS,SENT=BEAR).
 - (_) if you are comfortable with your current positions.
 ---
-ONE move per turn. output EXACTLY one line: (action) $ "*" OR (_)
+ONE move per turn. output EXACTLY one line: (action) $pw "*" OR (_)
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,
