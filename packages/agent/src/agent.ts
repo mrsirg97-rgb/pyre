@@ -292,7 +292,7 @@ export const buildCompactModelPrompt = (
     const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
     const fnr = foundedSet.has(f.mint)
     const sent = kit.state.sentimentMap.get(f.mint) ?? 0
-    factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},true,${fnr},${v.valueSol.toFixed(4)},${pnlLabel(v.valueSol, v.bal)},${sentLabel(sent)}`)
+    factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},true,${fnr},${Math.max(v.valueSol, 0.005).toFixed(2)},${pnlLabel(v.valueSol, v.bal)},${sentLabel(sent)}`)
   }
 
   // Non-member factions
@@ -795,7 +795,8 @@ export async function llmDecide(
 
       if (toScout.length > 0) {
         const intels = await Promise.all(toScout.map((f) => fetchFactionIntel(kit, f)))
-        const lines = intels.map((intel) => {
+        const lines = intels.map((intel, i) => {
+          const fid = toScout[i].mint.slice(-8)
           const memberInfo =
             intel.totalMembers > 0
               ? `${intel.totalMembers} members, top holder: ${intel.members[0]?.percentage.toFixed(1)}%`
@@ -806,11 +807,11 @@ export async function llmDecide(
                   .slice(0, 3)
                   .map(
                     (c) =>
-                      `@${c.sender.slice(0, 8)} said: "${c.memo.replace(/^<+/, '').replace(/>+\s*$/, '')}"`,
+                      `@AP${c.sender.slice(0, 4)} said: "${c.memo.replace(/^<+/, '').replace(/>+\s*$/, '')}"`,
                   )
                   .join(', ')
               : 'no recent comms'
-          return `  [${intel.symbol}] ${memberInfo} | recent comms: ${commsInfo}`
+          return `  [${fid}] ${memberInfo} | recent comms: ${commsInfo}`
         })
         intelSnippet = 'FACTION INTEL:\n' + lines.join('\n')
       }
