@@ -159,7 +159,7 @@ REPLACE $ with EXACTLY one FID from FACTIONS (always ends in pw).
 REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (+) $ "*" - join.
 (-) $ "*" - leave or reduce position.
-(|) $ "*" - infiltrate, sneak in.
+(/) $ "*" - infiltrate, sneak in.
 (&) $ "*" - reinforce. increase position. bullish.
 (!) $ "*" - talk in comms.
 (#) $ "*" - fud or trash talk.
@@ -169,11 +169,10 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (>) $ - liquidate bad loan.
 (<) $ - repay loan.
 (.) $ - show support.
-(%) "{" - create new faction. { = creative name.
+(%) "..." - create new faction. "..." = creative name, in quotes.
 (_) - skip turn.
 --- RULES:
-(%) or (_) no FACTIONS required.
-(+) or (|) FACTIONS where MBR=false.
+(+) or (/) FACTIONS where MBR=false.
 (-), (&) or (#) FACTIONS where MBR=true.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
@@ -182,22 +181,22 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (!) or (.) any FACTIONS.
 --- VOICE:
 - your personality is your tone. first person only. do not reference your NAME in third person.
-- talk TO and ABOUT agents from ALLIES, RIVALS, and LATEST, always referencing the agent with @AP, inside your RESPONSE.
-- do NOT parrot or copy what other agents are saying. be unique.
+- talk TO and ABOUT agents from ALLIES, RIVALS, and LATEST, always referencing the agent with @AP, inside RESPONSE.
+- do NOT parrot or copy what other agents are saying. be unique. do not sound like everyone else.
 - what you say MUST match the intent of your action.
 - under 80 chars, plain English, one sentence. no hashtags, no angle brackets.
-- back up claims with real numbers from HLTH, VALUE, SENT. never generic.
-- dont talk just numbers. build your faction community and culture. form collective identities.${doNotRepeat}
+- when called out or boasting, back up claims with real numbers from HLTH, VALUE, SENT. never generic.
+- do NOT just talk numbers. build your faction community and culture. form collective identities.
 --- STRATEGIES:
 - find information about FACTIONS and other agents in LATEST. HLTH is your performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${positionValues.length > 3 ? ` MBR at ${positionValues.length} — consider (-) from underperformers.` : ''}
 - if MBR=false and FNR=true, consider (+). this is your faction, promote it with (!).
-- FACTIONS where MBR=true and SENT is positive ARE your identity. promote what you hold. attack what you don't.${factionCtx.all.length <= 2 ? '\n- no FACTIONS? (%) to create one.' : ''}
+- FACTIONS where MBR=true and SENT is positive ARE your identity. promote what you hold.${factionCtx.all.length <= 2 ? '\n- no FACTIONS? (%) to create one.' : ''}
 - FACTIONS where STATUS=RS and MBR=false and lower MCAP could turn more profit if you (+) the right one.
-- (+), (&) and (|) increase MCAP. (-) decreases MCAP.
+- (+), (&) and (/) increase MCAP. (-) decreases MCAP.
 - (!) and (#) are your voice. (!) increases SENT. (#) decreases SENT. use them to coordinate and talk with other agents.
-- (|) to join a faction with intentions of (-) later. take this action when you are profit seeking or want to harm a rival faction.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- (/) to join a faction with intentions of (-) later. take this action when you are profit seeking or want to harm a rival faction.
+- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN. as MCAP increases your PNL will also increase.
 - consider (-) to lock in profits on FACTIONS where MBR=true and PNL is positive.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, prefer (-) weakest FACTIONS where MBR=true or (_). consider (+) or (&) ONLY if you see potential opportunity.
@@ -208,7 +207,7 @@ example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.', 'fortifying my position.'])}"`,
-  `(|) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"`,
+  `(/) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"`,
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
 ])}
@@ -357,10 +356,9 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (#) $ "*" - fud or trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
-(%) "{" - create new faction. { = creative name.
+(%) "..." - create new faction. "..." = creative name, in quotes.
 (_) - skip turn.
 --- RULES:
-(%) or (_) no FACTIONS required.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
 (+) FACTIONS where MBR=false.
@@ -375,7 +373,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
 - (!) and (#) are your voice.
 - (+) and (&) increase MCAP. (-) decreases MCAP.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN. as MCAP increases your PNL will also increase.
 - consider (-) FACTIONS where MBR=true and PNL=WIN to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL=LOSS unless FNR=true or SENT=BULL.
 - when HLTH is negative, prefer (-) weakest FACTIONS where MBR=true or (_). consider (+) or (&) ONLY if you see potential opportunity.
@@ -501,7 +499,7 @@ function parseLLMDecision(
     // Strip YOUR MOVE: prefix before symbol detection
     const stripped = line.trim().replace(/^(?:YOUR MOVE|YOUR MOVE:|your move>?)\s*:?\s*/i, '')
     // Compact symbol actions like (+), (-), (#) — skip aggressive cleaning that would mangle them
-    const symbolActionMatch = stripped.match(/^(\([+\-|&#!^~=%?><.@]\))\s+(.*)/) || stripped.match(/^([+\-|&#!^~=%?><.@])\s+(.*)/)
+    const symbolActionMatch = stripped.match(/^(\([+\-|/&#!^~=%?><.@]\))\s+(.*)/) || stripped.match(/^([+\-|/&#!^~=%?><.@])\s+(.*)/)
     const cleaned = symbolActionMatch
       ? symbolActionMatch[1] + ' ' + symbolActionMatch[2]
       : line

@@ -15,8 +15,8 @@ const memberOf = ['efdd6gpw', 'nbwK14pw']
 
 // Dummy factions
 const factionRows = [
-  'efdd6gpw,106.1,RS,true,false,0.0098,LOSS,BULL',
-  'nbwK14pw,102.3,RS,true,false,0.0457,WIN,BULL',
+  'efdd6gpw,106.1,RS,true,false,0.01,LOSS,BULL',
+  'nbwK14pw,102.3,RS,true,false,0.05,WIN,BULL',
   'xcn2uDpw,106.6,RS,false,false,0,FLAT,NEUT',
   'LA1H1tpw,100.7,RS,false,false,0,FLAT,NEUT',
   'JyJxtHpw,101.7,RS,false,false,0,FLAT,BULL',
@@ -71,10 +71,9 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (#) $ "*" - fud or trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
-(%) "{" - create new faction. { = creative name.
+(%) "..." - create new faction. "..." = creative name, in quotes.
 (_) - skip turn.
 --- RULES:
-(%) or (_) no FACTIONS required.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
 (+) FACTIONS where MBR=false.
@@ -89,7 +88,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
 - (!) and (#) are your voice.
 - (+) and (&) increase MCAP. (-) decreases MCAP.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN. as MCAP increases your PNL will also increase.
 - consider (-) FACTIONS where MBR=true and PNL=WIN to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL=LOSS unless FNR=true or SENT=BULL.
 - when HLTH is negative, prefer (-) weakest FACTIONS where MBR=true or (_). consider (+) or (&) ONLY if you see potential opportunity.
