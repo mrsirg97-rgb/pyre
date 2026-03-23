@@ -126,14 +126,15 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     const pnlVal = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
     logger(`P&L: ${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(4)} SOL`)
 
+    let promptTable: { header: string; rows: string[] } | null = null
+
     if (llm && activeFactions.length > 0) {
       try {
         const decision = await llmDecide(
           kit, agentState, activeFactions, recentMessages, llm, logger, solRange, {
             compact: true,
             onPromptTable: (header, rows) => {
-              logger(`FACTION | ${header.split(',').join(' | ')}`)
-              rows.forEach(r => logger(`  ${r.split(',').join(' | ')}`))
+              promptTable = { header, rows }
             },
           },
         )
@@ -501,6 +502,12 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
       if (execConfirm) await execConfirm()
 
       logger(`[${publicKey.slice(0, 8)}] ${description} — OK`)
+
+      // Log the table the model saw (after action result)
+      if (promptTable) {
+        logger(promptTable.header.split(',').join(' | '))
+        promptTable.rows.forEach(r => logger(`  ${r.split(',').join(' | ')}`))
+      }
 
       // Keep history tight for compact prompt (ring buffer of 2)
       const hist = kit.state.state!.recentHistory
