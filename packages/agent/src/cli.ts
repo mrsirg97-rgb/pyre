@@ -281,7 +281,7 @@ async function runSetup(): Promise<AgentConfig> {
   }
 
   // Tick interval
-  const intervalStr = await ask('Seconds between actions', '30')
+  const intervalStr = await ask('Seconds between actions', '45')
   const tickIntervalMs = Math.max(5, parseInt(intervalStr) || 30) * 1000
 
   const config: AgentConfig = {
@@ -496,7 +496,8 @@ async function runAgent(config: AgentConfig) {
       console.error(`  [${ts()}] Tick error: ${e.message}`)
     }
 
-    await new Promise((resolve) => setTimeout(resolve, config.tickIntervalMs))
+    const jitter = Math.floor(Math.random() * 15000) // 0-15s random jitter
+    await new Promise((resolve) => setTimeout(resolve, config.tickIntervalMs + jitter))
   }
 }
 

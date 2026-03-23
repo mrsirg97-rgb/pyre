@@ -155,7 +155,7 @@ FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT,LOAN
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
 FORMAT: (action) $ "*"
-REPLACE $ with EXACTLY one FID from FACTIONS (always ends in pw).
+REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
 REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (+) $ "*" - join.
 (-) $ "*" - leave or reduce position.
