@@ -121,29 +121,60 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     let message: string | undefined
     let usedLLM = false
 
-    // Log gamestate snapshot for the user
+    // Log gamestate snapshot — match the prompt builder's faction ordering
+    // (members sorted by value first, then non-members by category)
     const holdings = await kit.state.getHoldings()
     const TOKEN_MULTIPLIER = 1_000_000
     const gameState = kit.state.state!
     const pnlVal = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
     const netInvested = (gameState.totalSolSpent - gameState.totalSolReceived) / 1e9
     const totalTokens = [...holdings.values()].reduce((sum, b) => sum + b, 0)
-    const rows = activeFactions.slice(0, 10).map(f => {
-      const bal = holdings.get(f.mint) ?? 0
-      const value = (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0)
-      const mbr = bal > 0
-      const fnr = (gameState.founded ?? []).includes(f.mint)
+    const holdingsEntries = [...holdings.entries()]
+    const foundedSet = new Set(gameState.founded ?? [])
+
+    // Build member rows sorted by value (same as compact prompt builder)
+    const valued = holdingsEntries
+      .map(([mint, bal]) => {
+        const f = activeFactions.find(ff => ff.mint === mint)
+        if (!f) return null
+        return { mint, bal, value: (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0), f }
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aFnr = foundedSet.has(a!.mint) ? 1 : 0
+        const bFnr = foundedSet.has(b!.mint) ? 1 : 0
+        if (aFnr !== bFnr) return bFnr - aFnr
+        return b!.value - a!.value
+      }) as { mint: string; bal: number; value: number; f: FactionInfo }[]
+
+    const loggedMints = new Set<string>()
+    const rows: string[] = []
+
+    // Members first (up to 5, matching prompt)
+    for (const v of valued.slice(0, 5)) {
+      loggedMints.add(v.mint)
+      const sent = kit.state.getSentiment(v.mint)
+      const sentLabel = sent > 0.5 ? 'BULL' : sent < -0.5 ? 'BEAR' : 'NEUT'
+      const status = v.f.status === 'ascended' ? 'ASN' : v.f.status === 'ready' ? 'RD' : 'RS'
+      let pnlLabel = 'FLAT'
+      if (totalTokens > 0 && netInvested > 0) {
+        const estCost = netInvested * (v.bal / totalTokens)
+        const posPnl = v.value - estCost
+        pnlLabel = posPnl > 0.005 ? 'WIN' : posPnl < -0.005 ? 'LOSS' : 'FLAT'
+      }
+      rows.push(`  ${v.mint.slice(-8)} | ${(v.f.market_cap_sol ?? 0).toFixed(1)} | ${status} | true | ${foundedSet.has(v.mint)} | ${v.value.toFixed(4)} | ${pnlLabel} | ${sentLabel}`)
+    }
+
+    // Non-members (fill to ~10 rows total)
+    const nonMember = activeFactions.filter(f => !loggedMints.has(f.mint) && f.status !== 'razed')
+    for (const f of nonMember.slice(0, 10 - rows.length)) {
+      loggedMints.add(f.mint)
       const sent = kit.state.getSentiment(f.mint)
       const sentLabel = sent > 0.5 ? 'BULL' : sent < -0.5 ? 'BEAR' : 'NEUT'
       const status = f.status === 'ascended' ? 'ASN' : f.status === 'ready' ? 'RD' : 'RS'
-      let pnlLabel = 'FLAT'
-      if (mbr && totalTokens > 0 && netInvested > 0) {
-        const estCost = netInvested * (bal / totalTokens)
-        const posPnl = value - estCost
-        pnlLabel = posPnl > 0.005 ? 'WIN' : posPnl < -0.005 ? 'LOSS' : 'FLAT'
-      }
-      return `  ${f.mint.slice(-8)} | ${(f.market_cap_sol ?? 0).toFixed(1)} | ${status} | ${mbr} | ${fnr} | ${value.toFixed(4)} | ${pnlLabel} | ${sentLabel}`
-    })
+      rows.push(`  ${f.mint.slice(-8)} | ${(f.market_cap_sol ?? 0).toFixed(1)} | ${status} | false | false | 0.0000 | FLAT | ${sentLabel}`)
+    }
+
     logger(`P&L: ${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(4)} SOL`)
     logger(`FACTION    | MCAP  | ST  | MBR   | FNR   | VALUE  | PNL  | SENT`)
     rows.forEach(r => logger(r))
