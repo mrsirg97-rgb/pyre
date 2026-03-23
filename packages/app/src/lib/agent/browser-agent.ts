@@ -126,7 +126,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
     const pnlVal = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
     logger(`P&L: ${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(4)} SOL`)
 
-    let promptTable: { header: string; rows: string[] } | null = null
+    let promptTable: { header: string; rows: string[] } | undefined
 
     if (llm && activeFactions.length > 0) {
       try {
