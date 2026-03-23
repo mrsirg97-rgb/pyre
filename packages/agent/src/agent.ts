@@ -6,6 +6,7 @@ import { fetchFactionIntel } from './faction'
 
 export interface LLMDecideOptions {
   compact?: boolean
+  onPromptTable?: (header: string, rows: string[]) => void
 }
 
 export const pendingScoutResults = new Map<string, string[]>()
@@ -169,7 +170,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (<) $ - repay loan.
 (.) $ - show support.
 (%) "{" - create new faction. { = creative name.
-(_) - do nothing. wait until next turn.
+(_) - skip turn.
 --- RULES:
 (%) or (_) no FACTIONS required.
 (+) or (|) FACTIONS where MBR=false.
@@ -202,7 +203,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - when HLTH is negative, prefer (-) weakest FACTIONS where MBR=true or (_). consider (+) or (&) ONLY if you see potential opportunity.
 - (_) if holding is the optimal move.
 ---
-one move per turn. output EXACTLY one line: (action) $ "*" OR (_)
+one move per turn. output EXACTLY one line.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"`,
@@ -838,6 +839,17 @@ export async function llmDecide(
     solRange,
     holdings,
   )
+
+  // Surface the faction table to the caller if requested
+  if (options?.onPromptTable) {
+    const tableStart = prompt.indexOf('--- FACTIONS:')
+    const tableEnd = prompt.indexOf('--- ACTIONS:')
+    if (tableStart !== -1 && tableEnd !== -1) {
+      const tableBlock = prompt.slice(tableStart + '--- FACTIONS:\n'.length, tableEnd).trim()
+      const lines = tableBlock.split('\n')
+      options.onPromptTable(lines[0], lines.slice(1))
+    }
+  }
 
   const raw = await llm.generate(prompt)
   if (!raw) {
