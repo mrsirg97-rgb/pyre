@@ -188,7 +188,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - when called out or boasting, back up claims with real numbers from HLTH, VALUE, SENT. never generic.
 - do NOT just talk numbers. build your faction community and culture. form collective identities.
 --- STRATEGIES:
-- find information about FACTIONS and other agents in LATEST. HLTH is your performance. PNL and SENT are per-faction direction. use all three to decide.
+- learn about FACTIONS and other agents in LATEST. HLTH is your performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${positionValues.length > 3 ? ` MBR at ${positionValues.length} — consider (-) from underperformers.` : ''}
 - if MBR=false and FNR=true, consider (+). this is your faction, promote it with (!).
 - FACTIONS where MBR=true and SENT is positive ARE your identity. promote what you hold.${factionCtx.all.length <= 2 ? '\n- no FACTIONS? (%) to create one.' : ''}
@@ -347,7 +347,7 @@ FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT
 ${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
 --- ACTIONS:
 FORMAT: (action) $ "*"
-REPLACE $ with EXACTLY one FID from FACTIONS (always ends in pw).
+REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
 REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (+) $ "*" - join.
 (-) $ "*" - leave or reduce.
