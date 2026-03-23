@@ -246,7 +246,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             }
           }
           kit.state.markVoted(faction.mint)
-          description = `join ${faction.symbol}${message ? ` — "${message}"` : ''}`
+          description = `join ${faction.mint.slice(-8)}${message ? ` — "${message}"` : ''}`
           break
         }
         case 'reinforce': {
@@ -261,7 +261,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           const { result: rResult, confirm: rConfirm } = await kit.exec('actions', 'join', reinforceParams)
           execResult = rResult
           execConfirm = rConfirm
-          description = `reinforce ${faction.symbol}${message ? ` — "${message}"` : ''}`
+          description = `reinforce ${faction.mint.slice(-8)}${message ? ` — "${message}"` : ''}`
           break
         }
         case 'defect': {
@@ -291,7 +291,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           })
           execResult = result
           execConfirm = confirm
-          description = `defect ${f?.symbol ?? defectMint.slice(0, 8)}${message ? ` — "${message}"` : ''}`
+          description = `defect ${defectMint.slice(-8)}${message ? ` — "${message}"` : ''}`
           break
         }
         case 'rally': {
@@ -308,7 +308,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           })
           execResult = result
           execConfirm = confirm
-          description = `rally ${target.symbol}`
+          description = `rally ${target.mint.slice(-8)}`
           break
         }
         case 'launch': {
@@ -395,7 +395,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             }
           }
           kit.state.markVoted(faction.mint)
-          description = `message ${faction.symbol}: "${msg.slice(0, 60)}"`
+          description = `message ${faction.mint.slice(-8)}: "${msg.slice(0, 60)}"`
           break
         }
         case 'fud': {
@@ -423,7 +423,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           })
           execResult = result
           execConfirm = confirm
-          description = `fud ${fudTarget.symbol}: "${fudMsg.slice(0, 60)}"`
+          description = `fud ${fudTarget.mint.slice(-8)}: "${fudMsg.slice(0, 60)}"`
           break
         }
         case 'infiltrate': {
@@ -450,7 +450,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           const { result, confirm } = await kit.exec('actions', 'join', infiltrateParams)
           execResult = result
           execConfirm = confirm
-          description = `infiltrate ${target.symbol}`
+          description = `infiltrate ${target.mint.slice(-8)}`
           break
         }
         case 'tithe': {
@@ -470,7 +470,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           })
           execResult = result
           execConfirm = confirm
-          description = `tithe ${target.symbol}`
+          description = `tithe ${target.mint.slice(-8)}`
           break
         }
         case 'ascend': {
@@ -484,7 +484,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           })
           execResult = result
           execConfirm = confirm
-          description = `ascend ${target.symbol}`
+          description = `ascend ${target.mint.slice(-8)}`
           break
         }
         default: {
@@ -503,7 +503,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
           execResult = result
           execConfirm = confirm
           action = 'join'
-          description = `join ${faction.symbol}`
+          description = `join ${faction.mint.slice(-8)}`
           break
         }
       }
@@ -517,6 +517,12 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
       if (execConfirm) await execConfirm()
 
       logger(`[${publicKey.slice(0, 8)}] ${description} — OK`)
+
+      // Keep history tight for compact prompt (ring buffer of 2)
+      const hist = kit.state.state!.recentHistory
+      if (hist.length > 2) {
+        kit.state.state!.recentHistory = hist.slice(-2)
+      }
 
       // Track recent messages to prevent repetition
       if (message) {

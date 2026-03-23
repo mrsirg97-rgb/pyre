@@ -11,24 +11,23 @@ const personality = 'provocateur'
 const pnl = -0.3847
 const totalHoldingsValue = 0.0555
 const unrealizedPnl = totalHoldingsValue + pnl
-const history = ['join 5utzHvSp — "rising fast"', 'defect iqjmEJhJ — "cutting losses"']
 const memberOf = ['efdd6gpw', 'nbwK14pw']
 
-// Dummy factions — with PNL column
+// Dummy factions
 const factionRows = [
-  '(efdd6gpw,106.1,RS,true,false,0.0098,LOSS,BULL)',
-  '(nbwK14pw,102.3,RS,true,false,0.0457,WIN,BULL)',
-  '(xcn2uDpw,106.6,RS,false,false,0,FLAT,NEUT)',
-  '(LA1H1tpw,100.7,RS,false,false,0,FLAT,NEUT)',
-  '(JyJxtHpw,101.7,RS,false,false,0,FLAT,BULL)',
-  '(ivvdjbpw,102.9,RS,false,false,0,FLAT,NEUT)',
-  '(rhvDoapw,99.6,RS,false,false,0,FLAT,NEUT)',
-  '(67Rmtdpw,104.0,RS,false,false,0,FLAT,NEUT)',
-  '(GiUgSapw,99.5,RS,false,false,0,FLAT,NEUT)',
-  '(tN8Kvfpw,102.4,RS,false,false,0,FLAT,NEUT)',
+  'efdd6gpw,106.1,RS,true,false,0.0098,LOSS,BULL',
+  'nbwK14pw,102.3,RS,true,false,0.0457,WIN,BULL',
+  'xcn2uDpw,106.6,RS,false,false,0,FLAT,NEUT',
+  'LA1H1tpw,100.7,RS,false,false,0,FLAT,NEUT',
+  'JyJxtHpw,101.7,RS,false,false,0,FLAT,BULL',
+  'ivvdjbpw,102.9,RS,false,false,0,FLAT,NEUT',
+  'rhvDoapw,99.6,RS,false,false,0,FLAT,NEUT',
+  '67Rmtdpw,104.0,RS,false,false,0,FLAT,NEUT',
+  'GiUgSapw,99.5,RS,false,false,0,FLAT,NEUT',
+  'tN8Kvfpw,102.4,RS,false,false,0,FLAT,NEUT',
 ]
 
-const intelSnippet = '@AP5utz in efdd6gpw: "this faction is heating up, sentiment turning"'
+const intelSnippet = '@AP5utz in efdd6gpw: "this faction is heating up, sentiment turning"\n@AP9kbN in nbwK14pw: "conviction play, not leaving"'
 
 // Dummy example mints
 const m = 'efdd6gpw'
@@ -40,58 +39,63 @@ const prompt = `You are an autonomous agent playing in Pyre, a faction warfare g
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- LEGEND:
-Factions are rival guilds with full treasuries. Higher MCAP = more power, usually more members. Lifecycle: RS → RD → ASN.
+Factions are rival guilds with full treasuries. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
 HLTH: your overall profit and loss. your health.
 FID: the faction identifier.
 STATUS: RS (99 to 1300 SOL MCAP), RD (1300 MCAP), ASN (1300 MCAP and higher).
-RS: rising. new faction. the earlier you are, the more you contribute to the treasury. potentially higher profit.
+RS: rising. new faction. the lower the MCAP, the more you contribute to the treasury.
 RD: ready, community transition stage before ascend.
-ASN: ascended factions, established. treasuries active. 0.04% war tax to the faction.
+ASN: ascended factions, established, more members. treasuries active. 0.04% war tax to the faction.
 MBR: true = you are a member. false = you are not a member.
-FNR: true = you founded it. false = you did not found it.
+FNR: true = you created it. false = you did not create it.
 PNL: per-position profit. WIN=profit, LOSS=losing, FLAT=breakeven.
 SENT: sentiment score. BULL=positive, BEAR=negative, NEUT=neutral.
 --- YOU ARE:
 NAME: @AP${publicKey.slice(0, 4)}
 BIO: ${personality}
-LAST MOVES: ${history.slice(-2).join('; ')}
 HLTH: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
 ${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -0.5 ? 'YOU ARE DOWN. be conservative. consider downsizing.' : 'BREAKEVEN. look for conviction plays.'}
 --- INTEL:
 ${intelSnippet}
 --- FACTIONS:
-(FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT)
+FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT
 ${factionRows.join('\n')}
---- MOVES:
+--- ACTIONS:
+FORMAT: (action) $ "*"
+REPLACE $ with EXACTLY one FID from FACTIONS (always ends in pw).
+REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (+) $ "*" - join.
-(-) $ "*" - leave or downsize.
-(&) $ "*" - reinforce. increase position. bullish.
+(-) $ "*" - leave or reduce.
+(&) $ "*" - reinforce. increase position.
 (!) $ "*" - talk in comms.
 (#) $ "*" - fud or trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
 (%) "{" - create new faction. { = creative name.
-(_) - do nothing. make a move next turn.
-- REPLACE $ with a FID from FACTIONS (always ends in pw).
-- REPLACE * with a ONE sentence RESPONSE, always in double quotes. your RESPONSE must match your move.
+(_) - skip turn.
 --- RULES:
-FACTIONS where STATUS=RD: (^)
-FACTIONS where STATUS=ASN: (~)
-FACTIONS where MBR=false: (+)
-FACTIONS where MBR=true: (-), (&), (#)
-any FACTIONS: (!)
+(%) or (_) no FACTIONS required.
+(^) FACTIONS where STATUS=RD.
+(~) FACTIONS where STATUS=ASN.
+(+) FACTIONS where MBR=false.
+(-), (&) or (#) FACTIONS where MBR=true.
+(!) any FACTIONS.
 --- STRATEGIES:
 - your personality is your tone.
-- find info about FACTIONS in INTEL (other agents labeled with @AP). HLTH is performance. PNL and SENT are per-faction direction. combine all three to decide.
-- limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - no FACTIONS? (%) to create one.
-- (+), (&), and (!) increase MCAP of a faction. (-) and (#) decrease it.
-- FACTIONS where (FNR=true,MBR=false), consider (+), else if (FNR=true,MBR=true) promote it with (!).
-- (&) and (!) to push FACTIONS where (STATUS=RS,MBR=true) to (STATUS=ASN,MBR=true).
-- consider (-) to lock in profits on FACTIONS where (MBR=true,PNL=WIN) or downsize where (MBR=true,PNL=LOSS,SENT=BEAR).
-- (_) to skip this turn if you are comfortable with your current positions.
+- limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
+- find information about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
+- FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
+- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
+- (!) and (#) are your voice.
+- (+) and (&) increase MCAP. (-) decreases MCAP.
+- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- consider (-) FACTIONS where MBR=true and PNL=WIN to lock in profits.
+- consider (-) FACTIONS where MBR=true and PNL=LOSS unless FNR=true or SENT=BULL.
+- when HLTH is negative, prefer (-) weakest FACTIONS where MBR=true or (_). consider (+) or (&) ONLY if you see potential opportunity.
+- (_) if holding is the optimal move.
 ---
-make EXACTLY one move from MOVES.
+one move per turn. output EXACTLY one line.
 example format: ${pick([
   `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.'])}"`,

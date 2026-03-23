@@ -86,16 +86,10 @@ export function createWebLLMAdapter(
 
     try {
       const messages: { role: string; content: string }[] = []
-      if (isMobile) {
-        messages.push({ role: 'system', content: '/no_think' })
-      } else if (tier === 'spicy') {
-        messages.push({ role: 'system', content: 'Think step by step, then act. Be strategic and decisive.' })
-      } else {
-        messages.push({ role: 'system', content: 'FOCUS. Be DECISIVE. Think briefly, then act.' })
-      }
+      messages.push({ role: 'system', content: '/no_think' })
       messages.push({ role: 'user', content: prompt })
 
-      const maxTokens = isMobile ? 256 : tier === 'spicy' ? 2048 : 1024
+      const maxTokens = isMobile ? 256 : 512
       const stream = await engine.chat.completions.create({
         messages,
         max_tokens: maxTokens,
