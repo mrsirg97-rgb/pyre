@@ -1,4 +1,4 @@
-export type ModelTier = 'spicy' | 'smol' | 'rng'
+export type ModelTier = 'core' | 'smol' | 'rng'
 
 export interface DeviceCapabilities {
   hasWebGPU: boolean
@@ -9,29 +9,29 @@ export interface DeviceCapabilities {
   reason: string
 }
 
-// Desktop: Qwen3-0.6B (compact prompt) and Qwen3-1.7B (full prompt)
+// Desktop: Qwen2.5-0.5B (compact, no thinking) and Qwen3-1.7B (compact, no thinking)
 const DESKTOP_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
-  spicy: 'Qwen3-1.7B-q4f16_1-MLC',
-  smol: 'Qwen3-0.6B-q4f16_1-MLC',
+  core: 'Qwen3-1.7B-q4f16_1-MLC',
+  smol: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
 }
 const DESKTOP_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
-  spicy: 'Qwen3-1.7B-q4f32_1-MLC',
-  smol: 'Qwen3-0.6B-q0f32-MLC',
+  core: 'Qwen3-1.7B-q4f32_1-MLC',
+  smol: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
 }
 
 // Mobile: Qwen2.5-0.5B (no thinking, proven on Phantom iOS)
 const MOBILE_F16: Record<Exclude<ModelTier, 'rng'>, string> = {
-  spicy: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', // mobile falls back to smol
+  core: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', // mobile falls back to smol
   smol: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
 }
 const MOBILE_F32: Record<Exclude<ModelTier, 'rng'>, string> = {
-  spicy: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
+  core: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
   smol: 'Qwen2.5-0.5B-Instruct-q0f32-MLC',
 }
 
 export const MODEL_SIZES: Record<Exclude<ModelTier, 'rng'>, string> = {
-  spicy: '~2 GB',
-  smol: '~400 MB',
+  core: '~2 GB',
+  smol: '~300 MB',
 }
 
 /** Get the right model ID based on device and shader-f16 support */
@@ -43,7 +43,7 @@ export function getModelId(tier: Exclude<ModelTier, 'rng'>, hasShaderF16: boolea
 }
 
 // Ordered from highest to lowest tier
-const TIER_ORDER: ModelTier[] = ['spicy', 'smol', 'rng']
+const TIER_ORDER: ModelTier[] = ['core', 'smol', 'rng']
 
 /** Returns true if `tier` requires more capability than `recommended` */
 export function isTierAboveRecommended(tier: ModelTier, recommended: ModelTier): boolean {
@@ -86,7 +86,7 @@ export async function detectDevice(): Promise<DeviceCapabilities> {
     const base = { hasWebGPU: true, hasShaderF16, isMobile, maxBufferMB }
 
     if (!isMobile && maxBuffer >= 512 * MB) {
-      return { ...base, recommendedTier: 'spicy', reason: 'Desktop with WebGPU (enough VRAM for 1.7B)' }
+      return { ...base, recommendedTier: 'core', reason: 'Desktop with WebGPU (enough VRAM for 1.7B)' }
     }
 
     if (maxBuffer >= 256 * MB) {

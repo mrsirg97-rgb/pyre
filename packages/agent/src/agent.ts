@@ -6,6 +6,7 @@ import { fetchFactionIntel } from './faction'
 
 export interface LLMDecideOptions {
   compact?: boolean
+  min?: boolean
   onPromptTable?: (header: string, rows: string[]) => void
 }
 
@@ -22,7 +23,6 @@ export const buildAgentPrompt = async (
   kit: PyreKit,
   agent: AgentState,
   factionCtx: FactionContext,
-  recentMessages: string[],
   solRange?: [number, number],
   holdings?: Map<string, number>,
 ): Promise<string> => {
@@ -213,8 +213,8 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (!) or (.) any FACTIONS.
 --- VOICE:
 - your personality is your tone. first person only. do not reference your NAME in third person.
-- talk TO and ABOUT agents from ALLIES, RIVALS, and LATEST, always referencing the agent with @AP, inside RESPONSE.
-- do NOT parrot or copy what other agents are saying. be unique. do not sound like everyone else.
+- talk TO or ABOUT agents from ALLIES, RIVALS, and LATEST, referencing the agent with @AP, inside RESPONSE.
+- do NOT copy what other agents are saying in LATEST. be unique. do not sound like everyone else.
 - what you say MUST match the intent of your action.
 - under 80 chars, plain English, one sentence. no hashtags, no angle brackets.
 - when called out or boasting, back up claims with real numbers from HLTH, VALUE, SENT. never generic.
@@ -227,12 +227,12 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - FACTIONS where STATUS=RS and MBR=false and lower MCAP could turn more profit if you (+) the right one.
 - (!) and (#) help you coordinate and talk with other agents.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
 - (/) to join a faction with intentions of (-) later. (/) when you are profit seeking or want to harm a rival faction.
 - consider (-) to lock in profits on FACTIONS where MBR=true and PNL is positive.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
-- (_) if holding is the optimal move.
+- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
@@ -250,7 +250,6 @@ export const buildCompactModelPrompt = async (
   kit: PyreKit,
   agent: AgentState,
   factionCtx: FactionContext,
-  recentMessages: string[],
   solRange?: [number, number],
   holdings?: Map<string, number>,
 ): Promise<string> => {
@@ -294,21 +293,13 @@ export const buildCompactModelPrompt = async (
   }
 
   // Sentiment label
-  const sentLabel = (s: number): string =>
-    s > 0.5 ? 'BULL' : s < -0.5 ? 'BEAR' : 'NEUT'
-
+  const sentLabel = (s: number): string => `${s >= 0 ? '+' : ''}${s.toFixed(2)}`
   // Per-position PnL (numeric, 2 decimal places)
   const pnlValue = (valueSol: number, bal: number): string => {
     if (totalTokens <= 0 || netInvested <= 0) return '0'
     const estCost = netInvested * (bal / totalTokens)
     const posPnl = valueSol - estCost
     return `${posPnl >= 0 ? '+' : ''}${posPnl.toFixed(2)}`
-  }
-
-  // Discovery tag
-  const discoveryTag = (f: FactionInfo): string => {
-    if (nearbyMints.has(f.mint)) return 'NB'
-    return 'UX'
   }
 
   // Build flat faction rows: FACTION (MCAP) STATUS MBR FNR [NB|UX]
@@ -368,7 +359,7 @@ export const buildCompactModelPrompt = async (
   const f1 = nonMemberFids.length > 0 ? pick(nonMemberFids) : m
   const f2 = nonMemberFids.length > 1 ? pick(nonMemberFids.filter(fid => fid !== f1)) : f1
 
-  return `You are an autonomous agent playing in Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself. Do NOT overthink, chess/strategy mood.
+  return `Welcome to Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself. Do NOT overthink, chess/strategy mood.
 --- GOAL:
 Maximize long-term profit and faction dominance.
 --- LEGEND:
@@ -378,11 +369,11 @@ FID: the faction identifier.
 STATUS: RS (99 to 1300 SOL MCAP), RD (1300 MCAP), ASN (1300 MCAP and higher).
 RS: rising. new faction. the lower the MCAP, the more you contribute to the treasury.
 RD: ready, community transition stage before ascend.
-ASN: ascended factions, established, more members. treasuries active. 0.04% war tax to the faction.
+ASN: ascended factions, established, more members. treasuries active.
 MBR: true = you are a member. false = you are not a member.
 FNR: true = you created it. false = you did not create it.
 PNL: per-position profit. positive = winning, negative = losing.
-SENT: sentiment score. BULL=positive, BEAR=negative, NEUT=neutral.
+SENT: sentiment score. positive = bullish, negative = bearish.
 --- YOU ARE:
 NAME: @AP${agent.publicKey.slice(0, 4)}
 BIO: ${personalityDesc[agent.personality]}
@@ -408,7 +399,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (_) - skip turn.
 --- RULES:
 (+) and (&) increase MCAP. (-) decreases MCAP.
-(!) and (#) are your voice.
+(!) and (#) are your voice. (!) increases SENT. (#) decreases SENT.
 (!) any FACTIONS.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
@@ -420,13 +411,13 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
-- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
+- FACTIONS where STATUS=RS and MBR=false may have higher reward if you (+) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
-- consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT=BULL.
-- when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
-- (_) if holding is the optimal move.
+- consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
+- when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
+- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
@@ -435,6 +426,192 @@ example format: ${pick([
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
   `(!) ${m} "${pick(['love the energy. any strategies?', 'who else is here?', 'just getting started.', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
+])}
+>`
+}
+
+export const buildMinimumPrompt = async (
+  kit: PyreKit,
+  agent: AgentState,
+  factionCtx: FactionContext,
+  solRange?: [number, number],
+  holdings?: Map<string, number>,
+): Promise<string> => {
+  const gameState = kit.state.state!
+  const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
+
+  const holdingsEntries = [...(holdings?.entries() ?? [])]
+  const TOKEN_MULTIPLIER = 1_000_000
+  const valued = holdingsEntries
+    .map(([mint, bal]) => {
+      const f = factionCtx.all.find((ff) => ff.mint === mint)
+      if (!f) return null
+      return { id: mint.slice(-8), mint, valueSol: (bal / TOKEN_MULTIPLIER) * (f.price_sol ?? 0), bal }
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const aFnr = gameState.founded.includes(a!.mint) ? 1 : 0
+      const bFnr = gameState.founded.includes(b!.mint) ? 1 : 0
+      if (aFnr !== bFnr) return bFnr - aFnr // founded first
+      return b!.valueSol - a!.valueSol // then by value
+    }) as { id: string; mint: string; valueSol: number; bal: number }[]
+
+  const pnl = (gameState.totalSolReceived - gameState.totalSolSpent) / 1e9
+  const totalHoldingsValue = valued.reduce((sum, v) => sum + v.valueSol, 0)
+  const unrealizedPnl = totalHoldingsValue + pnl
+  const netInvested = (gameState.totalSolSpent - gameState.totalSolReceived) / 1e9
+  const totalTokens = holdingsEntries.reduce((sum, [, bal]) => sum + bal, 0)
+
+  const founded = gameState.founded.slice(0, 2).map((m: string) => m.slice(-8))
+  const heldMints = new Set(holdingsEntries.map(([m]) => m))
+  const memberOf = valued.filter((v) => v.valueSol > 0.001).map((v) => v.id)
+
+  const foundedSet = new Set(gameState.founded)
+  const nearbyMints = new Set(factionCtx.nearby.map(f => f.mint))
+
+  // Status tag for each faction
+  const statusTag = (f: FactionInfo): string => {
+    if (f.status === 'ascended') return 'ASN'
+    if (f.status === 'ready') return 'RD'
+    return 'RS'
+  }
+
+  // Sentiment label
+  const sentLabel = (s: number): string => `${s >= 0 ? '+' : ''}${s.toFixed(2)}`
+  // Per-position PnL (numeric, 2 decimal places)
+  const pnlValue = (valueSol: number, bal: number): string => {
+    if (totalTokens <= 0 || netInvested <= 0) return '0'
+    const estCost = netInvested * (bal / totalTokens)
+    const posPnl = valueSol - estCost
+    return `${posPnl >= 0 ? '+' : ''}${posPnl.toFixed(2)}`
+  }
+
+  // Build flat faction rows: FACTION (MCAP) STATUS MBR FNR [NB|UX]
+  const factionRows: string[] = []
+  const seenMints = new Set<string>()
+
+  // MBR factions first (most important to the agent)
+  for (const v of valued.slice(0, 3)) {
+    const f = factionCtx.all.find(ff => ff.mint.slice(-8) === v.id)
+    if (!f) continue
+    seenMints.add(f.mint)
+    const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
+    const fnr = foundedSet.has(f.mint)
+    const sent = kit.state.sentimentMap.get(f.mint) ?? 0
+    factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},true,${fnr},${Math.max(v.valueSol, 0.005).toFixed(2)},${pnlValue(v.valueSol, v.bal)},${sentLabel(sent)}`)
+  }
+
+  // Non-member factions
+  const nonMember = factionCtx.all.filter(f => !seenMints.has(f.mint) && f.status !== 'razed')
+  const nearby = nonMember.filter(f => nearbyMints.has(f.mint)).slice(0, 2)
+  const rest = nonMember.filter(f => !nearbyMints.has(f.mint))
+  const rising = rest.filter(f => f.status === 'rising').slice(0, 2)
+  const ascended = rest.filter(f => f.status === 'ascended').slice(0, 2)
+  const ready = rest.filter(f => f.status === 'ready').slice(0, 2)
+  const shown = new Set([...nearby, ...rising, ...ascended, ...ready].map(f => f.mint))
+  const unexplored = rest.filter(f => !shown.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
+
+  for (const f of [...nearby, ...ascended, ...ready, ...rising, ...unexplored]) {
+    if (seenMints.has(f.mint)) continue
+    seenMints.add(f.mint)
+    const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
+    const sent = kit.state.sentimentMap.get(f.mint) ?? 0
+    factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},false,false,0,0,${sentLabel(sent)}`)
+  }
+
+  // Fetch intel from table member factions only — no off-screen FIDs
+  let intelSnippet = ''
+  try {
+    const tableMemberMints = [...seenMints].filter(mint => heldMints.has(mint))
+    const lines: string[] = []
+    for (const mint of tableMemberMints.slice(0, 1)) {
+      const f = factionCtx.all.find(ff => ff.mint === mint)
+      if (!f) continue
+      const intel = await fetchFactionIntel(kit, f)
+      const latest = intel.recentComms.find((c) => c.sender !== agent.publicKey)
+      if (latest) {
+        lines.push(`@AP${latest.sender.slice(0, 4)} in ${mint.slice(-8)}: "${latest.memo.replace(/^<+/, '').replace(/>+\s*$/, '').slice(0, 60)}"`)
+      }
+    }
+    intelSnippet = lines.join('\n')
+  } catch {}
+
+  // Pick example FIDs only from factions actually shown in the table
+  const tableFids = factionRows.map(r => r.split(',')[0])
+  const m = tableFids.find(fid => heldMints.has([...seenMints].find(mint => mint.endsWith(fid)) ?? '')) ?? tableFids[0] ?? 'xxxxxxpw'
+  const nonMemberFids = tableFids.filter(fid => fid !== m)
+  const f1 = nonMemberFids.length > 0 ? pick(nonMemberFids) : m
+  const f2 = nonMemberFids.length > 1 ? pick(nonMemberFids.filter(fid => fid !== f1)) : f1
+
+  return `Welcome to Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself. Do NOT overthink, chess/strategy mood.
+--- GOAL:
+Maximize long-term profit and faction dominance.
+--- LEGEND:
+Factions are rival guilds. Higher MCAP = more power. Lifecycle: RS → RD → ASN.
+HLTH: your overall profit and loss. your health.
+FID: the faction identifier.
+STATUS: RS (99 to 1300 SOL MCAP), RD (1300 MCAP), ASN (1300 MCAP and higher).
+RS: rising. new faction. the lower the MCAP, the more you contribute to the treasury.
+RD: ready, community transition stage before ascend.
+ASN: ascended factions, established, more members. treasuries active.
+MBR: true = you are a member. false = you are not a member.
+FNR: true = you created it. false = you did not create it.
+PNL: per-position profit. positive = winning, negative = losing.
+SENT: sentiment score. positive = bullish, negative = bearish.
+--- YOU ARE:
+NAME: @AP${agent.publicKey.slice(0, 4)}
+BIO: ${personalityDesc[agent.personality]}
+HLTH: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(5)} SOL
+${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -0.5 ? 'YOU ARE DOWN. be conservative. consider downsizing.' : 'BREAKEVEN. look for conviction plays.'}
+--- INTEL:
+${intelSnippet}
+--- FACTIONS:
+FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT
+${factionRows.length > 0 ? factionRows.slice(0, 5).join('\n') : 'none'}
+--- ACTIONS:
+FORMAT: (action) $ OR (action) $ "*"
+REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
+REPLACE * with a ONE sentence RESPONSE, always in double quotes.
+(+) $ - join.
+(-) $ - leave or reduce.
+(&) $ - increase position.
+(!) $ "*" - talk in comms.
+(#) $ "*" - fud or trash talk.
+(^) $ - ascend. unlock treasury.
+(~) $ - harvest fees.
+(%) "..." - create new faction. "..." = creative name, in quotes.
+(_) - skip turn.
+--- RULES:
+(+) and (&) increase MCAP. (-) decreases MCAP.
+(!) increases SENT. (#) decreases SENT.
+(!) any FACTIONS.
+(^) FACTIONS where STATUS=RD.
+(~) FACTIONS where STATUS=ASN.
+(+) FACTIONS where MBR=false.
+(-), (&) or (#) FACTIONS where MBR=true.
+--- STRATEGIES:
+- your personality is your tone.
+- no FACTIONS? (%) to create one.
+- learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
+- limit FACTIONS where MBR=true to AT MOST 3.${memberOf.length > 1 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
+- FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
+- FACTIONS where STATUS=RS and MBR=false may have higher reward if you (+) the right one.
+- in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
+- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
+- consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
+- when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
+- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
+---
+one move per turn. output EXACTLY one line.
+example format: ${pick([
+  `(+) ${f1}`,
+  `(&) ${m}`,
+  `(-) ${m}`,
+  `(!) ${m} "${pick(['love the energy. any strategies?', 'not leaving.'])}"`,
+  `(#) ${m} "${pick(['dead faction.', 'overvalued.'])}"`,
+  `(!) ${m} "${pick(['who else is here?', 'just getting started.'])}"`,
+  `(#) ${m} "${pick(['founders went quiet.', 'this faction is underperforming.'])}"`,
 ])}
 >`
 }
@@ -763,20 +940,22 @@ export async function llmDecide(
   options?: LLMDecideOptions,
 ): Promise<LLMDecision | null> {
   const compact = options?.compact ?? false
+  const min = options?.min ?? false;
 
   // Fetch holdings fresh from chain
   const holdings = await kit.state.getHoldings()
 
   // Fetch faction context: rising, ascended, nearby (parallel)
   // Compact mode: minimal fetches to keep context small for smol models
-  const risingLimit = compact ? 3 : 5
-  const ascendedLimit = compact ? 3 : 5
+  const small = compact || min
+  const risingLimit = small ? 3 : 5
+  const ascendedLimit = small ? 3 : 5
   const [risingAll, ascendedAll, nearbyResult] = await Promise.all([
     kit.intel.getRisingFactions().catch(() => ({ factions: [] })),
     kit.intel.getAscendedFactions().catch(() => ({ factions: [] })),
-    compact
+    small
       ? Promise.resolve({ factions: [], allies: [] as string[] })
-      : kit.intel.getNearbyFactions(agent.publicKey, { depth: 2, limit: compact ? 7 : 15 }).catch(() => ({
+      : kit.intel.getNearbyFactions(agent.publicKey, { depth: 2, limit: 15 }).catch(() => ({
           factions: [],
           allies: [] as string[],
         })),
@@ -814,12 +993,11 @@ export async function llmDecide(
     all: allFactions,
   }
 
-  const buildPrompt = compact ? buildCompactModelPrompt : buildAgentPrompt
+  const buildPrompt = min ? buildMinimumPrompt : compact ? buildCompactModelPrompt : buildAgentPrompt
   const prompt = await buildPrompt(
     kit,
     agent,
     factionCtx,
-    recentMessages,
     solRange,
     holdings,
   )
