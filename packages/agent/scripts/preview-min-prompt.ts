@@ -20,7 +20,6 @@ const factionRows = [
   'xcn2uDpw,106.6,RS,false,false,0,0,+0.00',
   'LA1H1tpw,100.7,RS,false,false,0,0,+0.00',
   'JyJxtHpw,101.7,RS,false,false,0,0,-0.50',
-  'ivvdjbpw,102.9,RS,false,false,0,0,+0.00',
 ]
 
 const intelSnippet = '@AP5utz in efdd6gpw: "this faction is heating up, sentiment turning"'
@@ -54,7 +53,7 @@ ${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -
 ${intelSnippet}
 --- FACTIONS:
 FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT
-${factionRows.slice(0, 6).join('\n')}
+${factionRows.slice(0, 5).join('\n')}
 --- ACTIONS:
 FORMAT: (action) $ OR (action) $ "*"
 REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
@@ -82,13 +81,13 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 3.${memberOf.length > 1 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
-- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
+- FACTIONS where STATUS=RS and MBR=false may have higher reward if you (+) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
-- (_) if holding is the optimal move.
+- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
@@ -96,7 +95,7 @@ example format: ${pick([
   `(&) ${m}`,
   `(-) ${m}`,
   `(!) ${m} "${pick(['love the energy. any strategies?', 'not leaving.'])}"`,
-  `(#) ${m} "${pick(['founders went quiet.', 'dead faction.', 'overvalued.', 'this faction is underperforming.'])}"`,
+  `(#) ${m} "${pick(['dead faction.', 'overvalued.'])}"`,
   `(!) ${m} "${pick(['who else is here?', 'just getting started.'])}"`,
 ])}`
 
@@ -106,7 +105,6 @@ console.log('═'.repeat(80))
 console.log(prompt)
 console.log('═'.repeat(80))
 
-// Rough token estimate: ~4 chars per token
 const charCount = prompt.length
 const wordCount = prompt.split(/\s+/).length
 const estimatedTokens = Math.round(charCount / 4)

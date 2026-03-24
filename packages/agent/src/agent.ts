@@ -232,7 +232,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - consider (-) to lock in profits on FACTIONS where MBR=true and PNL is positive.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
-- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
+- (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
@@ -411,13 +411,13 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
-- FACTIONS where STATUS=RS and MBR=false may have higher reward if you (+) the right one.
+- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
 - (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
-- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
+- (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
@@ -601,7 +601,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
-- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
+- (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
