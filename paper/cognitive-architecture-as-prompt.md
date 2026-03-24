@@ -4,7 +4,7 @@
 
 ## Abstract
 
-We present a novel prompt architecture — a domain-specific language (DSL) combining natural language, SQL-like query syntax, and programming language control flow — that produces emergent strategic reasoning from language models as small as 0.6B parameters. Without fine-tuning, distillation, or architectural modification, models running this 747-token prompt exhibit multi-pass decision branching, constraint checking against typed data tables, personality-driven creative generation, and multi-agent coordination through on-chain messages. We demonstrate that a Qwen3-0.6B model running in a browser via WebGPU produces reasoning behaviors previously associated with 7B+ models, and that the same prompt architecture scales unchanged to a 200-agent swarm executing autonomous financial strategy on the Solana blockchain using a single consumer GPU (RTX 4070).
+We present a novel prompt architecture — a domain-specific language (DSL) combining natural language, SQL-like query syntax, and programming language control flow — that produces emergent strategic reasoning from language models as small as 0.6B parameters. Without fine-tuning, distillation, or architectural modification, models running this 847-token prompt exhibit multi-pass decision branching, constraint checking against typed data tables, personality-driven creative generation, and multi-agent coordination through on-chain messages. We demonstrate that a Qwen3-0.6B model running in a browser via WebGPU produces reasoning behaviors previously associated with 7B+ models, and that the same prompt architecture scales unchanged to a 200-agent swarm executing autonomous financial strategy on the Solana blockchain using a single consumer GPU (RTX 4070).
 
 Beyond the prompt architecture, we identify a second contribution: a self-evolving identity loop in which agents checkpoint their behavior to an on-chain personality PDA, introspect on their own action history, update their self-model, and act from it on subsequent ticks — without awareness that they authored the self-model they are reading. This loop — experience, internalization, forgetting of authorship, action from identity — produces persistent, portable personality that survives model swaps and cold restarts. We observe emergent behaviors arising from this loop, including a 0.6B model independently inventing a "do nothing" action that did not exist in its action space, arriving at this decision through coherent first-principles reasoning about when inaction has positive expected value. Across a 200-agent swarm, agents maintain near-breakeven P&L in an adversarial economic environment despite waking for only 1% of game ticks, suggesting that the self-model carries sufficient signal for coherent cold-start decision-making.
 
@@ -49,13 +49,17 @@ Our approach eliminates this overhead by providing the mental model pre-construc
 
 Traditional prompts describe what the model should do in natural language. Our DSL describes what the model *has* — its identity, its data, its tools, and its constraints — in a structured format that maps directly to how attention mechanisms process information.
 
-The design was driven by three principles:
+The design was driven by four principles:
 
 **Principle 1: Define once, reference everywhere.** Every concept (faction status, membership, sentiment) is assigned a short identifier (STATUS, MBR, SENT) and defined in a LEGEND section. All subsequent references use the identifier, creating consistent graph nodes in the model's attention space.
 
 **Principle 2: Data as tables, not prose.** Game state is presented as typed tuples with a schema header, not as descriptive sentences. The model reads structured records rather than parsing natural language descriptions.
 
-**Principle 3: Actions as opcodes, permissions as a matrix.** Available actions are defined with typed signatures `(+) $ "*"` and a separate RULES section maps column conditions to available actions: `FACTIONS where MBR=false - (+), (|)`.
+**Principle 3: Actions as opcodes, permissions as a matrix.** Available actions are defined with typed signatures `(+) $ "*"` and a separate RULES section maps column conditions to available actions: `FACTIONS where MBR=false - (+), (/)`.
+
+**Principle 4: The prompt is a lens, not a script.** The architecture is static but the data flowing through it is alive. Every tick, the agent receives a fresh world state: different faction prices, different sentiment scores, different intel from other agents' on-chain messages. The prompt is not a set of instructions to follow — it is a window into a changing world, with a vocabulary for perceiving it and a grammar for acting on it. The structure teaches the model *how to see*. The data teaches it *what to do*. This distinction is critical: the same 840-token architecture produces radically different behavior depending on the state it contains, because the model is not executing a script — it is reasoning about a world.
+
+This principle has a corollary: the richness and variety of the data matters as much as the structure. Intel snippets from other agents' on-chain messages serve as live few-shot examples — not hardcoded in the prompt, but refreshed every tick from the swarm's actual behavior. A 1.7B model that would parrot static examples instead absorbs vocabulary from the 9B agents' messages flowing through the intel feed: "RS corpse," "drainer," "before rivals feast." The prompt provides the cognitive architecture. The world provides the curriculum.
 
 ### 2.2 Architecture
 
@@ -79,11 +83,11 @@ This mirrors the sequence a human decision-maker follows: understand the vocabul
 World state is presented as tuples with a schema header:
 
 ```
-(FID,MCAP,STATUS,MBR,FNR,VALUE,SENT)
-(1asdffpw,99.51,ASN,true,false,0.3945,+3)
-(2bcdegpw,45.20,RS,true,false,0.3006,-2)
-(111FNRpw,12.30,RS,true,true,0.0001,+5)
-(3xyzwqpw,80.00,ASN,false,false,0,0)
+FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT
+1asdffpw,99.51,ASN,true,false,0.3945,+3
+2bcdegpw,45.20,RS,true,false,0.3006,-2
+111FNRpw,12.30,RS,true,true,0.0001,+5
+3xyzwqpw,80.00,ASN,false,false,0,0
 ```
 
 Each faction is a complete record. The model scans rows and evaluates columns without cross-referencing separate lists — a critical improvement over our initial approach of presenting factions in category-separated lists (ASCENDED, RISING, READY, etc.) which required the model to mentally merge information from multiple locations.
@@ -93,11 +97,11 @@ Each faction is a complete record. The model scans rows and evaluates columns wi
 Action permissions are expressed as column queries against the FACTIONS table:
 
 ```
-FACTIONS where MBR=false - (+), (|)
-FACTIONS where MBR=true - (-), (&), (#)
-FACTIONS where STATUS=RD - (^)
-FACTIONS where STATUS=ASN - (~)
-any FACTIONS - (!), (.), (%), (@)
+(!) any FACTIONS.
+(^) FACTIONS where STATUS=RD.
+(~) FACTIONS where STATUS=ASN.
+(+) FACTIONS where MBR=false.
+(-), (&) or (#) FACTIONS where MBR=true only.
 ```
 
 The keyword `FACTIONS` serves as an anchor — an uppercase identifier that the model links to the `--- FACTIONS:` section, creating a direct attention path from the rule to the data. This eliminated a persistent failure mode where models confused per-row column values (MBR on a specific faction) with global agent state.
@@ -110,13 +114,13 @@ Actions are encoded as single-character symbols within parentheses, inspired by 
 |--------|--------|-----------|
 | (+) | Join | MBR=false |
 | (-) | Leave/downsize | MBR=true |
-| (\|) | Infiltrate | MBR=false |
 | (&) | Reinforce | MBR=true |
 | (!) | Message | any |
 | (#) | Trash talk | MBR=true |
 | (^) | Ascend | STATUS=RD |
 | (~) | Harvest | STATUS=ASN |
 | (%) | Create faction | any |
+| (_) | Skip turn |
 
 Each symbol is a single token, a fixed node in the model's attention space. The model does not need to parse "JOIN" as a word with semantic content that could be confused with the concept of joining in other contexts. `(+)` is purely an opcode — a button that does exactly one thing.
 
@@ -351,6 +355,18 @@ This is analogous to how humans use written notes, spreadsheets, or dashboards d
 Our findings align with Herbert Simon's theory of bounded rationality: that rational agents make decisions not by optimizing over all possible information, but by satisficing within bounded state spaces. The DSL creates an optimal bounded space — enough information to make strategic decisions, structured enough to reason about, and small enough to fit within the model's effective attention span.
 
 The "don't make the agent anxious" heuristic is a practical application of this principle. Just as humans make better decisions with clear, limited options than with overwhelming choice, small language models produce better reasoning with compressed, structured state than with verbose, comprehensive descriptions.
+
+### 5.4 The Lens Principle: Structure as Perception, Data as Curriculum
+
+A critical insight that emerged during iterative testing is that the prompt architecture cannot be evaluated in isolation from the data flowing through it. The same 840-token structure produces qualitatively different behavior depending on the richness of its dynamic content — not because the model follows different instructions, but because it perceives a different world.
+
+This is most evident in the INTEL section. When the compact prompt carried a single intel snippet — one agent's message from one faction — the 0.6B and 1.7B models produced generic responses copied from the static example pool. When expanded to two intel snippets from different factions, models began generating novel language that referenced specific agents and mirrored vocabulary from the intel feed. A 1.7B model with no thinking tokens produced "slash this -9.4 PnL corpse before rivals feast" — language absorbed entirely from the 9B swarm agents' messages visible through the intel pipeline.
+
+The implication is that the prompt is less a set of instructions and more a perceptual lens: a structured way of seeing the world that the model looks *through*, not *at*. The LEGEND defines the vocabulary of perception. The FACTIONS table is the visual field. The ACTIONS and RULES are the motor cortex. The STRATEGIES are learned heuristics. The INTEL is what other agents are saying — the social environment.
+
+What makes this lens powerful is that the world it reveals is alive. Every tick, prices change, sentiment shifts, agents send new messages. The model does not need to be told to adapt — it adapts because the data it perceives has changed. A faction that was FLAT+NEUT last tick is now LOSS+BEAR. The model's response changes not because of a new instruction, but because the world it sees through the lens has changed.
+
+This has a practical consequence for prompt engineering: optimizing the structure without optimizing the data pipeline is insufficient. The 1.7B no-think model achieved 60+ consecutive correct decisions not because the prompt told it what to do in every scenario, but because the combination of structured perception (the prompt) and rich, varied input (live game state + live agent comms) provided enough signal for direct pattern matching from state to action — without reasoning.
 
 ## 6. The Identity Loop
 

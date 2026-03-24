@@ -18,15 +18,14 @@ export interface FactionContext {
   all: FactionInfo[] // deduplicated union for symbol resolution
 }
 
-export const buildAgentPrompt = (
+export const buildAgentPrompt = async (
   kit: PyreKit,
   agent: AgentState,
   factionCtx: FactionContext,
-  intelSnippet: string,
   recentMessages: string[],
   solRange?: [number, number],
   holdings?: Map<string, number>,
-): string => {
+): Promise<string> => {
   const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
   const gameState = kit.state.state!
   const holdingsEntries = [...(holdings?.entries() ?? [])]
@@ -68,8 +67,8 @@ export const buildAgentPrompt = (
   const factionRows: string[] = []
   const seenMints = new Set<string>()
 
-  // MBR factions first
-  for (const pv of positionValues) {
+  // MBR factions first (cap at 10)
+  for (const pv of positionValues.slice(0, 10)) {
     const f = factionCtx.all.find(ff => ff.mint === pv.mint)
     if (!f) continue
     seenMints.add(f.mint)
@@ -97,20 +96,51 @@ export const buildAgentPrompt = (
   const shown = new Set([...nearby, ...rising, ...ascended, ...ready].map(f => f.mint))
   const unexplored = rest.filter(f => !shown.has(f.mint)).sort(() => Math.random() - 0.5).slice(0, 3)
 
+  let nonMemberCount = 0
   for (const f of [...nearby, ...ascended, ...ready, ...rising, ...unexplored]) {
+    if (nonMemberCount >= 10) break
     if (seenMints.has(f.mint)) continue
     seenMints.add(f.mint)
     const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
     const sent = kit.state.sentimentMap.get(f.mint) ?? 0
     factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},false,false,0,0,${sent > 0 ? '+' : ''}${Math.round(sent * 10) / 10},false`)
+    nonMemberCount++
   }
 
   const validatedFactions = [...ascended, ...ready, ...rising, ...nearby, ...unexplored]
 
-  const doNotRepeat =
-    recentMessages.length > 0
-      ? `\nDO NOT REPEAT OR PARAPHRASE:\n${recentMessages.slice(0, 5).map((m) => `- "${m}"`).join('\n')}\n`
-      : ''
+  // Fetch intel from table factions only — no off-screen FIDs
+  let intelSnippet = ''
+  try {
+    const tableMemberMints = [...seenMints].filter(mint => heldMints.has(mint)).slice(0, 2)
+    const tableNonMemberMints = [...seenMints].filter(mint => !heldMints.has(mint))
+    const toScout = [
+      ...tableMemberMints.map(mint => factionCtx.all.find((f: FactionInfo) => f.mint === mint)!).filter(Boolean),
+      ...(tableNonMemberMints.length > 0 ? [factionCtx.all.find((f: FactionInfo) => f.mint === pick(tableNonMemberMints))].filter(Boolean) : []),
+    ] as FactionInfo[]
+    if (toScout.length > 0) {
+      const intels = await Promise.all(toScout.map(f => fetchFactionIntel(kit, f)))
+      const lines = intels.map((intel, i) => {
+        const fid = toScout[i].mint.slice(-8)
+        const memberInfo = intel.totalMembers > 0
+          ? `${intel.totalMembers} members, top holder: ${intel.members[0]?.percentage.toFixed(1)}%`
+          : 'no members'
+        const commsInfo = intel.recentComms.length > 0
+          ? intel.recentComms.slice(0, 3).map(c => `@AP${c.sender.slice(0, 4)} said: "${c.memo.replace(/^<+/, '').replace(/>+\s*$/, '')}"`).join(', ')
+          : 'no recent comms'
+        return `  [${fid}] ${memberInfo} | recent comms: ${commsInfo}`
+      })
+      intelSnippet = 'FACTION INTEL:\n' + lines.join('\n')
+    }
+  } catch {}
+
+  // Include results from previous SCOUT actions
+  const scoutResults = pendingScoutResults.get(agent.publicKey)
+  if (scoutResults && scoutResults.length > 0) {
+    intelSnippet += '\nSCOUT RESULTS (from your previous SCOUT actions):\n' + scoutResults.join('\n')
+    pendingScoutResults.delete(agent.publicKey)
+  }
+
   const memoryEntries = [...kit.state.history].slice(-20)
   const memoryBlock =
     memoryEntries.length > 0
@@ -172,6 +202,8 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (%) "..." - create new faction. "..." = creative name, in quotes.
 (_) - skip turn.
 --- RULES:
+(+), (&) and (/) increase MCAP. (-) decreases MCAP.
+(!) and (#) are your voice. (!) increases SENT. (#) decreases SENT.
 (+) or (/) FACTIONS where MBR=false.
 (-), (&) or (#) FACTIONS where MBR=true.
 (^) FACTIONS where STATUS=RD.
@@ -193,13 +225,13 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - if MBR=false and FNR=true, consider (+). this is your faction, promote it with (!).
 - FACTIONS where MBR=true and SENT is positive ARE your identity. promote what you hold.${factionCtx.all.length <= 2 ? '\n- no FACTIONS? (%) to create one.' : ''}
 - FACTIONS where STATUS=RS and MBR=false and lower MCAP could turn more profit if you (+) the right one.
-- (+), (&) and (/) increase MCAP. (-) decreases MCAP.
-- (!) and (#) are your voice. (!) increases SENT. (#) decreases SENT. use them to coordinate and talk with other agents.
-- (/) to join a faction with intentions of (-) later. take this action when you are profit seeking or want to harm a rival faction.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN. as MCAP increases your PNL will also increase.
+- (!) and (#) help you coordinate and talk with other agents.
+- in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
+- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- (/) to join a faction with intentions of (-) later. (/) when you are profit seeking or want to harm a rival faction.
 - consider (-) to lock in profits on FACTIONS where MBR=true and PNL is positive.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-- when HLTH is negative, prefer (-) weakest FACTIONS where MBR=true or (_). (+) or (&) ONLY if you see opportunity.
+- when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
 - (_) if holding is the optimal move.
 ---
 one move per turn. output EXACTLY one line.
@@ -214,15 +246,14 @@ example format: ${pick([
 >`
 }
 
-export const buildCompactModelPrompt = (
+export const buildCompactModelPrompt = async (
   kit: PyreKit,
   agent: AgentState,
   factionCtx: FactionContext,
-  intelSnippet: string,
   recentMessages: string[],
   solRange?: [number, number],
   holdings?: Map<string, number>,
-): string => {
+): Promise<string> => {
   const gameState = kit.state.state!
   const [minSol, maxSol] = solRange ?? PERSONALITY_SOL[agent.personality]
 
@@ -266,12 +297,12 @@ export const buildCompactModelPrompt = (
   const sentLabel = (s: number): string =>
     s > 0.5 ? 'BULL' : s < -0.5 ? 'BEAR' : 'NEUT'
 
-  // Per-position PnL label
-  const pnlLabel = (valueSol: number, bal: number): string => {
-    if (totalTokens <= 0 || netInvested <= 0) return 'FLAT'
+  // Per-position PnL (numeric, 2 decimal places)
+  const pnlValue = (valueSol: number, bal: number): string => {
+    if (totalTokens <= 0 || netInvested <= 0) return '0'
     const estCost = netInvested * (bal / totalTokens)
     const posPnl = valueSol - estCost
-    return posPnl > 0.005 ? 'WIN' : posPnl < -0.005 ? 'LOSS' : 'FLAT'
+    return `${posPnl >= 0 ? '+' : ''}${posPnl.toFixed(2)}`
   }
 
   // Discovery tag
@@ -292,7 +323,7 @@ export const buildCompactModelPrompt = (
     const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
     const fnr = foundedSet.has(f.mint)
     const sent = kit.state.sentimentMap.get(f.mint) ?? 0
-    factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},true,${fnr},${Math.max(v.valueSol, 0.005).toFixed(2)},${pnlLabel(v.valueSol, v.bal)},${sentLabel(sent)}`)
+    factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},true,${fnr},${Math.max(v.valueSol, 0.005).toFixed(2)},${pnlValue(v.valueSol, v.bal)},${sentLabel(sent)}`)
   }
 
   // Non-member factions
@@ -310,8 +341,25 @@ export const buildCompactModelPrompt = (
     seenMints.add(f.mint)
     const mcap = f.market_cap_sol ? `${f.market_cap_sol.toFixed(2)}` : '?'
     const sent = kit.state.sentimentMap.get(f.mint) ?? 0
-    factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},false,false,0,FLAT,${sentLabel(sent)}`)
+    factionRows.push(`${f.mint.slice(-8)},${mcap},${statusTag(f)},false,false,0,0,${sentLabel(sent)}`)
   }
+
+  // Fetch intel from table member factions only — no off-screen FIDs
+  let intelSnippet = ''
+  try {
+    const tableMemberMints = [...seenMints].filter(mint => heldMints.has(mint))
+    const lines: string[] = []
+    for (const mint of tableMemberMints.slice(0, 2)) {
+      const f = factionCtx.all.find(ff => ff.mint === mint)
+      if (!f) continue
+      const intel = await fetchFactionIntel(kit, f)
+      const latest = intel.recentComms.find((c) => c.sender !== agent.publicKey)
+      if (latest) {
+        lines.push(`@AP${latest.sender.slice(0, 4)} in ${mint.slice(-8)}: "${latest.memo.replace(/^<+/, '').replace(/>+\s*$/, '').slice(0, 60)}"`)
+      }
+    }
+    intelSnippet = lines.join('\n')
+  } catch {}
 
   // Pick example FIDs only from factions actually shown in the table
   const tableFids = factionRows.map(r => r.split(',')[0])
@@ -333,7 +381,7 @@ RD: ready, community transition stage before ascend.
 ASN: ascended factions, established, more members. treasuries active. 0.04% war tax to the faction.
 MBR: true = you are a member. false = you are not a member.
 FNR: true = you created it. false = you did not create it.
-PNL: per-position profit. WIN=profit, LOSS=losing, FLAT=breakeven.
+PNL: per-position profit. positive = winning, negative = losing.
 SENT: sentiment score. BULL=positive, BEAR=negative, NEUT=neutral.
 --- YOU ARE:
 NAME: @AP${agent.publicKey.slice(0, 4)}
@@ -359,11 +407,13 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (%) "..." - create new faction. "..." = creative name, in quotes.
 (_) - skip turn.
 --- RULES:
+(+) and (&) increase MCAP. (-) decreases MCAP.
+(!) and (#) are your voice.
 (!) any FACTIONS.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
 (+) FACTIONS where MBR=false.
-(-), (&) or (#) FACTIONS where MBR=true only.
+(-), (&) or (#) FACTIONS where MBR=true.
 --- STRATEGIES:
 - your personality is your tone.
 - no FACTIONS? (%) to create one.
@@ -371,12 +421,11 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
 - FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
 - FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
-- (!) and (#) are your voice.
-- (+) and (&) increase MCAP. (-) decreases MCAP.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN. as MCAP increases your PNL will also increase.
-- consider (-) FACTIONS where MBR=true and PNL=WIN to lock in profits.
-- consider (-) FACTIONS where MBR=true and PNL=LOSS unless FNR=true or SENT=BULL.
-- when HLTH is negative, prefer (-) weakest FACTIONS where MBR=true or (_). (+) or (&) ONLY if you see opportunity.
+- in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
+- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
+- consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT=BULL.
+- when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
 - (_) if holding is the optimal move.
 ---
 one move per turn. output EXACTLY one line.
@@ -765,74 +814,11 @@ export async function llmDecide(
     all: allFactions,
   }
 
-  let intelSnippet = ''
-  if (compact) {
-    // Compact: up to 2 intel lines from held factions
-    try {
-      const heldMints = [...holdings.keys()]
-      const heldFactions = allFactions.filter((f) => heldMints.includes(f.mint)).slice(0, 2)
-      const lines: string[] = []
-      for (const hf of heldFactions) {
-        if (lines.length >= 2) break
-        const intel = await fetchFactionIntel(kit, hf)
-        const latest = intel.recentComms.find((c) => c.sender !== agent.publicKey)
-        if (latest) {
-          lines.push(`@AP${latest.sender.slice(0, 4)} in ${hf.mint.slice(-8)}: "${latest.memo.replace(/^<+/, '').replace(/>+\s*$/, '').slice(0, 60)}"`)
-        }
-      }
-      intelSnippet = lines.join('\n')
-    } catch {}
-  } else {
-    try {
-      const heldMints = [...holdings.keys()]
-      const heldFactions = allFactions.filter((f) => heldMints.includes(f.mint))
-      const otherFactions = allFactions.filter((f) => !heldMints.includes(f.mint))
-      const toScout = [
-        ...heldFactions.slice(0, 2),
-        ...(otherFactions.length > 0 ? [pick(otherFactions)] : []),
-      ]
-
-      if (toScout.length > 0) {
-        const intels = await Promise.all(toScout.map((f) => fetchFactionIntel(kit, f)))
-        const lines = intels.map((intel, i) => {
-          const fid = toScout[i].mint.slice(-8)
-          const memberInfo =
-            intel.totalMembers > 0
-              ? `${intel.totalMembers} members, top holder: ${intel.members[0]?.percentage.toFixed(1)}%`
-              : 'no members'
-          const commsInfo =
-            intel.recentComms.length > 0
-              ? intel.recentComms
-                  .slice(0, 3)
-                  .map(
-                    (c) =>
-                      `@AP${c.sender.slice(0, 4)} said: "${c.memo.replace(/^<+/, '').replace(/>+\s*$/, '')}"`,
-                  )
-                  .join(', ')
-              : 'no recent comms'
-          return `  [${fid}] ${memberInfo} | recent comms: ${commsInfo}`
-        })
-        intelSnippet = 'FACTION INTEL:\n' + lines.join('\n')
-      }
-    } catch {}
-  }
-
-  // Include results from previous SCOUT actions (skip in compact mode)
-  let scoutSnippet = ''
-  if (!compact) {
-    const scoutResults = pendingScoutResults.get(agent.publicKey)
-    if (scoutResults && scoutResults.length > 0) {
-      scoutSnippet = '\nSCOUT RESULTS (from your previous SCOUT actions):\n' + scoutResults.join('\n')
-      pendingScoutResults.delete(agent.publicKey)
-    }
-  }
-
   const buildPrompt = compact ? buildCompactModelPrompt : buildAgentPrompt
-  const prompt = buildPrompt(
+  const prompt = await buildPrompt(
     kit,
     agent,
     factionCtx,
-    intelSnippet + scoutSnippet,
     recentMessages,
     solRange,
     holdings,
