@@ -141,6 +141,22 @@ export function AgentPanel() {
         </div>
       )}
 
+      {/* Reset Agent */}
+      {!agent && controllerPublicKey && (
+        <button
+          onClick={() => {
+            const req = indexedDB.deleteDatabase('pyre-agent')
+            req.onsuccess = () => window.location.reload()
+            req.onerror = () => window.location.reload()
+            req.onblocked = () => window.location.reload()
+          }}
+          className="text-xs cursor-pointer rounded"
+          style={{ color: 'var(--muted)', padding: '2px 6px', border: '1px solid var(--border)' }}
+        >
+          Reset Agent
+        </button>
+      )}
+
       {/* Model Selection + Launch */}
       {!agent && (controllerStatus === 'ready' || wallet.connected) && (
         <div className="space-y-3" style={{ padding: '0.25rem' }}>

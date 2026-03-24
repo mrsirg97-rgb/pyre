@@ -73,14 +73,6 @@ export function useBrowserAgent(): BrowserAgentHook {
     setLogs((prev) => [...prev.slice(-99), msg])
   }, [])
 
-  // Handle ?reset=1 — wipe all agent state and reload
-  useEffect(() => {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('reset')) {
-      indexedDB.deleteDatabase('pyre-agent')
-      window.location.href = window.location.pathname
-    }
-  }, [])
-
   // Detect device capabilities on mount
   useEffect(() => {
     detectDevice()
