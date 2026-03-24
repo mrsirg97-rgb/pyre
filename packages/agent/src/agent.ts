@@ -117,7 +117,7 @@ export const buildAgentPrompt = async (
       ...(tableNonMemberMints.length > 0 ? [factionCtx.all.find((f: FactionInfo) => f.mint === pick(tableNonMemberMints))].filter(Boolean) : []),
     ] as FactionInfo[]
     if (toScout.length > 0) {
-      const intels = await Promise.all(toScout.map(f => fetchFactionIntel(kit, f)))
+      const intels = await Promise.all(toScout.slice(0, 6).map(f => fetchFactionIntel(kit, f)))
       const lines = intels.map((intel, i) => {
         const fid = toScout[i].mint.slice(-8)
         const memberInfo = intel.totalMembers > 0
