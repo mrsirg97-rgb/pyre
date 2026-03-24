@@ -107,8 +107,6 @@ export const buildAgentPrompt = async (
     nonMemberCount++
   }
 
-  const validatedFactions = [...ascended, ...ready, ...rising, ...nearby, ...unexplored]
-
   // Fetch intel from table factions only — no off-screen FIDs
   let intelSnippet = ''
   try {
@@ -182,7 +180,7 @@ RIVALS: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 5).map((a) => `@AP$
 LATEST: ${intelSnippet}
 --- FACTIONS:
 FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT,LOAN
-${factionRows.length > 0 ? factionRows.join('\n') : 'none'}
+${factionRows.length > 0 ? factionRows.slice(0, 14).join('\n') : 'none'}
 --- ACTIONS:
 FORMAT: (action) $ "*"
 REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).

@@ -83,11 +83,11 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
 - FACTIONS where STATUS=RS and MBR=false may have higher reward if you (+) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-- (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
+- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
-- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
+- (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([

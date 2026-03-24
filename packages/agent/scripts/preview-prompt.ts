@@ -93,7 +93,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
-- (_) can be strategic if you are comfortable with your positions and want to see what plays out next turn.
+- (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
