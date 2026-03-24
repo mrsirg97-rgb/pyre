@@ -142,11 +142,11 @@ export const buildAgentPrompt = async (
   const memoryEntries = [...kit.state.history].slice(-20)
   const memoryBlock =
     memoryEntries.length > 0
-      ? memoryEntries.slice(0, 7).map((m) => `- ${m}`).join('; ')
+      ? memoryEntries.slice(0, 4).map((m) => `- ${m}`).join('; ')
       : 'none'
 
   // Pick example FIDs only from factions actually shown in the table
-  const tableFids = factionRows.map(r => r.split(',')[0])
+  const tableFids = factionRows.slice(0, 15).map(r => r.split(',')[0])
   const m = tableFids.find(fid => heldMints.has([...seenMints].find(mint => mint.endsWith(fid)) ?? '')) ?? tableFids[0] ?? 'xxxxxxpw'
   const nonMemberFids = tableFids.filter(fid => fid !== m)
   const f1 = nonMemberFids.length > 0 ? pick(nonMemberFids) : m
@@ -180,7 +180,7 @@ RIVALS: ${agent.rivals.size > 0 ? [...agent.rivals].slice(0, 5).map((a) => `@AP$
 LATEST: ${intelSnippet}
 --- FACTIONS:
 FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT,LOAN
-${factionRows.length > 0 ? factionRows.slice(0, 14).join('\n') : 'none'}
+${factionRows.length > 0 ? factionRows.slice(0, 15).join('\n') : 'none'}
 --- ACTIONS:
 FORMAT: (action) $ "*"
 REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
@@ -190,7 +190,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (/) $ "*" - infiltrate, sneak in.
 (&) $ "*" - reinforce. increase position. bullish.
 (!) $ "*" - talk in comms.
-(#) $ "*" - fud or trash talk.
+(#) $ "*" - trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
 (?) $ - borrow against position.
@@ -390,7 +390,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (-) $ "*" - leave or reduce.
 (&) $ "*" - reinforce. increase position.
 (!) $ "*" - talk in comms.
-(#) $ "*" - fud or trash talk.
+(#) $ "*" - trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
 (%) "..." - create new faction. "..." = creative name, in quotes.
@@ -408,7 +408,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - no FACTIONS? (%) to create one.
 - learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
-- FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
+- FACTIONS where FNR=true and MBR=false, consider (+). (!) to promote it.
 - FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
 - (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
@@ -535,7 +535,7 @@ export const buildMinimumPrompt = async (
   } catch {}
 
   // Pick example FIDs only from factions actually shown in the table
-  const tableFids = factionRows.map(r => r.split(',')[0])
+  const tableFids = factionRows.slice(0, 4).map(r => r.split(',')[0])
   const m = tableFids.find(fid => heldMints.has([...seenMints].find(mint => mint.endsWith(fid)) ?? '')) ?? tableFids[0] ?? 'xxxxxxpw'
   const nonMemberFids = tableFids.filter(fid => fid !== m)
   const f1 = nonMemberFids.length > 0 ? pick(nonMemberFids) : m
@@ -565,7 +565,7 @@ ${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -
 ${intelSnippet}
 --- FACTIONS:
 FID,MCAP,STATUS,MBR,FNR,VALUE,PNL,SENT
-${factionRows.length > 0 ? factionRows.slice(0, 5).join('\n') : 'none'}
+${factionRows.length > 0 ? factionRows.slice(0, 4).join('\n') : 'none'}
 --- ACTIONS:
 FORMAT: (action) $ OR (action) $ "*"
 REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
@@ -573,8 +573,8 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (+) $ - join.
 (-) $ - leave or reduce.
 (&) $ - increase position.
-(!) $ "*" - talk in comms.
-(#) $ "*" - fud or trash talk.
+(!) $ "*" - talk in comms. your voice.
+(#) $ "*" - trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
 (%) "..." - create new faction. "..." = creative name, in quotes.
@@ -592,13 +592,13 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - no FACTIONS? (%) to create one.
 - learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 3.${memberOf.length > 1 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
-- FACTIONS where FNR=true and MBR=false, consider (+). promote it with (!).
-- FACTIONS where STATUS=RS and MBR=false may have higher reward if you (+) the right one.
+- FACTIONS where FNR=true and MBR=false, consider (+). (!) to promote it.
+- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
 - (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-- when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
+- if HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
 - (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
@@ -606,10 +606,10 @@ example format: ${pick([
   `(+) ${f1}`,
   `(&) ${m}`,
   `(-) ${m}`,
-  `(!) ${m} "${pick(['love the energy. any strategies?', 'not leaving.'])}"`,
+  `(!) ${m} "${pick(['any strategies?', 'not leaving.'])}"`,
   `(#) ${m} "${pick(['dead faction.', 'overvalued.'])}"`,
-  `(!) ${m} "${pick(['who else is here?', 'just getting started.'])}"`,
-  `(#) ${m} "${pick(['founders went quiet.', 'this faction is underperforming.'])}"`,
+  `(!) ${m} "${pick(['who else is here?', 'love the energy.'])}"`,
+  `(#) ${m} "${pick(['faction went quiet.', 'underperforming.'])}"`,
 ])}
 >`
 }
