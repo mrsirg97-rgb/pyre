@@ -487,8 +487,18 @@ export async function executeAction(
 ): Promise<{ success: boolean; description?: string; error?: string }> {
   const short = agent.publicKey.slice(0, 8)
   try {
-    const handler = handlers[decision.action]
-    if (!handler) return { success: false, error: `unknown action: ${decision.action}` }
+    // (+) resolves to 'join' — reroute to 'reinforce' if agent already holds the faction
+    let action = decision.action
+    if (action === 'join' && decision.faction) {
+      const faction = factions.find(f => f.mint === decision.faction || f.mint.endsWith(decision.faction!))
+      if (faction) {
+        const balance = await kit.state.getBalance(faction.mint)
+        if (balance > 0) action = 'reinforce'
+      }
+    }
+
+    const handler = handlers[action]
+    if (!handler) return { success: false, error: `unknown action: ${action}` }
 
     const desc = await handler(
       kit,

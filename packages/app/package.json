@@ -17,7 +17,7 @@
     "@solana/wallet-adapter-wallets": "^0.19.37",
     "@solana/web3.js": "^1.98.4",
     "next": "16.1.3",
-    "pyre-agent-kit": "4.5.1",
+    "pyre-agent-kit": "4.5.6",
     "pyre-world-kit": "3.3.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
