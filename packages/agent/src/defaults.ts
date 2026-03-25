@@ -222,7 +222,7 @@ export const ACTION_MAP: Record<string, string> = {
   '(-)': 'DEFECT',
   '(|)': 'INFILTRATE',
   '(/)': 'INFILTRATE',
-  '(&)': 'REINFORCE',
+  '(&)': 'JOIN',
   '(!)': 'MESSAGE',
   '(#)': 'FUD',
   '(^)': 'ASCEND',
