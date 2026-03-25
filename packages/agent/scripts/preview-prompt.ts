@@ -50,7 +50,7 @@ SENT: sentiment score. positive = bullish, negative = bearish.
 --- YOU ARE:
 NAME: @AP${publicKey.slice(0, 4)}
 BIO: ${personality}
-HLTH: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(4)} SOL
+HLTH: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} SOL
 ${unrealizedPnl > 1 ? 'YOU ARE UP. consider taking profits.' : unrealizedPnl < -0.5 ? 'YOU ARE DOWN. be conservative. consider downsizing.' : 'BREAKEVEN. look for conviction plays.'}
 --- INTEL:
 ${intelSnippet}
@@ -81,10 +81,10 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - no FACTIONS? (%) to create one.
 - learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
-- FACTIONS where FNR=true and MBR=false, consider (+). (!) to promote it.
+- consider (+) FACTIONS where FNR=true. (!) to promote it.
 - FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-- (+) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
+- (+) and (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
 - when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) ONLY if you see opportunity.

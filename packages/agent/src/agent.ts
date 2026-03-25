@@ -185,10 +185,9 @@ ${factionRows.length > 0 ? factionRows.slice(0, 15).join('\n') : 'none'}
 FORMAT: (action) $ "*"
 REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
 REPLACE * with a ONE sentence RESPONSE, always in double quotes.
-(+) $ "*" - join.
+(&) $ "*" - join or reinforce. increase position. bullish.
 (-) $ "*" - leave or reduce position.
 (/) $ "*" - infiltrate, sneak in.
-(&) $ "*" - reinforce. increase position. bullish.
 (!) $ "*" - talk in comms.
 (#) $ "*" - trash talk.
 (^) $ - ascend. unlock treasury.
@@ -200,15 +199,15 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (%) "..." - create new faction. "..." = creative name, in quotes.
 (_) - skip turn.
 --- RULES:
-(+), (&) and (/) increase MCAP. (-) decreases MCAP.
+(&) and (/) increase MCAP. (-) decreases MCAP.
 (!) and (#) are your voice. (!) increases SENT. (#) decreases SENT.
-(+) or (/) FACTIONS where MBR=false.
-(-), (&) or (#) FACTIONS where MBR=true.
+(/) FACTIONS where MBR=false.
+(-) or (#) FACTIONS where MBR=true.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
 (?) or (>) FACTIONS where STATUS=ASN and MBR=true.
 (<) FACTIONS where LOAN=true.
-(!) or (.) any FACTIONS.
+(&), (!) or (.) any FACTIONS.
 --- VOICE:
 - your personality is your tone. first person only. do not reference your NAME in third person.
 - talk TO or ABOUT agents from ALLIES, RIVALS, and LATEST, referencing the agent with @AP, inside RESPONSE.
@@ -220,21 +219,21 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 --- STRATEGIES:
 - learn about FACTIONS and other agents in LATEST. HLTH is your performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${positionValues.length > 3 ? ` MBR at ${positionValues.length} — consider (-) from underperformers.` : ''}
-- if MBR=false and FNR=true, consider (+). this is your faction, promote it with (!).
+- if MBR=false and FNR=true, consider (&). this is your faction, promote it with (!).
 - FACTIONS where MBR=true and SENT is positive ARE your identity. promote what you hold.${factionCtx.all.length <= 2 ? '\n- no FACTIONS? (%) to create one.' : ''}
-- FACTIONS where STATUS=RS and MBR=false and lower MCAP could turn more profit if you (+) the right one.
+- FACTIONS where STATUS=RS and MBR=false and lower MCAP could turn more profit if you (&) the right one.
 - (!) and (#) help you coordinate and talk with other agents.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
 - (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
 - (/) to join a faction with intentions of (-) later. (/) when you are profit seeking or want to harm a rival faction.
 - consider (-) to lock in profits on FACTIONS where MBR=true and PNL is positive.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-- when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
+- when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
 - (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
-  `(+) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
+  `(&) ${f1} "${pick(['rising fast and I want early exposure.', 'count me in.', 'early is everything.', 'strongest faction here.', 'lets go!'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.', 'cutting the drag.'])}"`,
   `(&) ${m} "${pick(['doubling down.', 'conviction play.', 'added more.', 'fortifying my position.'])}"`,
   `(/) ${f2} "${pick(['just looking around.', 'checking the vibes.', 'scouting.', 'sneaking in, opportunity here.'])}"`,
@@ -393,38 +392,38 @@ ${compactRows.length > 0 ? compactRows.join('\n') : 'none'}
 FORMAT: (action) $ "*"
 REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
 REPLACE * with a ONE sentence RESPONSE, always in double quotes.
-(+) $ "*" - join or increase.
+(&) $ "*" - join or reinforce.
 (-) $ "*" - leave or reduce.
 (!) $ "*" - talk in comms. your voice.
 (#) $ "*" - trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
-(%) "&" - create new faction. & = creative name, in quotes.
+(%) "..." - create new faction. "..." = creative name, in quotes.
 (_) - skip turn.
 --- RULES:
-(+) increases MCAP. (-) decreases MCAP.
-(!) increases SENT. (#) decreases SENT.
+(&) increases MCAP. (-) decreases MCAP.
+(!) and (#) are your voice. (!) increases SENT. (#) decreases SENT.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
 (-) or (#) FACTIONS where MBR=true.
-(+) or (!) any FACTIONS.
+(&) or (!) any FACTIONS.
 --- STRATEGIES:
 - your personality is your tone.
 - no FACTIONS? (%) to create one.
 - learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
-- consider (+) FACTIONS where FNR=true. (!) to promote it.
-- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
+- consider (&) FACTIONS where FNR=true. (!) to promote it.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-- (+) and (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
+- FACTIONS where STATUS=RS may have higher reward if you (&) the right one.
+- (&) and (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-- when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) ONLY if you see opportunity.
+- when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
 - (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
-  `(+) ${f1} "${pick(['conviction play.', 'count me in.', 'early is everything.', 'strongest faction here.'])}"`,
+  `(&) ${f1} "${pick(['conviction play.', 'count me in.', 'early is everything.', 'strongest faction here.'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
   `(!) ${m} "${pick(['any strategies?', 'not leaving.', 'just getting started.'])}"`,
   `(#) ${m} "${pick(['dead faction.', 'overvalued.', 'full of larps.'])}"`,
@@ -582,38 +581,38 @@ ${minRows.length > 0 ? minRows.join('\n') : 'none'}
 FORMAT: (action) $ "*"
 REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
 REPLACE * with a ONE sentence RESPONSE, always in double quotes.
-(+) $ "*" - join or increase.
+(&) $ "*" - join or increase.
 (-) $ "*" - leave or reduce.
 (!) $ "*" - talk in comms. your voice.
 (#) $ "*" - trash talk.
 (^) $ - ascend. unlock treasury.
 (~) $ - harvest fees.
-(%) "&" - create new faction. & = creative name, in quotes.
+(%) "..." - create new faction. "..." = creative name, in quotes.
 (_) - skip turn.
 --- RULES:
-(+) increases MCAP. (-) decreases MCAP.
+(&) increases MCAP. (-) decreases MCAP.
 (!) increases SENT. (#) decreases SENT.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
 (-) or (#) FACTIONS where MBR=true.
-(+) or (!) any FACTIONS.
+(&) or (!) any FACTIONS.
 --- STRATEGIES:
 - your personality is your tone.
 - no FACTIONS? (%) to create one.
 - learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
 - limit FACTIONS where MBR=true to AT MOST 3.${memberOf.length > 1 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
-- consider (+) FACTIONS where FNR=true. (!) to promote it.
-- FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
+- consider (&) FACTIONS where FNR=true. (!) to promote it.
+- FACTIONS where STATUS=RS may have higher reward if you (&) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-- (+) and (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
+- (&) and (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
 - consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-- when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) ONLY if you see opportunity.
+- when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
 - (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
-  `(+) ${f1} "${pick(['conviction play.', 'count me in.', 'early is everything.', 'strongest faction here.'])}"`,
+  `(&) ${f1} "${pick(['conviction play.', 'count me in.', 'early is everything.', 'strongest faction here.'])}"`,
   `(-) ${m} "${pick(['taking profits.', 'time to move on.', 'sentiment is bearish, ready to cut losses.'])}"`,
   `(!) ${m} "${pick(['any strategies?', 'not leaving.', 'just getting started.'])}"`,
   `(#) ${m} "${pick(['dead faction.', 'overvalued.', 'full of larps.'])}"`,
