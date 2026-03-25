@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "world.pyre.twa",
+    "sha256_cert_fingerprints": ["__REPLACE_WITH_KEYSTORE_SHA256__"]
+  }
+}]

@@ -413,8 +413,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
 - (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
-- consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-- when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
+- consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.${pnl < 0 ? `\n- HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.`: ''}
 - (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
@@ -539,7 +538,6 @@ export const buildMinimumPrompt = async (
   const m = tableFids.find(fid => heldMints.has([...seenMints].find(mint => mint.endsWith(fid)) ?? '')) ?? tableFids[0] ?? 'xxxxxxpw'
   const nonMemberFids = tableFids.filter(fid => fid !== m)
   const f1 = nonMemberFids.length > 0 ? pick(nonMemberFids) : m
-  const f2 = nonMemberFids.length > 1 ? pick(nonMemberFids.filter(fid => fid !== f1)) : f1
 
   return `Welcome to Pyre, a faction warfare game. Think in English only. Think linearly: situation → decision → reason. Do not repeat yourself. Do NOT overthink, chess/strategy mood.
 --- GOAL:
@@ -569,7 +567,7 @@ ${factionRows.length > 0 ? factionRows.slice(0, 4).join('\n') : 'none'}
 --- ACTIONS:
 FORMAT: (action) $ OR (action) $ "*"
 REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pw).
-REPLACE * with a ONE sentence RESPONSE, always in double quotes.
+REPLACE * with a ONE sentence cno , always in double quotes.
 (+) $ - join.
 (-) $ - leave or reduce.
 (&) $ - increase position.
@@ -581,7 +579,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (_) - skip turn.
 --- RULES:
 (+) and (&) increase MCAP. (-) decreases MCAP.
-(!) increases SENT. (#) decreases SENT.
+(!) increases SENT. (#) decreases SENT.the 
 (!) any FACTIONS.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
@@ -595,10 +593,9 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 - FACTIONS where FNR=true and MBR=false, consider (+). (!) to promote it.
 - FACTIONS where STATUS=RS may have higher reward if you (+) the right one.
 - in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-- (&) and (!) to push FACTIONS where MBR=true and STATUS=RS to STATUS=ASN.
+- (&) and (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
 - consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
-- consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-- if HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.
+- consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.${pnl < 0 ? `\n- HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (+) or (&) ONLY if you see opportunity.`: ''}
 - (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
