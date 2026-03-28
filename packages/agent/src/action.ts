@@ -82,11 +82,10 @@ export const chooseAction = (
     weights[12] = 0  // can't infiltrate
   }
 
-  // Few factions available → boost launch (modest — agents converge on existing factions naturally)
+  // Few factions available → boost launch (conservative — launches cost SOL)
   const nonRazedFactions = knownFactions.filter((f) => f.status !== 'razed')
-  if (nonRazedFactions.length === 0) weights[3] += 0.15
-  else if (nonRazedFactions.length <= 2) weights[3] += 0.08
-  else if (nonRazedFactions.length <= 5) weights[3] += 0.03
+  if (nonRazedFactions.length === 0) weights[3] += 0.08
+  else if (nonRazedFactions.length <= 2) weights[3] += 0.03
 
   if (agent.infiltrated?.size > 0) weights[1] += 0.1
 

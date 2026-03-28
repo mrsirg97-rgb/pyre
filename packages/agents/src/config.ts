@@ -5,7 +5,7 @@ import * as path from 'path'
 export const NETWORK = (process.env.TORCH_NETWORK ?? 'devnet') as 'devnet' | 'mainnet'
 const isMainnet = NETWORK === 'mainnet'
 
-export const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? (isMainnet ? '7' : '200'))
+export const AGENT_COUNT = parseInt(process.env.AGENT_COUNT ?? (isMainnet ? '7' : '125'))
 export const RPC_URL =
   process.env.RPC_URL ??
   (isMainnet

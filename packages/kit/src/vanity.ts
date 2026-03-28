@@ -80,9 +80,9 @@ const finalizeTransaction = async (
 
 // ── Vanity grinder ──
 
-const PYRE_SUFFIX = 'pw'
+const PYRE_SUFFIX = 'pr'
 
-/** Grind for a keypair whose base58 address ends with "pw" (pyreworld) */
+/** Grind for a keypair whose base58 address ends with "pr" (pyre) */
 export const grindPyreMint = (maxAttempts: number = 500_000): Keypair => {
   for (let i = 0; i < maxAttempts; i++) {
     const kp = Keypair.generate()
@@ -94,8 +94,8 @@ export const grindPyreMint = (maxAttempts: number = 500_000): Keypair => {
   return Keypair.generate()
 }
 
-/** Check if a mint address is a pyre faction (ends with "pw") */
-export const isPyreMint = (mint: string): boolean => mint.endsWith(PYRE_SUFFIX)
+/** Check if a mint address is a pyre faction (ends with "pr" or legacy "pw") */
+export const isPyreMint = (mint: string): boolean => mint.endsWith(PYRE_SUFFIX) || mint.endsWith('pw')
 
 // ── Build create transaction with pyre vanity address ──
 
