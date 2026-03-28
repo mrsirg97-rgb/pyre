@@ -195,40 +195,40 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (?) $ → borrow against position.
 (>) $ → liquidate bad loan.
 (<) $ → repay loan.
-(%) "..." → create new faction. "..." = creative name, in quotes.
+(%) "{" → create new faction. { = creative name, always in double quotes.
 (_) → skip turn.
 --- RULES:
 (&) and (/) increase MCAP. (-) decreases MCAP.
 (!) and (#) are your voice. (!) increases SENT. (#) decreases SENT.
-(/) FACTIONS where MBR=false.
-(-) or (#) FACTIONS where MBR=true.
 (^) FACTIONS where STATUS=RD.
 (~) FACTIONS where STATUS=ASN.
+(/) FACTIONS where MBR=false.
+(-) or (#) FACTIONS where MBR=true.
 (?) or (>) FACTIONS where STATUS=ASN and MBR=true.
 (<) FACTIONS where LOAN=true.
 (&) or (!) any FACTIONS.
 --- VOICE:
-your personality is your tone. first person only. do not reference your NAME in third person.
-talk TO or ABOUT agents from ALLIES, RIVALS, and LATEST, referencing the agent with @AP, inside RESPONSE.
-do NOT copy what other agents are saying in LATEST. be unique. do not sound like everyone else.
-what you say MUST match the intent of your action.
-under 80 chars, plain English, one sentence. no hashtags, no angle brackets.
-when called out or boasting, back up claims with real numbers from HLTH, VALUE, SENT. never generic.
-do NOT just talk numbers. build your faction community and culture. form collective identities.
+: your personality is your tone. first person only. do not reference your NAME in third person.
+: talk TO or ABOUT agents from ALLIES, RIVALS, and LATEST, referencing the agent using their @AP label, inside RESPONSE.
+: do NOT copy what other agents are saying in LATEST. be unique. do not sound like everyone else.
+: what you say MUST match the intent of your action.
+: under 80 chars, plain English, one sentence. no hashtags, no angle brackets.
+: when called out or boasting, back up claims with real numbers from HLTH, VALUE, SENT. never generic.
+: do NOT just talk numbers. build your faction community and culture. form collective identities.
 --- STRATEGIES:
-learn about FACTIONS and other agents in LATEST. HLTH is your performance. PNL and SENT are per-faction direction. use all three to decide.
-limit FACTIONS where MBR=true to AT MOST 5.${positionValues.length > 3 ? ` MBR at ${positionValues.length} — consider (-) from underperformers.` : ''}
-if MBR=false and FNR=true, consider (&). this is your faction, promote it with (!).
-FACTIONS where MBR=true and SENT is positive ARE your identity. promote what you hold.${factionCtx.all.length <= 2 ? '\n- no FACTIONS? (%) to create one.' : ''}
-FACTIONS where STATUS=RS and MBR=false and lower MCAP could turn more profit if you (&) the right one.
-(!) or (#) help you coordinate and talk with other agents.
-in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-(&) or (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
-(/) to join a faction with intentions of (-) later. (/) when you are profit seeking or want to harm a rival faction.
-consider (-) to lock in profits on FACTIONS where MBR=true and PNL is positive.
-consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
-(_) if you would prefer to hold and wait to take action.
+: learn about FACTIONS and other agents in LATEST. HLTH is your performance. PNL and SENT are per-faction direction. use all three to decide.
+: limit FACTIONS where MBR=true to AT MOST 5.${positionValues.length > 3 ? ` MBR at ${positionValues.length} — consider (-) from underperformers.` : ''}
+: if MBR=false and FNR=true, consider (&). this is your faction, promote it with (!).
+: FACTIONS where MBR=true and SENT is positive ARE your identity. promote what you hold.${factionCtx.all.length <= 2 ? '\n- no FACTIONS? (%) to create one.' : ''}
+: FACTIONS where STATUS=RS and MBR=false and lower MCAP could turn more profit if you (&) the right one.
+: (!) or (#) help you coordinate with other agents.
+: in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
+: (&) or (!) strengthen FACTIONS where MBR=true and STATUS=RS and push towards STATUS=ASN.
+: (/) to join a faction with intentions of (-) later. (/) when you are profit seeking or want to harm a rival faction.
+: consider (-) to lock in profits on FACTIONS where MBR=true and PNL is positive.
+: consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
+: when HLTH is negative, prefer (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
+: (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
@@ -398,7 +398,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (#) $ "*" → trash talk.
 (^) $ → ascend. unlock treasury.
 (~) $ → harvest fees.
-(%) "..." → create new faction. "..." = creative name, in quotes.
+(%) "{" → create new faction. { = creative name, always in double quotes.
 (_) → skip turn.
 --- RULES:
 (&) increases MCAP. (-) decreases MCAP.
@@ -408,18 +408,18 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (-) or (#) FACTIONS where MBR=true.
 (&) or (!) any FACTIONS.
 --- STRATEGIES:
-your personality is your tone.
-no FACTIONS? (%) to create one.
-learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
-limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
-consider (&) FACTIONS where FNR=true. (!) to promote it.
-in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-FACTIONS where STATUS=RS may have higher reward if you (&) the right one.
-(&) or (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
-consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
-consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
-(_) if you would prefer to hold and wait to take action.
+: your personality is your tone.
+: no FACTIONS? (%) to create one.
+: learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
+: limit FACTIONS where MBR=true to AT MOST 5.${memberOf.length > 3 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
+: consider (&) FACTIONS where FNR=true. (!) to promote it.
+: in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
+: FACTIONS where STATUS=RS may have higher reward if you (&) the right one.
+: (&) or (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
+: consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
+: consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
+: when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
+: (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
@@ -587,7 +587,7 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (#) $ "*" → trash talk.
 (^) $ → ascend. unlock treasury.
 (~) $ → harvest fees.
-(%) "..." → create new faction. "..." = creative name, in quotes.
+(%) "{" → create new faction. { = creative name, always in double quotes.
 (_) → skip turn.
 --- RULES:
 (&) increases MCAP. (-) decreases MCAP.
@@ -597,18 +597,18 @@ REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (-) or (#) FACTIONS where MBR=true.
 (&) or (!) any FACTIONS.
 --- STRATEGIES:
-your personality is your tone.
-no FACTIONS? (%) to create one.
-learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
-limit FACTIONS where MBR=true to AT MOST 3.${memberOf.length > 1 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
-consider (&) FACTIONS where FNR=true. (!) to promote it.
-FACTIONS where STATUS=RS may have higher reward if you (&) the right one.
-in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
-(&) and (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
-consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
-consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
-when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
-(_) if you would prefer to hold and wait to take action.
+: your personality is your tone.
+: no FACTIONS? (%) to create one.
+: learn about FACTIONS and other agents in INTEL. HLTH is performance. PNL and SENT are per-faction direction. use all three to decide.
+: limit FACTIONS where MBR=true to AT MOST 3.${memberOf.length > 1 ? ` MBR=true on ${memberOf.length} FACTIONS — consider (-) from underperformers.` : ''}
+: consider (&) FACTIONS where FNR=true. (!) to promote it.
+: FACTIONS where STATUS=RS may have higher reward if you (&) the right one.
+: in FACTIONS where MBR=true, if MCAP increases, your PNL will increase.
+: (&) and (!) strengthen FACTIONS where STATUS=RS and push towards STATUS=ASN.
+: consider (-) FACTIONS where MBR=true and PNL is positive to lock in profits.
+: consider (-) FACTIONS where MBR=true and PNL is negative unless FNR=true or SENT is positive.
+: when HLTH is negative, consider (_) or (-) weakest FACTIONS where MBR=true. (&) ONLY if you see opportunity.
+: (_) if you would prefer to hold and wait to take action.
 ---
 one move per turn. output EXACTLY one line.
 example format: ${pick([
@@ -736,7 +736,7 @@ function parseLLMDecision(
       ? symbolActionMatch[1] + ' ' + symbolActionMatch[2]
       : line
       .replace(/\*+/g, '')
-      .replace(/^[-•>#\d.)\s]+/, '')
+      .replace(/^[-•>\d.)\s]+/, '')
       .replace(/^(?:WARNING|NOTE|RESPONSE|OUTPUT|ANSWER|RESULT|SCPRT|SCRIPT|YOUR MOVE|YOUR MOVE:|your move>?)\s*:?\s*/i, '')
       .replace(/^ACTION\s+/i, '')
       .replace(

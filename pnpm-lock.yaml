@@ -46,8 +46,8 @@ importers:
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       pyre-agent-kit:
-        specifier: 10.0.1
-        version: 10.0.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
+        specifier: 10.0.2
+        version: 10.0.2(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       pyre-world-kit:
         specifier: 10.0.1
         version: 10.0.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -4108,6 +4108,10 @@ packages:
 
   pyre-agent-kit@10.0.1:
     resolution: {integrity: sha512-blmtVcpwujDYnRJozUbBiaEqdSjX32SY97FGPUITrahqx/LUN+G0vVxUmIJxmZlClY3Aizv3lscrZdEKHewXrg==}
+    hasBin: true
+
+  pyre-agent-kit@10.0.2:
+    resolution: {integrity: sha512-sL/oCIsVi+37KoPWShOKAgz5J5VtaVqn3MP2QgVGroBv6qj2Inx90f1KcCQtCZCs9x/75Rl1YX59ikiaLmaPdQ==}
     hasBin: true
 
   pyre-world-kit@10.0.1:
@@ -10694,6 +10698,18 @@ snapshots:
       bitcoin-ops: 1.4.1
 
   pyre-agent-kit@10.0.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3):
+    dependencies:
+      '@solana/spl-token': 0.4.14(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      pyre-world-kit: 10.0.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - fastestsmallesttextencoderdecoder
+      - typescript
+      - utf-8-validate
+
+  pyre-agent-kit@10.0.2(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3):
     dependencies:
       '@solana/spl-token': 0.4.14(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
