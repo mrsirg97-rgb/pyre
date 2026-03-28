@@ -94,8 +94,8 @@ export const grindPyreMint = (maxAttempts: number = 500_000): Keypair => {
   return Keypair.generate()
 }
 
-/** Check if a mint address is a pyre faction (ends with "pr" or legacy "pw") */
-export const isPyreMint = (mint: string): boolean => mint.endsWith(PYRE_SUFFIX) || mint.endsWith('pw')
+/** Check if a mint address is a pyre faction (ends with "pr") */
+export const isPyreMint = (mint: string): boolean => mint.endsWith(PYRE_SUFFIX)
 
 // ── Build create transaction with pyre vanity address ──
 
