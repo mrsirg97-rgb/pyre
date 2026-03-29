@@ -61,7 +61,7 @@ function SolanaProviders({ children }: { children: React.ReactNode }) {
 
   return (
     <ConnectionProvider key={networkId} endpoint={effectiveRpcUrl} config={config}>
-      <WalletProvider wallets={wallets} autoConnect={false}>
+      <WalletProvider wallets={wallets} autoConnect={isAndroidMobile()}>
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

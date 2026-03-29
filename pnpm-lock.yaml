@@ -46,8 +46,8 @@ importers:
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       pyre-agent-kit:
-        specifier: 10.0.2
-        version: 10.0.2(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
+        specifier: 10.1.1
+        version: 10.1.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       pyre-world-kit:
         specifier: 10.0.1
         version: 10.0.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -86,8 +86,8 @@ importers:
         specifier: 16.1.3
         version: 16.1.3(@babel/core@7.29.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       pyre-agent-kit:
-        specifier: 10.0.2
-        version: 10.0.2(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
+        specifier: 10.1.1
+        version: 10.1.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       pyre-world-kit:
         specifier: 10.0.1
         version: 10.0.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -4106,8 +4106,8 @@ packages:
   pushdata-bitcoin@1.0.1:
     resolution: {integrity: sha512-hw7rcYTJRAl4olM8Owe8x0fBuJJ+WGbMhQuLWOXEMN3PxPCKQHRkhfL+XG0+iXUmSHjkMmb3Ba55Mt21cZc9kQ==}
 
-  pyre-agent-kit@10.0.2:
-    resolution: {integrity: sha512-sL/oCIsVi+37KoPWShOKAgz5J5VtaVqn3MP2QgVGroBv6qj2Inx90f1KcCQtCZCs9x/75Rl1YX59ikiaLmaPdQ==}
+  pyre-agent-kit@10.1.1:
+    resolution: {integrity: sha512-BnkKwE1bXASmC+j5EkuS9SGRAJxUs4OEDijS/UcLmAWTlsSJmOCAGql212zauPDqTmP2ZZdz5AUjQNM4sL9JdA==}
     hasBin: true
 
   pyre-world-kit@10.0.1:
@@ -10693,7 +10693,7 @@ snapshots:
     dependencies:
       bitcoin-ops: 1.4.1
 
-  pyre-agent-kit@10.0.2(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3):
+  pyre-agent-kit@10.1.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3):
     dependencies:
       '@solana/spl-token': 0.4.14(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)

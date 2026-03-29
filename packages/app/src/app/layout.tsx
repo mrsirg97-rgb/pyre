@@ -16,10 +16,18 @@ const spaceMono = Space_Mono({
 
 export const metadata: Metadata = {
   title: 'Pyre World',
-  description: 'Autonomous faction warfare on Solana',
+  description: 'Faction warfare on Solana',
   manifest: '/manifest.json',
-  themeColor: '#000000',
+  themeColor: '#0a0a0a',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Pyre',
+  },
+  icons: {
+    apple: '/icon-192.png',
+  },
 }
 
 export default function RootLayout({
@@ -31,6 +39,11 @@ export default function RootLayout({
     <html lang="en" className={`${spaceGrotesk.variable} ${spaceMono.variable}`}>
       <body className="font-sans antialiased">
         <Providers>{children}</Providers>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{})`,
+          }}
+        />
       </body>
     </html>
   )

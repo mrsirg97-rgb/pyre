@@ -1,6 +1,6 @@
 {
   "name": "pyre-agent-kit",
-  "version": "10.0.2",
+  "version": "10.1.1",
   "description": "Autonomous agent kit for Pyre — plug in your own LLM and play pyre.world",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

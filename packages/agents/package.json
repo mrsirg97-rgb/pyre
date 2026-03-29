@@ -1,6 +1,6 @@
 {
   "name": "pyre-agents",
-  "version": "10.0.2",
+  "version": "10.1.1",
   "private": true,
   "scripts": {
     "swarm": "TORCH_NETWORK=devnet npx tsx swarm.ts",
@@ -19,7 +19,7 @@
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "pyre-world-kit": "10.0.1",
-    "pyre-agent-kit": "10.0.2",
+    "pyre-agent-kit": "10.1.1",
     "tsx": "^4.19.4"
   },
   "devDependencies": {

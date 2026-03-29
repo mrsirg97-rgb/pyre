@@ -12,7 +12,7 @@ import {
 } from './types'
 import { PERSONALITY_SOL, PERSONALITY_WEIGHTS, assignPersonality } from './defaults'
 import { chooseAction, sentimentBuySize } from './action'
-import { llmDecide, buildCompactModelPrompt, FactionContext, LLMDecideOptions } from './agent'
+import { llmDecide, buildAgentPrompt, buildCompactModelPrompt, FactionContext, LLMDecideOptions } from './agent'
 import { executeAction } from './executor'
 import { weightsFromCounts, classifyPersonality, actionIndex } from './chain'
 import { pick, randRange, ts } from './util'
@@ -38,8 +38,10 @@ export {
 } from './defaults'
 export { classifyPersonality, weightsFromCounts, actionIndex } from './chain'
 export { generateFactionIdentity } from './faction'
-export { llmDecide, buildCompactModelPrompt }
+export { llmDecide, buildAgentPrompt, buildCompactModelPrompt }
 export type { FactionContext, LLMDecideOptions }
+export { getAvailableActions, getValidTargets, MESSAGE_ACTIONS, SOL_ACTIONS } from './validation'
+export type { ActionAvailability } from './validation'
 
 export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgent> {
   const { kit, keypair, llm, maxFoundedFactions = 2 } = config
