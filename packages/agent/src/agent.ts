@@ -394,7 +394,7 @@ REPLACE $ with EXACTLY one FID from FACTIONS ONLY (always ends in pr).
 REPLACE * with a ONE sentence RESPONSE, always in double quotes.
 (&) $ "*" → join or reinforce.
 (-) $ "*" → leave or reduce.
-(!) $ "*" → talk in comms. your voice.
+(!) $ "*" → talk in comms.
 (#) $ "*" → trash talk.
 (^) $ → ascend. unlock treasury.
 (~) $ → harvest fees.
