@@ -1,60 +1,66 @@
 'use client'
 
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react'
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
 import { NetworkProvider, useNetwork } from '@/lib/NetworkContext'
 import { ThemeProvider } from '@/lib/ThemeContext'
+import {
+  createDefaultAuthorizationCache,
+  createDefaultChainSelector,
+  createDefaultWalletNotFoundHandler,
+  registerMwa,
+} from '@solana-mobile/wallet-standard-mobile'
 
 import '@solana/wallet-adapter-react-ui/styles.css'
 
-// Register Solana Mobile Wallet Adapter on Android (Seeker, Saga)
-function isAndroidMobile(): boolean {
-  if (typeof navigator === 'undefined') return false
-  return /Android/i.test(navigator.userAgent)
+function getUriForAppIdentity() {
+  const location = globalThis.location
+  if (!location) return undefined
+  return `${location.protocol}//${location.host}`
 }
 
-function getUriForAppIdentity(): string {
-  if (typeof window === 'undefined') return 'https://pyre.world'
-  return `${window.location.protocol}//${window.location.host}`
+function isAndroidMobile() {
+  return (
+    typeof window !== 'undefined' &&
+    window.isSecureContext &&
+    typeof document !== 'undefined' &&
+    /android/i.test(navigator.userAgent)
+  )
 }
 
-function useMobileWalletAdapter() {
-  useEffect(() => {
-    if (!isAndroidMobile()) return
-    import('@solana-mobile/wallet-standard-mobile').then(({
-      registerMwa,
-      createDefaultAuthorizationCache,
-      createDefaultChainSelector,
-      createDefaultWalletNotFoundHandler,
-    }) => {
-      registerMwa({
-        appIdentity: {
-          name: 'Pyre World',
-          uri: getUriForAppIdentity(),
-          icon: '/apple-touch-icon.png',
-        },
-        authorizationCache: createDefaultAuthorizationCache(),
-        chains: ['solana:mainnet', 'solana:devnet'],
-        chainSelector: createDefaultChainSelector(),
-        onWalletNotFound: createDefaultWalletNotFoundHandler(),
-      })
-    }).catch(() => {
-      // MWA not available — desktop or unsupported device
-    })
-  }, [])
+// Determine active chain from localStorage (matches NetworkContext)
+function getActiveChain(): 'solana:mainnet' | 'solana:devnet' {
+  if (typeof window === 'undefined') return 'solana:devnet'
+  const stored = localStorage.getItem('pyre-network')
+  return stored === 'mainnet' ? 'solana:mainnet' : 'solana:devnet'
+}
+
+// Register MWA at module load — must happen before WalletProvider mounts
+if (isAndroidMobile()) {
+  const chain = getActiveChain()
+  registerMwa({
+    appIdentity: {
+      name: 'Pyre World',
+      uri: getUriForAppIdentity(),
+      icon: '/apple-touch-icon.png',
+    },
+    authorizationCache: createDefaultAuthorizationCache(),
+    chains: [chain],
+    chainSelector: createDefaultChainSelector(),
+    onWalletNotFound: createDefaultWalletNotFoundHandler(),
+  })
 }
 
 function SolanaProviders({ children }: { children: React.ReactNode }) {
-  useMobileWalletAdapter()
   const { networkId, isSimnet, effectiveRpcUrl, effectiveWsUrl } = useNetwork()
 
   const config = useMemo(
     () => ({
       commitment: 'confirmed' as const,
-      ...(effectiveWsUrl ? { wsEndpoint: effectiveWsUrl } : {}),
+      ...(effectiveWsUrl && !isSimnet ? { wsEndpoint: effectiveWsUrl } : {}),
     }),
-    [effectiveWsUrl],
+    [effectiveWsUrl, isSimnet],
   )
 
   const wallets = useMemo(() => [], [])

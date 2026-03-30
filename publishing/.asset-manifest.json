@@ -1,0 +1,45 @@
+{
+  "schema_version": "0.1",
+  "assets": {
+    "media/icon.png": {
+      "path": "media/icon.png",
+      "sha256": "3MjLhCJHtdNmpSpJ1BJc8zcyqg6qQjqwAbcXKWSAKM0=",
+      "uri": "https://dappstorecontent.com/wytn-YAms4qkEkIIDfsaslK-r-j5keBExEZ-zu6Nsh4"
+    },
+    "../packages/app/twa/app-release-signed.apk": {
+      "path": "../packages/app/twa/app-release-signed.apk",
+      "sha256": "YGl1gL4mHJA1U71vCTM6qcV7wkKFrBBOFKE5VStd0rQ=",
+      "uri": "https://dappstorecontent.com/3BYpPEeIz1W-fabV54eK6Rk3LVftDtGb6yWRZv5nqzg"
+    },
+    "media/pyre_banner.png": {
+      "path": "media/pyre_banner.png",
+      "sha256": "Tqm8F2xcQbSwCvzs6riOA2hlor5SaXT9Tws/NFGkw0U=",
+      "uri": "https://dappstorecontent.com/j6P1G__WwBsBeQ-BIzZmP8UFgnV9WI4967DSK23fVrA"
+    },
+    "media/pyre_stage.png": {
+      "path": "media/pyre_stage.png",
+      "sha256": "fDdEOIeTkE9Vgf0G+LgY7jAZ/iNQSC4h1DeR4E7rc74=",
+      "uri": "https://dappstorecontent.com/NuJk839dhsLVElqidb08_dcgwozrsKZMyk3Ub5OdytI"
+    },
+    "media/pyre_factions.png": {
+      "path": "media/pyre_factions.png",
+      "sha256": "9wyKTvS1n3iOuWBbqbBu+lIoLIi71Kz5FHCt9Ccp654=",
+      "uri": "https://dappstorecontent.com/grUlCruqwdVK3Kgxzkj80KSbZfSldDc7--AP0RKt40c"
+    },
+    "media/pyre_stronghold.png": {
+      "path": "media/pyre_stronghold.png",
+      "sha256": "QmYhQN/NhvwLGwPnNLBVfkT7EymyjP0yITJRbX1YmAM=",
+      "uri": "https://dappstorecontent.com/gsSq1GF5Pe2k-TpH-nmwp5gNlfs9KhcxcFc3mtSpIIo"
+    },
+    "media/pyre_prompt.png": {
+      "path": "media/pyre_prompt.png",
+      "sha256": "rlJ6qJPZAGm3XTDAX2VF1yEr2/ZhOoTG1H9oOQEdMiI=",
+      "uri": "https://dappstorecontent.com/77i8YyzzB1zNp1YRk5KEm3GXvrPBizY720XyWlELLEw"
+    },
+    "media/pyre_play.png": {
+      "path": "media/pyre_play.png",
+      "sha256": "84MFVEYfoJpbsdSqeSVuJknESrecRGVa0QFx7OUeCHI=",
+      "uri": "https://dappstorecontent.com/NdTYKH7A4XQSMdw-4Mgo3AUKqoOtMKvJIHSrBcg_z1c"
+    }
+  }
+}

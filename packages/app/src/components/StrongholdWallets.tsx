@@ -6,6 +6,7 @@ import { PublicKey } from '@solana/web3.js'
 import Link from 'next/link'
 import type { Stronghold, AgentLink } from 'pyre-world-kit'
 import { usePyreKit } from '@/hooks/usePyreKit'
+import { useMwaSendTransaction } from '@/hooks/useMwaSendTransaction'
 import { shortenAddress } from '@/lib/utils'
 
 interface StrongholdWalletsProps {
@@ -16,6 +17,7 @@ interface StrongholdWalletsProps {
 export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) {
   const { actions, connection } = usePyreKit()
   const wallet = useWallet()
+  const sendTransaction = useMwaSendTransaction()
 
   const [walletAddress, setWalletAddress] = useState('')
   const [loading, setLoading] = useState(false)
@@ -55,7 +57,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
   }, [agents, search, vault.authority, vault.creator])
 
   async function handleLink() {
-    if (!wallet.publicKey || !wallet.sendTransaction || !isAuthority) return
+    if (!wallet.publicKey || !isAuthority) return
 
     const addr = walletAddress.trim()
     if (!addr) {
@@ -81,7 +83,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
         wallet_to_link: addr,
       })
 
-      const txId = await wallet.sendTransaction(tx, connection)
+      const txId = await sendTransaction(tx)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setWalletAddress('')
@@ -99,7 +101,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
   }
 
   async function handleUnlink(addr: string) {
-    if (!wallet.publicKey || !wallet.sendTransaction || !isAuthority) return
+    if (!wallet.publicKey || !isAuthority) return
 
     setUnlinkingWallet(addr)
     setError(null)
@@ -112,7 +114,7 @@ export function StrongholdWallets({ vault, onSuccess }: StrongholdWalletsProps) 
         wallet_to_unlink: addr,
       })
 
-      const txId = await wallet.sendTransaction(tx, connection)
+      const txId = await sendTransaction(tx)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setSuccess(`Unlinked ${shortenAddress(addr)}`)

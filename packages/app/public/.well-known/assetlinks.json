@@ -3,6 +3,6 @@
   "target": {
     "namespace": "android_app",
     "package_name": "world.pyre.twa",
-    "sha256_cert_fingerprints": ["__REPLACE_WITH_KEYSTORE_SHA256__"]
+    "sha256_cert_fingerprints": ["1F:1A:26:FE:C9:A1:E3:A1:46:34:60:5E:AA:3D:58:27:78:39:3E:D9:EE:BF:6B:D1:89:AF:C4:D2:B8:F1:6A:CB"]
   }
 }]

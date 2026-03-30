@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import type { Action, FactionInfo } from 'pyre-agent-kit'
 import { MESSAGE_ACTIONS, SOL_ACTIONS } from 'pyre-agent-kit'
 import { useLensPlayer } from '@/lib/agent'
@@ -77,25 +77,37 @@ export function LensBoard() {
         {controllerStatus === 'created' && controllerBalance === 0 && (
           <div className="space-y-2">
             <p className="text-xs" style={{ color: 'var(--muted)' }}>
-              Controller: <span className="font-mono">{shortenAddress(controllerPublicKey!)}</span>
+              Controller:{' '}
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(controllerPublicKey!)
+                }}
+                className="font-mono cursor-pointer hover:opacity-70"
+                style={{ color: 'var(--foreground)' }}
+                title="Copy address"
+              >
+                {controllerPublicKey}
+              </button>
             </p>
             <p className="text-xs" style={{ color: 'var(--muted)' }}>
-              Fund with ~0.01 SOL for gas, then link it.
+              Fund with ~0.01 SOL for gas, then link it in{' '}
+              <a href="/stronghold" className="underline" style={{ color: 'var(--foreground)' }}>stronghold</a>.
             </p>
-            <button
-              onClick={linkController}
-              className="text-xs px-3 py-1.5 rounded cursor-pointer transition-colors"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground)' }}
-            >
-              Link Controller
-            </button>
           </div>
         )}
 
         {(controllerStatus === 'ready' || (controllerStatus === 'created' && controllerBalance > 0)) && (
           <div className="space-y-2">
             <p className="text-xs" style={{ color: 'var(--muted)' }}>
-              Controller: <span className="font-mono">{shortenAddress(controllerPublicKey!)}</span>
+              Controller:{' '}
+              <button
+                onClick={() => navigator.clipboard.writeText(controllerPublicKey!)}
+                className="font-mono cursor-pointer hover:opacity-70"
+                style={{ color: 'var(--foreground)' }}
+                title="Copy address"
+              >
+                {shortenAddress(controllerPublicKey!)}
+              </button>
               {' '}({controllerBalance.toFixed(4)} SOL)
             </p>
             <button

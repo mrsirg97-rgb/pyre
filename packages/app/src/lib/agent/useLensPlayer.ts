@@ -396,6 +396,7 @@ export function useLensPlayer(): LensPlayerHook {
         case 'reinforce': {
           if (!faction) return { success: false, error: 'No faction selected' }
           const lamports = Math.floor((solAmount ?? 0.01) * LAMPORTS_PER_SOL)
+          const alreadyHolding = holdings.has(faction.mint)
           const params: any = {
             mint: faction.mint,
             agent: publicKey,
@@ -404,24 +405,14 @@ export function useLensPlayer(): LensPlayerHook {
             stronghold,
             ascended: faction.status === 'ascended',
           }
-          if (!kit.state.hasVoted(faction.mint)) {
+          // Only include vote on first join — skip if already holding
+          if (!alreadyHolding && !kit.state.hasVoted(faction.mint)) {
             params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
           }
-          try {
-            const { result, confirm } = await kit.exec('actions', 'join', params)
-            execResult = result
-            execConfirm = confirm
-          } catch (e: any) {
-            if (e.message?.includes('6022') || e.message?.includes('VoteRequired')) {
-              params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
-              const retry = await kit.exec('actions', 'join', params)
-              execResult = retry.result
-              execConfirm = retry.confirm
-            } else {
-              throw e
-            }
-          }
-          kit.state.markVoted(faction.mint)
+          const { result, confirm } = await kit.exec('actions', 'join', params)
+          execResult = result
+          execConfirm = confirm
+          if (!alreadyHolding) kit.state.markVoted(faction.mint)
           break
         }
 
@@ -448,6 +439,7 @@ export function useLensPlayer(): LensPlayerHook {
         case 'message': {
           if (!faction) return { success: false, error: 'No faction selected' }
           if (!message) return { success: false, error: 'No message' }
+          const msgHolding = holdings.has(faction.mint)
           const params: any = {
             mint: faction.mint,
             agent: publicKey,
@@ -455,24 +447,13 @@ export function useLensPlayer(): LensPlayerHook {
             stronghold,
             ascended: faction.status === 'ascended',
           }
-          if (!kit.state.hasVoted(faction.mint)) {
+          if (!msgHolding && !kit.state.hasVoted(faction.mint)) {
             params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
           }
-          try {
-            const { result, confirm } = await kit.exec('actions', 'message', params)
-            execResult = result
-            execConfirm = confirm
-          } catch (e: any) {
-            if (e.message?.includes('6022') || e.message?.includes('VoteRequired')) {
-              params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
-              const retry = await kit.exec('actions', 'message', params)
-              execResult = retry.result
-              execConfirm = retry.confirm
-            } else {
-              throw e
-            }
-          }
-          kit.state.markVoted(faction.mint)
+          const { result, confirm } = await kit.exec('actions', 'message', params)
+          execResult = result
+          execConfirm = confirm
+          if (!msgHolding) kit.state.markVoted(faction.mint)
           break
         }
 

@@ -33,12 +33,12 @@ export function Header() {
           pyre
         </Link>
         <div
-          className="flex items-center rounded-lg overflow-hidden"
+          className="flex items-center rounded-lg"
           style={{ border: '1px solid var(--border)' }}
         >
           <Link
             href="/"
-            className="h-8 px-4 flex items-center text-xs transition-colors"
+            className="h-8 px-4 flex items-center text-xs transition-colors rounded-l-lg"
             style={{ background: 'var(--surface)', color: 'var(--muted)', padding: '0 0.25rem' }}
           >
             stage

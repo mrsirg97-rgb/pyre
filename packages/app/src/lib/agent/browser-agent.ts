@@ -208,6 +208,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
 
       switch (action) {
         case 'join': {
+          const alreadyHolding = execHoldings.has(faction.mint)
           const joinParams: any = {
             mint: faction.mint,
             agent: publicKey,
@@ -216,7 +217,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             stronghold: await stronghold(),
             ascended: faction.status === 'ascended',
           }
-          if (!kit.state.hasVoted(faction.mint)) {
+          if (!alreadyHolding && !kit.state.hasVoted(faction.mint)) {
             joinParams.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
           }
           try {
@@ -233,7 +234,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
               throw e
             }
           }
-          kit.state.markVoted(faction.mint)
+          if (!alreadyHolding) kit.state.markVoted(faction.mint)
           description = `join ${faction.mint.slice(-8)}${message ? ` — "${message}"` : ''}`
           break
         }
@@ -358,6 +359,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             : null)
           if (!msg)
             return { action: 'message', success: false, error: 'no message', usedLLM }
+          const msgHolding = execHoldings.has(faction.mint)
           const params: any = {
             mint: faction.mint,
             agent: publicKey,
@@ -365,7 +367,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
             stronghold: await stronghold(),
             ascended: faction.status === 'ascended',
           }
-          if (!kit.state.hasVoted(faction.mint)) {
+          if (!msgHolding && !kit.state.hasVoted(faction.mint)) {
             params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
           }
           try {
@@ -382,7 +384,7 @@ export async function createBrowserAgent(config: BrowserAgentConfig): Promise<Br
               throw e
             }
           }
-          kit.state.markVoted(faction.mint)
+          if (!msgHolding) kit.state.markVoted(faction.mint)
           description = `message ${faction.mint.slice(-8)}: "${msg.slice(0, 60)}"`
           break
         }

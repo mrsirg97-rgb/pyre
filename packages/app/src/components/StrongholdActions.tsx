@@ -5,6 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { LAMPORTS_PER_SOL } from 'pyre-world-kit'
 import type { Stronghold } from 'pyre-world-kit'
 import { usePyreKit } from '@/hooks/usePyreKit'
+import { useMwaSendTransaction } from '@/hooks/useMwaSendTransaction'
 import { fmtSol } from '@/lib/utils'
 
 interface StrongholdActionsProps {
@@ -15,6 +16,7 @@ interface StrongholdActionsProps {
 export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) {
   const { actions, connection } = usePyreKit()
   const wallet = useWallet()
+  const sendTransaction = useMwaSendTransaction()
 
   const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit')
   const [amount, setAmount] = useState('')
@@ -25,7 +27,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
   const isAuthority = wallet.publicKey?.toString() === vault.authority
 
   async function handleAction() {
-    if (!wallet.publicKey || !wallet.sendTransaction) return
+    if (!wallet.publicKey) return
 
     const solAmount = parseFloat(amount)
     if (isNaN(solAmount) || solAmount <= 0) {
@@ -62,7 +64,7 @@ export function StrongholdActions({ vault, onSuccess }: StrongholdActionsProps) 
         tx = result.transaction
       }
 
-      const txId = await wallet.sendTransaction(tx, connection)
+      const txId = await sendTransaction(tx)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setAmount('')

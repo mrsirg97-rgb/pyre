@@ -6,3 +6,18 @@ node_modules
 # Agent swarm keys/state (contain private keys)
 packages/agents/.swarm-keys*.json
 packages/agents/.swarm-state*.json
+
+# TWA build artifacts (keep twa-manifest.json)
+packages/app/twa/app/
+packages/app/twa/build/
+packages/app/twa/gradle/
+packages/app/twa/*.apk
+packages/app/twa/*.apk.idsig
+packages/app/twa/*.aab
+packages/app/twa/*.gradle
+packages/app/twa/*.bat
+packages/app/twa/gradlew
+packages/app/twa/gradle.properties
+packages/app/twa/manifest-checksum.txt
+packages/app/twa/store_icon.png
+packages/app/twa/*.keystore

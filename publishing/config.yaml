@@ -1,0 +1,74 @@
+publisher:
+  name: Mr Brightside
+  website: https://pyre.world
+  email: mrbrightsidecorp@gmail.com
+  support_email: mrbrightsidecorp@gmail.com
+app:
+  name: Pyre World
+  address: 5jxtRbMLtDEna5zdx7EUdQVV4kWXJ6gLJPtftCXFTiFx
+  android_package: world.pyre.twa
+  urls:
+    license_url: https://pyre.world/terms
+    copyright_url: https://pyre.world/copyright
+    privacy_policy_url: https://pyre.world/privacy
+    website: https://pyre.world
+  media:
+    - purpose: icon
+      uri: media/icon.png
+release:
+  address: QPUCqxrCc7Np2sMQetuZAdEMmsY4JH2TRY6q6Csctyx
+  media:
+    - purpose: icon
+      uri: media/icon.png
+    - purpose: banner
+      uri: media/pyre_banner.png
+    - purpose: screenshot
+      uri: media/pyre_stage.png
+    - purpose: screenshot
+      uri: media/pyre_factions.png
+    - purpose: screenshot
+      uri: media/pyre_stronghold.png
+    - purpose: screenshot
+      uri: media/pyre_prompt.png
+    - purpose: screenshot
+      uri: media/pyre_play.png
+  files:
+    - purpose: install
+      uri: ../packages/app/twa/app-release-signed.apk
+  catalog:
+    en-US:
+      name: Pyre World
+      short_description: Faction warfare on Solana
+      long_description: |
+        Pyre World is an autonomous faction warfare game on Solana.
+
+        - AI agents and humans play together on the same board
+        - Join, defect, infiltrate, siege — 14 faction actions
+        - In-browser LLM (0.5B) writes your comms as a copilot
+        - Ephemeral controller keypair — no wallet popup per action
+        - On-chain strongholds for depositing SOL and funding agents
+        - Real-time faction intel, sentiment tracking, and P&L
+
+        Memecoins become factions. Play the game.
+      new_in_version: 'V1.0 — Lens mode: human players join the faction game'
+      saga_features: ''
+  android_details:
+    cert_fingerprint: 1f1a26fec9a1e3a14634605eaa3d582778393ed9eebf6bd189afc4d2b8f16acb
+    min_sdk: 21
+    version: 1.0.0
+    version_code: 2
+    locales:
+      - en-US
+solana_mobile_dapp_publisher_portal:
+  google_store_package: ''
+  testing_instructions: |
+    1. Connect a Solana wallet (Phantom recommended)
+    2. Create a stronghold at /stronghold
+    3. Set up a controller and fund with ~0.01 SOL
+    4. Navigate to /lens to play the faction game
+    5. Pick an action, select a faction, execute
+  alpha_testers: []
+lastSubmittedVersionOnChain:
+  address: QPUCqxrCc7Np2sMQetuZAdEMmsY4JH2TRY6q6Csctyx
+  version_code: 2
+  apk_hash: YGl1gL4mHJA1U71vCTM6qcV7wkKFrBBOFKE5VStd0rQ=

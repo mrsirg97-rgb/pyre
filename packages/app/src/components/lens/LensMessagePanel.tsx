@@ -22,12 +22,15 @@ export function LensMessagePanel({
   onMessageChange,
 }: LensMessagePanelProps) {
   const [generating, setGenerating] = useState(false)
+  const [genFailed, setGenFailed] = useState(false)
 
   const isDownloading = modelStatus.status === 'downloading' || modelStatus.status === 'loading'
+  const modelFailed = modelStatus.status === 'error'
+  const showManualInput = modelFailed || genFailed
 
   // Auto-generate when faction is selected and no message yet
   useEffect(() => {
-    if (faction && !message && !generating) {
+    if (faction && !message && !generating && !showManualInput) {
       handleGenerate()
     }
   }, [faction.mint]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -36,10 +39,41 @@ export function LensMessagePanel({
     setGenerating(true)
     try {
       const msg = await onGenerate(action, faction)
-      if (msg) onMessageChange(msg)
+      if (msg) {
+        onMessageChange(msg)
+        setGenFailed(false)
+      } else {
+        setGenFailed(true)
+      }
+    } catch {
+      setGenFailed(true)
     } finally {
       setGenerating(false)
     }
+  }
+
+  // Manual input mode — model unavailable
+  if (showManualInput) {
+    return (
+      <div className="flex items-center gap-2" style={{ padding: '0.375rem 0.5rem', borderTop: '1px solid var(--border)' }}>
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => onMessageChange(e.target.value.slice(0, 80))}
+          placeholder="Write your message..."
+          className="flex-1 text-xs font-mono rounded focus:outline-none"
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            color: 'var(--foreground)',
+            padding: '0.25rem 0.375rem',
+          }}
+        />
+        <span className="text-[10px] font-mono flex-shrink-0" style={{ color: message.length > 80 ? 'var(--danger)' : 'var(--muted)' }}>
+          {message.length}/80
+        </span>
+      </div>
+    )
   }
 
   return (

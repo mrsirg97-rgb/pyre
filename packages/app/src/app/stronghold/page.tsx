@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { usePyreKit } from '@/hooks/usePyreKit'
+import { useMwaSendTransaction } from '@/hooks/useMwaSendTransaction'
 import { Header } from '@/components/Header'
 import { StrongholdDashboard } from '@/components/StrongholdDashboard'
 import { StrongholdActions } from '@/components/StrongholdActions'
@@ -15,6 +16,7 @@ import { useRegistryProfile } from '@/hooks/useRegistryProfile'
 export default function StrongholdPage() {
   const { actions, connection } = usePyreKit()
   const wallet = useWallet()
+  const sendTransaction = useMwaSendTransaction()
   const { vault, linkedVault, activeVault, loading, refetch } = useVault()
   const {
     profile: registryProfile,
@@ -26,7 +28,7 @@ export default function StrongholdPage() {
   const [createError, setCreateError] = useState<string | null>(null)
 
   async function handleCreate() {
-    if (!wallet.publicKey || !wallet.sendTransaction) return
+    if (!wallet.publicKey) return
 
     setCreating(true)
     setCreateError(null)
@@ -36,7 +38,7 @@ export default function StrongholdPage() {
         creator: wallet.publicKey.toString(),
       })
 
-      const txId = await wallet.sendTransaction(tx, connection)
+      const txId = await sendTransaction(tx)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setTimeout(refetch, 1000)

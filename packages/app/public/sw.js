@@ -21,7 +21,10 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
-  // Network-first for all requests — we're a live game, stale data is worse than no data
+  // Only handle same-origin requests — don't intercept fonts, CDN, RPC, etc.
+  if (!event.request.url.startsWith(self.location.origin)) return
+
+  // Network-first for same-origin — we're a live game, stale data is worse than no data
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
   )

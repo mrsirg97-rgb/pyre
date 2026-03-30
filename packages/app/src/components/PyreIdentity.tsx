@@ -5,6 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { PublicKey } from '@solana/web3.js'
 import type { RegistryProfile } from 'pyre-world-kit'
 import { usePyreKit } from '@/hooks/usePyreKit'
+import { useMwaSendTransaction } from '@/hooks/useMwaSendTransaction'
 import { shortenAddress, timeAgo } from '@/lib/utils'
 
 interface PyreIdentityProps {
@@ -34,6 +35,7 @@ const ACTION_LABELS: { key: keyof RegistryProfile; label: string }[] = [
 export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreIdentityProps) {
   const { registry, connection } = usePyreKit()
   const wallet = useWallet()
+  const sendTransaction = useMwaSendTransaction()
 
   const [creating, setCreating] = useState(false)
   const [linking, setLinking] = useState(false)
@@ -43,7 +45,7 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
   const [success, setSuccess] = useState<string | null>(null)
 
   async function handleCreate() {
-    if (!wallet.publicKey || !wallet.sendTransaction) return
+    if (!wallet.publicKey) return
 
     setCreating(true)
     setError(null)
@@ -53,7 +55,7 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
         creator: wallet.publicKey.toString(),
       })
 
-      const txId = await wallet.sendTransaction(tx, connection)
+      const txId = await sendTransaction(tx)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setTimeout(onSuccess, 1500)
@@ -66,7 +68,7 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
   }
 
   async function handleLink() {
-    if (!wallet.publicKey || !wallet.sendTransaction || !profile) return
+    if (!wallet.publicKey || !profile) return
 
     const addr = linkAddress.trim()
     if (!addr) {
@@ -92,7 +94,7 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
         wallet_to_link: addr,
       })
 
-      const txId = await wallet.sendTransaction(tx, connection)
+      const txId = await sendTransaction(tx)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setLinkAddress('')
@@ -113,7 +115,7 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
   }
 
   async function handleUnlink() {
-    if (!wallet.publicKey || !wallet.sendTransaction || !profile) return
+    if (!wallet.publicKey || !profile) return
     if (profile.linked_wallet === profile.creator) return
 
     setUnlinking(true)
@@ -128,7 +130,7 @@ export function PyreIdentity({ profile, loading, isAuthority, onSuccess }: PyreI
         wallet_to_unlink: profile.linked_wallet,
       })
 
-      const txId = await wallet.sendTransaction(tx, connection)
+      const txId = await sendTransaction(tx)
       await connection.confirmTransaction(txId, 'confirmed')
 
       setSuccess('Wallet unlinked')
