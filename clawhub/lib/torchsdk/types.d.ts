@@ -32,14 +32,11 @@ export interface TokenDetail {
     total_supply: number;
     circulating_supply: number;
     tokens_in_curve: number;
-    tokens_in_vote_vault: number;
     tokens_burned: number;
     treasury_sol_balance: number;
     treasury_token_balance: number;
     total_bought_back: number;
     buyback_count: number;
-    votes_return: number;
-    votes_burn: number;
     creator: string;
     holders: number | null;
     stars: number;
@@ -81,7 +78,6 @@ export interface BuyQuoteResult {
     input_sol: number;
     output_tokens: number;
     tokens_to_user: number;
-    tokens_to_treasury: number;
     protocol_fee_sol: number;
     price_per_token_sol: number;
     price_impact_percent: number;
@@ -166,7 +162,6 @@ export interface BuyParams {
     buyer: string;
     amount_sol: number;
     slippage_bps?: number;
-    vote?: 'burn' | 'return';
     message?: string;
     /** Vault creator pubkey. Vault pays for the buy. */
     vault: string;
@@ -179,7 +174,6 @@ export interface DirectBuyParams {
     buyer: string;
     amount_sol: number;
     slippage_bps?: number;
-    vote?: 'burn' | 'return';
     message?: string;
     /** Pre-fetched quote from getBuyQuote. If provided, skips internal quote fetch. */
     quote?: BuyQuoteResult;

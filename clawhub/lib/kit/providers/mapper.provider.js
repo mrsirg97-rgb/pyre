@@ -60,7 +60,6 @@ class MapperProvider {
         comms: r.messages.map(this.tokenMessageToComms),
         total: r.total,
     });
-    strategy = (vote) => (vote === 'burn' ? 'smelt' : 'fortify');
     tokenDetailToFaction = (t) => ({
         mint: t.mint,
         name: t.name,
@@ -78,14 +77,11 @@ class MapperProvider {
         total_supply: t.total_supply,
         circulating_supply: t.circulating_supply,
         tokens_in_curve: t.tokens_in_curve,
-        tokens_in_vote_vault: t.tokens_in_vote_vault,
         tokens_burned: t.tokens_burned,
         war_chest_sol: t.treasury_sol_balance,
         war_chest_tokens: t.treasury_token_balance,
         total_bought_back: t.total_bought_back,
         buyback_count: t.buyback_count,
-        votes_scorched_earth: t.votes_burn,
-        votes_fortify: t.votes_return,
         founder: t.creator,
         members: t.holders,
         rallies: t.stars,
@@ -130,7 +126,6 @@ class MapperProvider {
         created_at: t.created_at,
         last_activity_at: t.last_activity_at,
     });
-    vote = (strategy) => (strategy === 'smelt' ? 'burn' : 'return');
     vaultToStronghold = (v) => ({
         address: v.address,
         creator: v.creator,

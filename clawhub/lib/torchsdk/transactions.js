@@ -9,7 +9,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildEnableShortSellingTransaction = exports.buildLiquidateShortTransaction = exports.buildCloseShortTransaction = exports.buildOpenShortTransaction = exports.buildSwapFeesToSolTransaction = exports.buildHarvestFeesTransaction = exports.buildMigrateTransaction = exports.buildWithdrawTokensTransaction = exports.buildReclaimFailedTokenTransaction = exports.buildClaimProtocolRewardsTransaction = exports.buildLiquidateTransaction = exports.buildRepayTransaction = exports.buildBorrowTransaction = exports.buildTransferAuthorityTransaction = exports.buildUnlinkWalletTransaction = exports.buildLinkWalletTransaction = exports.buildWithdrawVaultTransaction = exports.buildDepositVaultTransaction = exports.buildCreateVaultTransaction = exports.buildStarTransaction = exports.buildCreateTokenTransaction = exports.buildSellTransaction = exports.sendDirectBuy = exports.sendBuy = exports.buildDirectBuyTransaction = exports.buildBuyTransaction = exports.clearAltCache = exports.fetchAddressLookupTable = void 0;
+exports.buildEnableShortSellingTransaction = exports.buildLiquidateShortTransaction = exports.buildCloseShortTransaction = exports.buildOpenShortTransaction = exports.buildSwapFeesToSolTransaction = exports.buildHarvestFeesTransaction = exports.buildMigrateTransaction = exports.buildWithdrawTokensTransaction = exports.buildReclaimFailedTokenTransaction = exports.buildClaimProtocolRewardsTransaction = exports.buildLiquidateTransaction = exports.buildRepayTransaction = exports.buildBorrowTransaction = exports.buildTransferAuthorityTransaction = exports.buildUnlinkWalletTransaction = exports.buildLinkWalletTransaction = exports.buildWithdrawVaultTransaction = exports.buildDepositVaultTransaction = exports.buildCreateVaultTransaction = exports.buildStarTransaction = exports.sendCreateToken = exports.buildCreateTokenTransaction = exports.buildSellTransaction = exports.sendDirectBuy = exports.sendBuy = exports.buildDirectBuyTransaction = exports.buildBuyTransaction = exports.clearAltCache = exports.fetchAddressLookupTable = void 0;
 const web3_js_1 = require("@solana/web3.js");
 const spl_token_1 = require("@solana/spl-token");
 const anchor_1 = require("@coral-xyz/anchor");
@@ -101,7 +101,9 @@ const finalizeTransaction = async (connection, tx, feePayer) => {
 // Buy
 // ============================================================================
 // Internal buy builder shared by both vault and direct variants
-const buildBuyTransactionInternal = async (connection, mintStr, buyerStr, amount_sol, slippage_bps, vote, message, vaultCreatorStr, quote) => {
+const buildBuyTransactionInternal = async (connection, mintStr, buyerStr, amount_sol, slippage_bps, 
+// [V36] Removed: vote parameter — vote vault removed
+message, vaultCreatorStr, quote) => {
     const mint = new web3_js_1.PublicKey(mintStr);
     const buyer = new web3_js_1.PublicKey(buyerStr);
     const tokenData = await (0, tokens_1.fetchTokenRaw)(connection, mint);
@@ -175,7 +177,7 @@ const buildBuyTransactionInternal = async (connection, mintStr, buyerStr, amount
         .buy({
         solAmount: new anchor_1.BN(amount_sol.toString()),
         minTokensOut: new anchor_1.BN(minTokens.toString()),
-        vote: vote === 'return' ? true : vote === 'burn' ? false : null,
+        // [V36] vote parameter removed from BuyArgs
     })
         .accounts({
         buyer,
@@ -231,8 +233,8 @@ const buildBuyTransactionInternal = async (connection, mintStr, buyerStr, amount
  * @returns Unsigned transaction and descriptive message
  */
 const buildBuyTransaction = async (connection, params) => {
-    const { mint, buyer, amount_sol, slippage_bps = 100, vote, message, vault, quote } = params;
-    return buildBuyTransactionInternal(connection, mint, buyer, amount_sol, slippage_bps, vote, message, vault, quote);
+    const { mint, buyer, amount_sol, slippage_bps = 100, message, vault, quote } = params;
+    return buildBuyTransactionInternal(connection, mint, buyer, amount_sol, slippage_bps, message, vault, quote);
 };
 exports.buildBuyTransaction = buildBuyTransaction;
 /**
@@ -246,8 +248,8 @@ exports.buildBuyTransaction = buildBuyTransaction;
  * @returns Unsigned transaction and descriptive message
  */
 const buildDirectBuyTransaction = async (connection, params) => {
-    const { mint, buyer, amount_sol, slippage_bps = 100, vote, message, quote } = params;
-    return buildBuyTransactionInternal(connection, mint, buyer, amount_sol, slippage_bps, vote, message, undefined, quote);
+    const { mint, buyer, amount_sol, slippage_bps = 100, message, quote } = params;
+    return buildBuyTransactionInternal(connection, mint, buyer, amount_sol, slippage_bps, message, undefined, quote);
 };
 exports.buildDirectBuyTransaction = buildDirectBuyTransaction;
 // ── Sign-and-send helpers (Phantom / wallet-integrated flows) ────────
@@ -481,6 +483,27 @@ const buildCreateTokenTransaction = async (connection, params) => {
     };
 };
 exports.buildCreateTokenTransaction = buildCreateTokenTransaction;
+/**
+ * Build, simulate, and submit a create token via signAndSendTransaction.
+ *
+ * Phantom-friendly: simulates with sigVerify: false (mint keypair is already
+ * partially signed), then hands the tx to the wallet for the creator signature.
+ * Avoids the "malicious dapp" warning caused by Phantom trying to simulate a
+ * partially-signed transaction.
+ *
+ * @returns { signature, mint } on success
+ */
+const sendCreateToken = async (connection, wallet, params) => {
+    const fullParams = { ...params, creator: wallet.publicKey.toBase58() };
+    const { transaction, mint } = await (0, exports.buildCreateTokenTransaction)(connection, fullParams);
+    const sim = await connection.simulateTransaction(transaction, { sigVerify: false });
+    if (sim.value.err) {
+        throw new Error(`Create token simulation failed: ${JSON.stringify(sim.value.err)}`);
+    }
+    const { signature } = await wallet.signAndSendTransaction(transaction);
+    return { signature, mint };
+};
+exports.sendCreateToken = sendCreateToken;
 // ============================================================================
 // Star
 // ============================================================================

@@ -9,8 +9,6 @@ import type { VersionedTransaction, Keypair, PublicKey } from '@solana/web3.js';
 import type { TokenSortOption, TransactionResult, CreateTokenResult, SaidVerification, ConfirmResult, EphemeralAgent } from 'torchsdk';
 /** Faction lifecycle: rising (bonding) → ready (complete) → ascended (migrated) → razed (reclaimed) */
 export type FactionStatus = 'rising' | 'ready' | 'ascended' | 'razed';
-/** Governance strategy: scorched_earth (burn tokens) or fortify (return to treasury lock) */
-export type Strategy = 'smelt' | 'fortify';
 /** Agent loan health status */
 export type AgentHealth = 'healthy' | 'at_risk' | 'liquidatable' | 'none';
 /** Summary view of a faction (wraps TokenSummary) */
@@ -44,14 +42,11 @@ export interface FactionDetail {
     total_supply: number;
     circulating_supply: number;
     tokens_in_curve: number;
-    tokens_in_vote_vault: number;
     tokens_burned: number;
     war_chest_sol: number;
     war_chest_tokens: number;
     total_bought_back: number;
     buyback_count: number;
-    votes_scorched_earth: number;
-    votes_fortify: number;
     founder: string;
     members: number | null;
     rallies: number;
@@ -163,7 +158,6 @@ export interface JoinFactionParams {
     amount_sol: number;
     stronghold: string;
     slippage_bps?: number;
-    strategy?: Strategy;
     message?: string;
     ascended?: boolean;
 }
@@ -183,7 +177,6 @@ export interface MessageFactionParams {
     message: string;
     stronghold: string;
     ascended?: boolean;
-    strategy?: Strategy;
 }
 /** "Argued in" — micro sell + negative message (sells 100 tokens) */
 export interface FudFactionParams {

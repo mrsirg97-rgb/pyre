@@ -1,5 +1,5 @@
 import { AllLoanPositionsResult, BuyTransactionResult, CreateTokenResult, Holder, HoldersResult, LendingInfo, LoanPositionInfo, LoanPositionWithKey, MessagesResult, TokenDetail, TokenListResult, TokenMessage, TokenStatus, TokenStatusFilter, TokenSummary, VaultInfo, VaultWalletLinkInfo } from 'torchsdk';
-import { AgentLink, AllWarLoansResult, Comms, CommsResult, FactionDetail, FactionListResult, FactionStatus, FactionStatusFilter, FactionSummary, JoinFactionResult, LaunchFactionResult, Member, MembersResult, Strategy, Stronghold, WarChest, WarLoan, WarLoanWithAgent } from '../types';
+import { AgentLink, AllWarLoansResult, Comms, CommsResult, FactionDetail, FactionListResult, FactionStatus, FactionStatusFilter, FactionSummary, JoinFactionResult, LaunchFactionResult, Member, MembersResult, Stronghold, WarChest, WarLoan, WarLoanWithAgent } from '../types';
 export interface Mapper {
     allLoansResult(r: AllLoanPositionsResult): AllWarLoansResult;
     buyResult(r: BuyTransactionResult): JoinFactionResult;
@@ -11,14 +11,12 @@ export interface Mapper {
     loanToWarLoan(l: LoanPositionInfo): WarLoan;
     loanWithKeyToWarLoan(l: LoanPositionWithKey): WarLoanWithAgent;
     messagesResult(r: MessagesResult): CommsResult;
-    strategy(vote: 'burn' | 'return'): Strategy;
     tokenDetailToFaction(t: TokenDetail): FactionDetail;
     tokenListResult(r: TokenListResult): FactionListResult;
     tokenMessageToComms(m: TokenMessage): Comms;
     tokenStatus(status: FactionStatus): TokenStatus;
     tokenStatusFilter(status: FactionStatusFilter): TokenStatusFilter;
     tokenSummaryToFaction(t: TokenSummary): FactionSummary;
-    vote(strategy: Strategy): 'burn' | 'return';
     vaultToStronghold(v: VaultInfo): Stronghold;
     walletLinkToAgentLink(l: VaultWalletLinkInfo): AgentLink;
 }

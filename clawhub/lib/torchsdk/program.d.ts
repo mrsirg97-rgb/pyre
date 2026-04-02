@@ -133,7 +133,6 @@ treasuryFeeBps?: number, // [V10] 0% token treasury fee (removed — treasury fu
 bondingTarget?: bigint) => {
     tokensOut: bigint;
     tokensToUser: bigint;
-    tokensToCommunity: bigint;
     protocolFee: bigint;
     treasuryFee: bigint;
     solToCurve: bigint;

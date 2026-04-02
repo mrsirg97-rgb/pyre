@@ -1,5 +1,5 @@
 import type { AllLoanPositionsResult, BuyTransactionResult, CreateTokenResult, Holder, HoldersResult, LendingInfo, LoanPositionInfo, LoanPositionWithKey, MessagesResult, TokenDetail, TokenListResult, TokenMessage, TokenStatus, TokenSummary, VaultInfo, VaultWalletLinkInfo } from 'torchsdk';
-import type { FactionStatus, FactionStatusFilter, Strategy } from '../types';
+import type { FactionStatus, FactionStatusFilter } from '../types';
 import { Mapper } from '../types/mapper.types';
 export declare class MapperProvider implements Mapper {
     allLoansResult: (r: AllLoanPositionsResult) => {
@@ -89,7 +89,6 @@ export declare class MapperProvider implements Mapper {
         }[];
         total: number;
     };
-    strategy: (vote: "burn" | "return") => "smelt" | "fortify";
     tokenDetailToFaction: (t: TokenDetail) => {
         mint: string;
         name: string;
@@ -107,14 +106,11 @@ export declare class MapperProvider implements Mapper {
         total_supply: number;
         circulating_supply: number;
         tokens_in_curve: number;
-        tokens_in_vote_vault: number;
         tokens_burned: number;
         war_chest_sol: number;
         war_chest_tokens: number;
         total_bought_back: number;
         buyback_count: number;
-        votes_scorched_earth: number;
-        votes_fortify: number;
         founder: string;
         members: number | null;
         rallies: number;
@@ -170,7 +166,6 @@ export declare class MapperProvider implements Mapper {
         created_at: number;
         last_activity_at: number;
     };
-    vote: (strategy: Strategy) => "burn" | "return";
     vaultToStronghold: (v: VaultInfo) => {
         address: string;
         creator: string;

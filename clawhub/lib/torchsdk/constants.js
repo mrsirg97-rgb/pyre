@@ -96,6 +96,13 @@ exports.LEGACY_MINTS = [
 exports.BLACKLISTED_MINTS = [
     '22fRDzkMUp8LW7RhPGa17FxifJJr6hR4PqyREAR6jitm',
     'DFM5jCjtnEaHnBzfMExiT4rUGnAj7t7kvxci8BgA64tm',
+    // Irys data loss — bundle items never settled to Arweave L1 (Irys gateway shutdown Mar 2026)
+    '6Cc6izuk7816mV97fi9qDcbnLiBEnkFRho5Nnpcqbrtm',
+    '4y2vpd8J8o4bEneohAn6LjwH72BiCgym3c6hYYLamatm',
+    '2zKJuYvB9XJrW16xJgE2SNyECYWFpfEh3JYQU2npcZtm',
+    'DzS7tdbSXET5pFtyqTXCM7JED7JegHvTeuVeJxm56Epy',
+    '5YJdBkWu8wRG2zmaCTRZRBsCq5mcAhaac9ywsbNZtkpy',
+    '8RBSyx31YkBvxGLx6Dd1um5RUgkaVHuuA8dfiKRh6Cpy',
 ];
 // Formatting helpers
 exports.LAMPORTS_PER_SOL = 1000000000;

@@ -87,7 +87,6 @@ const toTokenSummary = (raw) => {
     const virtualTokens = BigInt(bc.virtual_token_reserves.toString());
     const realSol = BigInt(bc.real_sol_reserves.toString());
     const realTokens = BigInt(bc.real_token_reserves.toString());
-    const voteVault = BigInt(bc.vote_vault_balance.toString());
     const price = (0, program_1.calculatePrice)(virtualSol, virtualTokens);
     const priceInSol = (price * constants_1.TOKEN_MULTIPLIER) / constants_1.LAMPORTS_PER_SOL;
     // Market cap = fully diluted (total supply × price), matching pump.fun convention
@@ -140,7 +139,6 @@ const buildTokenDetail = (mint, bc, treasury, metadata, holdersCount, solPriceUs
     const virtualTokens = BigInt(bc.virtual_token_reserves.toString());
     const realSol = BigInt(bc.real_sol_reserves.toString());
     const realTokens = BigInt(bc.real_token_reserves.toString());
-    const voteVault = BigInt(bc.vote_vault_balance.toString());
     const burned = BigInt(bc.permanently_burned_tokens?.toString() || '0');
     let priceInSol;
     let marketCapSol;
@@ -156,7 +154,7 @@ const buildTokenDetail = (mint, bc, treasury, metadata, holdersCount, solPriceUs
     }
     // Market cap = fully diluted (total supply × price), matching pump.fun convention
     marketCapSol = (priceInSol * Number(constants_1.TOTAL_SUPPLY)) / constants_1.TOKEN_MULTIPLIER;
-    const circulating = constants_1.TOTAL_SUPPLY - realTokens - voteVault;
+    const circulating = constants_1.TOTAL_SUPPLY - realTokens;
     const treasurySol = treasury ? Number(treasury.sol_balance.toString()) / constants_1.LAMPORTS_PER_SOL : 0;
     const treasuryTokens = treasury ? Number(treasury.tokens_held.toString()) / constants_1.TOKEN_MULTIPLIER : 0;
     // V33: buyback removed — these fields are deprecated (always 0 for new tokens)
@@ -180,14 +178,11 @@ const buildTokenDetail = (mint, bc, treasury, metadata, holdersCount, solPriceUs
         total_supply: Number(constants_1.TOTAL_SUPPLY) / constants_1.TOKEN_MULTIPLIER,
         circulating_supply: Number(circulating) / constants_1.TOKEN_MULTIPLIER,
         tokens_in_curve: Number(realTokens) / constants_1.TOKEN_MULTIPLIER,
-        tokens_in_vote_vault: Number(voteVault) / constants_1.TOKEN_MULTIPLIER,
         tokens_burned: Number(burned) / constants_1.TOKEN_MULTIPLIER,
         treasury_sol_balance: treasurySol,
         treasury_token_balance: treasuryTokens,
         total_bought_back: boughtBack,
         buyback_count: buybackCount,
-        votes_return: Number(bc.votes_return.toString()),
-        votes_burn: Number(bc.votes_burn.toString()),
         creator: bc.creator.toString(),
         holders: holdersCount ?? null,
         stars,

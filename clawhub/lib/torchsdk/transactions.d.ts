@@ -4,7 +4,7 @@
  * Build unsigned transactions for buy, sell, create, star, vault, and lending.
  * Agents sign these locally and submit to the network.
  */
-import { Connection, AddressLookupTableAccount } from '@solana/web3.js';
+import { Connection, PublicKey, AddressLookupTableAccount } from '@solana/web3.js';
 import { BuyParams, DirectBuyParams, SellParams, CreateTokenParams, StarParams, MigrateParams, BorrowParams, RepayParams, LiquidateParams, OpenShortParams, CloseShortParams, LiquidateShortParams, EnableShortSellingParams, ClaimProtocolRewardsParams, HarvestFeesParams, SwapFeesToSolParams, CreateVaultParams, DepositVaultParams, WithdrawVaultParams, WithdrawTokensParams, LinkWalletParams, UnlinkWalletParams, TransferAuthorityParams, ReclaimParams, TransactionResult, BuyTransactionResult, CreateTokenResult, WalletAdapter } from './types';
 /**
  * Fetch the Torch ALT for this network. Cached per connection instance.
@@ -70,6 +70,20 @@ export declare const buildSellTransaction: (connection: Connection, params: Sell
  * @returns Partially-signed transaction, mint PublicKey, and mint Keypair
  */
 export declare const buildCreateTokenTransaction: (connection: Connection, params: CreateTokenParams) => Promise<CreateTokenResult>;
+/**
+ * Build, simulate, and submit a create token via signAndSendTransaction.
+ *
+ * Phantom-friendly: simulates with sigVerify: false (mint keypair is already
+ * partially signed), then hands the tx to the wallet for the creator signature.
+ * Avoids the "malicious dapp" warning caused by Phantom trying to simulate a
+ * partially-signed transaction.
+ *
+ * @returns { signature, mint } on success
+ */
+export declare const sendCreateToken: (connection: Connection, wallet: WalletAdapter, params: Omit<CreateTokenParams, "creator">) => Promise<{
+    signature: string;
+    mint: PublicKey;
+}>;
 /**
  * Build an unsigned star transaction (costs 0.05 SOL).
  *

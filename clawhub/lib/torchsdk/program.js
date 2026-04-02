@@ -103,8 +103,8 @@ const getProgram = (provider) => {
     return new anchor_1.Program(torch_market_json_1.default, provider);
 };
 exports.getProgram = getProgram;
-// [V10] Flat treasury SOL rate: 15% → 2.5% across all tiers (was 12.5%→4% in V4.0)
-const TREASURY_SOL_MAX_BPS = 1500; // 15% at start
+// [V36] Treasury SOL rate: 17.5% → 2.5% (was 15%→2.5% — increased to deepen treasury after vote vault removal)
+const TREASURY_SOL_MAX_BPS = 1750; // 17.5% at start
 const TREASURY_SOL_MIN_BPS = 250; // 2.5% at completion
 // [V34] Creator SOL share: 0.2% → 1% during bonding (carved from treasury rate)
 const CREATOR_SOL_MIN_BPS = 20; // 0.2% at start
@@ -138,14 +138,11 @@ bondingTarget = BigInt('200000000000')) => {
     const solToTreasury = treasuryFee + solToTreasurySplit;
     // Calculate tokens using constant product formula (based on SOL going to curve)
     const tokensOut = (virtualTokenReserves * solToCurve) / (virtualSolReserves + solToCurve);
-    // Split tokens: 90% to user, 10% to community treasury
-    // No permanent burn during bonding - community votes on treasury tokens at migration
-    const tokensToUser = (tokensOut * BigInt(9000)) / BigInt(10000);
-    const tokensToCommunity = tokensOut - tokensToUser;
+    // [V36] 100% of tokens go to buyer (vote vault removed)
+    const tokensToUser = tokensOut;
     return {
         tokensOut,
         tokensToUser,
-        tokensToCommunity,
         protocolFee,
         treasuryFee,
         solToCurve,

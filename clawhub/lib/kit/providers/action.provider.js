@@ -195,7 +195,6 @@ class ActionProvider {
             buyer: params.agent,
             amount_sol: params.amount_sol,
             slippage_bps: params.slippage_bps,
-            vote: params.strategy ? this.mapper.vote(params.strategy) : undefined,
             message: params.message,
             vault: params.stronghold,
         });
@@ -220,7 +219,6 @@ class ActionProvider {
             amount_sol: MICRO_BUY_LAMPORTS,
             message: params.message,
             vault: params.stronghold,
-            vote: params.strategy ? this.mapper.vote(params.strategy) : undefined,
         });
         return this.mapper.buyResult(result);
     }
