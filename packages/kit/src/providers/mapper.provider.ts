@@ -17,7 +17,7 @@ import type {
   VaultWalletLinkInfo,
 } from 'torchsdk'
 
-import type { FactionStatus, FactionStatusFilter, Strategy } from '../types'
+import type { FactionStatus, FactionStatusFilter } from '../types'
 import { Mapper, STATUS_FILTER_REVERSE, STATUS_MAP, STATUS_REVERSE } from '../types/mapper.types'
 
 export class MapperProvider implements Mapper {
@@ -88,8 +88,6 @@ export class MapperProvider implements Mapper {
     total: r.total,
   })
 
-  strategy = (vote: 'burn' | 'return') => (vote === 'burn' ? 'smelt' : 'fortify')
-
   tokenDetailToFaction = (t: TokenDetail) => ({
     mint: t.mint,
     name: t.name,
@@ -107,14 +105,11 @@ export class MapperProvider implements Mapper {
     total_supply: t.total_supply,
     circulating_supply: t.circulating_supply,
     tokens_in_curve: t.tokens_in_curve,
-    tokens_in_vote_vault: t.tokens_in_vote_vault,
     tokens_burned: t.tokens_burned,
     war_chest_sol: t.treasury_sol_balance,
     war_chest_tokens: t.treasury_token_balance,
     total_bought_back: t.total_bought_back,
     buyback_count: t.buyback_count,
-    votes_scorched_earth: t.votes_burn,
-    votes_fortify: t.votes_return,
     founder: t.creator,
     members: t.holders,
     rallies: t.stars,
@@ -164,8 +159,6 @@ export class MapperProvider implements Mapper {
     created_at: t.created_at,
     last_activity_at: t.last_activity_at,
   })
-
-  vote = (strategy: Strategy) => (strategy === 'smelt' ? 'burn' : 'return')
 
   vaultToStronghold = (v: VaultInfo) => ({
     address: v.address,

@@ -6,7 +6,7 @@ We used [Kani](https://model-checking.github.io/kani/), a formal verification to
 
 This is **not** a security audit. It proves the arithmetic is correct, but does not cover access control, account validation, or economic attacks. See [What Is NOT Verified](#what-is-not-verified) for full scope limitations.
 
-**48 proof harnesses. All passing. Zero failures.**
+**58 proof harnesses. All passing. Zero failures.**
 
 ---
 
@@ -15,8 +15,8 @@ This is **not** a security audit. It proves the arithmetic is correct, but does 
 torch_market's core arithmetic has been formally verified using [Kani](https://model-checking.github.io/kani/), a Rust model checker backed by the CBMC bounded model checker. Kani exhaustively proves properties hold for **all** valid inputs within constrained ranges -- not just sampled test cases.
 
 **Tool:** Kani Rust Verifier 0.67.0 / CBMC 6.8.0
-**Target:** `torch_market` v4.0.1
-**Harnesses:** 48 proof harnesses, all passing
+**Target:** `torch_market` v10.1.1
+**Harnesses:** 58 proof harnesses, all passing
 **Source:** `programs/torch_market/src/kani_proofs.rs`
 
 ## What Is Formally Verified
@@ -29,7 +29,7 @@ The proofs cover the **pure arithmetic layer** -- every fee calculation, bonding
 |---------|----------|-------------|
 | `verify_buy_fee_conservation` | `protocol_fee + treasury_fee + after_fees == sol_amount` | 0.001-200 SOL |
 | `verify_protocol_fee_split` | `dev_share + protocol_portion == protocol_fee_total` | 0.001-200 SOL |
-| `verify_treasury_rate_bounds` | `rate in [400, 1250]` (4-12.5%) flat across all tiers | 0-target SOL reserves |
+| `verify_treasury_rate_bounds` | `rate in [250, 1500]` (2.5-15%) flat across all tiers | 0-target SOL reserves |
 | `verify_treasury_rate_monotonic` | More reserves -> lower treasury rate | 0-target SOL (two symbolic) |
 | `verify_sol_distribution_conservation` | `curve + treasury + creator + dev + protocol == sol_amount` (zero SOL created or lost, V34 5-way sum) | 0.001-10 SOL per trade, 0-target SOL reserves |
 | `verify_curve_tokens_bounded_legacy` | `tokens_out < virtual_token_reserves` (can't mint from thin air) | Legacy pool state space (IVT=107.3T) |
@@ -141,6 +141,23 @@ These harnesses verify end-to-end lending correctness: borrow → (optional inte
 | `verify_lending_partial_repay_accounting` | After partial repay: remaining_debt == total_owed - repaid, interest paid first, borrowed never increases | Up to 50 SOL, interest < 10% of principal |
 | `verify_lending_lifecycle_with_interest` | After borrow + 1 epoch interest + full repay: treasury gains exactly the interest, principal fully returned | Up to 50 SOL, 2%/epoch, 1 epoch max |
 
+### Short Selling (Harnesses 47-54) — V5
+
+These harnesses verify the V5 short selling arithmetic — the mirror of lending. Short sellers post SOL collateral and borrow tokens. Interest accrues in token terms. All proofs mirror the long-side lending proofs with inverted assets.
+
+| Harness | Property | Input Range |
+|---------|----------|-------------|
+| `verify_short_debt_value_bounded_small` | Token debt value in SOL ≤ pool SOL | 50 SOL / 50T token pool |
+| `verify_short_debt_value_bounded_large` | Same property at larger pool scale | 500 SOL / 200T token pool |
+| `verify_short_ltv_zero_collateral` | Zero SOL collateral returns `u64::MAX` (instant liquidation) | All u64 debt values |
+| `verify_short_ltv_zero_debt` | Zero debt returns 0 LTV | All u64 collateral values |
+| `verify_short_interest_no_overflow` | Token interest calculation doesn't overflow; interest ≤ principal | Up to TOTAL_SUPPLY tokens, 2%/epoch, 1 epoch |
+| `verify_short_liquidation_bonus_increases_seizure` | 10% bonus increases SOL seized vs no bonus | Up to 50 SOL debt value |
+| `verify_short_lifecycle_conservation` | After open_short + full close (same slot): treasury tokens & SOL exactly restored, collateral fully released | 100 SOL / 50T pool, up to 10% supply borrowed, up to 500 SOL collateral |
+| `verify_short_partial_close_accounting` | After partial close: remaining_debt == total_owed - returned, interest paid first, borrowed never increases | Up to 10% supply, interest < 10% of principal |
+| `verify_short_lifecycle_with_interest` | After open_short + 1 epoch interest + full close: treasury gains exactly the interest tokens, principal fully returned | Up to 10% supply, 2%/epoch, 1 epoch max |
+| `verify_short_collateral_reservation` | Reserved short SOL correctly excluded from lending pool; all-short = zero lendable; no-short = full treasury available | 1-1000 SOL treasury, symbolic short collateral |
+
 ## Verification Methodology
 
 ### How Kani Works
@@ -181,7 +198,7 @@ Eight harnesses were dropped during verification because they prove structurally
 | `verify_ltv_100_percent` | `(v * 10000) / v == 10000` is a mathematical tautology. SAT solvers cannot efficiently prove symbolic u128 division cancellation. |
 | `verify_buyback_respects_reserve` | Buyback reserve/amount constraints are enforced by handler-level checks, not arithmetic. Property is structural given the config validation. |
 
-These properties remain true by construction. The remaining 48 harnesses cover every non-tautological safety property.
+These properties remain true by construction. The remaining 58 harnesses cover every non-tautological safety property.
 
 ## What Is NOT Verified
 
@@ -222,7 +239,7 @@ cargo kani
 cargo kani --harness verify_buy_fee_conservation
 ```
 
-All 48 harnesses pass. Most complete in under 1 second; the slowest (`verify_transfer_fee_bounds`, `verify_treasury_rate_monotonic`) take 30-55 seconds due to larger SAT formula complexity.
+All 58 harnesses pass. Most complete in under 1 second; the slowest (`verify_transfer_fee_bounds`, `verify_treasury_rate_monotonic`) take 30-55 seconds due to larger SAT formula complexity.
 
 ## Constants Reference
 
@@ -239,9 +256,9 @@ All 48 harnesses pass. Most complete in under 1 second; the slowest (`verify_tra
 | `CURVE_SUPPLY` | 700,000,000,000,000 | 700M tokens for curve + pool (70% of supply) |
 | V27 IVS | `3 * bonding_target / 8` | 18.75 SOL (Spark), 37.5 SOL (Flame), 75 SOL (Torch) |
 | `PROTOCOL_FEE_BPS` | 50 | [V4.0] 0.5% protocol fee (was 1%) |
-| `TREASURY_FEE_BPS` | 100 | 1% token treasury fee |
-| `TREASURY_SOL_MIN_BPS` | 400 | [V4.0] 4% min treasury SOL rate (was 5%) |
-| `TREASURY_SOL_MAX_BPS` | 1250 | [V4.0] 12.5% max treasury SOL rate (was 20%) |
+| `TREASURY_FEE_BPS` | 0 | [V10] Removed — treasury funded by dynamic SOL rate + transfer fees |
+| `TREASURY_SOL_MIN_BPS` | 250 | [V10] 2.5% min treasury SOL rate (was 4%) |
+| `TREASURY_SOL_MAX_BPS` | 1500 | [V10] 15% max treasury SOL rate (was 12.5%) |
 | `DEV_WALLET_SHARE_BPS` | 1000 | [V32] 10% of protocol fee to dev (was 25%) |
 | `BURN_RATE_BPS` | 1000 | 10% token burn on buy |
 | `TRANSFER_FEE_BPS` | 4 | [V34] 0.04% Token-2022 transfer fee (was 3 bps, old tokens retain 3) |
@@ -260,4 +277,6 @@ All 48 harnesses pass. Most complete in under 1 second; the slowest (`verify_tra
 | `CREATOR_SOL_MAX_BPS` | 100 | [V34] 1% creator SOL share at bonding completion |
 | `CREATOR_FEE_SHARE_BPS` | 1,500 | [V34] 15% creator share of fee swap proceeds |
 | `COMMUNITY_TOKEN_SENTINEL` | u64::MAX | [V35] Sentinel in Treasury.total_bought_back for community tokens (0% creator fees) |
+| `SHORT_ENABLED_SENTINEL` | u16::MAX | [V5] Sentinel in Treasury.buyback_percent_bps — short selling enabled |
+| `MIN_SHORT_TOKENS` | 1,000,000,000 | [V5] 1,000 tokens minimum short position (6 decimals) |
 | `MIN_SOL_AMOUNT` | 1,000,000 | 0.001 SOL minimum |

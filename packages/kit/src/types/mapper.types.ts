@@ -31,7 +31,6 @@ import {
   LaunchFactionResult,
   Member,
   MembersResult,
-  Strategy,
   Stronghold,
   WarChest,
   WarLoan,
@@ -49,14 +48,12 @@ export interface Mapper {
   loanToWarLoan(l: LoanPositionInfo): WarLoan
   loanWithKeyToWarLoan(l: LoanPositionWithKey): WarLoanWithAgent
   messagesResult(r: MessagesResult): CommsResult
-  strategy(vote: 'burn' | 'return'): Strategy
   tokenDetailToFaction(t: TokenDetail): FactionDetail
   tokenListResult(r: TokenListResult): FactionListResult
   tokenMessageToComms(m: TokenMessage): Comms
   tokenStatus(status: FactionStatus): TokenStatus
   tokenStatusFilter(status: FactionStatusFilter): TokenStatusFilter
   tokenSummaryToFaction(t: TokenSummary): FactionSummary
-  vote(strategy: Strategy): 'burn' | 'return'
   vaultToStronghold(v: VaultInfo): Stronghold
   walletLinkToAgentLink(l: VaultWalletLinkInfo): AgentLink
 }

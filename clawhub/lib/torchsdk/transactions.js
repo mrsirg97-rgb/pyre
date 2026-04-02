@@ -9,7 +9,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildSwapFeesToSolTransaction = exports.buildHarvestFeesTransaction = exports.buildMigrateTransaction = exports.buildWithdrawTokensTransaction = exports.buildReclaimFailedTokenTransaction = exports.buildClaimProtocolRewardsTransaction = exports.buildLiquidateTransaction = exports.buildRepayTransaction = exports.buildBorrowTransaction = exports.buildTransferAuthorityTransaction = exports.buildUnlinkWalletTransaction = exports.buildLinkWalletTransaction = exports.buildWithdrawVaultTransaction = exports.buildDepositVaultTransaction = exports.buildCreateVaultTransaction = exports.buildStarTransaction = exports.buildCreateTokenTransaction = exports.buildSellTransaction = exports.sendDirectBuy = exports.sendBuy = exports.buildDirectBuyTransaction = exports.buildBuyTransaction = exports.clearAltCache = exports.fetchAddressLookupTable = void 0;
+exports.buildEnableShortSellingTransaction = exports.buildLiquidateShortTransaction = exports.buildCloseShortTransaction = exports.buildOpenShortTransaction = exports.buildSwapFeesToSolTransaction = exports.buildHarvestFeesTransaction = exports.buildMigrateTransaction = exports.buildWithdrawTokensTransaction = exports.buildReclaimFailedTokenTransaction = exports.buildClaimProtocolRewardsTransaction = exports.buildLiquidateTransaction = exports.buildRepayTransaction = exports.buildBorrowTransaction = exports.buildTransferAuthorityTransaction = exports.buildUnlinkWalletTransaction = exports.buildLinkWalletTransaction = exports.buildWithdrawVaultTransaction = exports.buildDepositVaultTransaction = exports.buildCreateVaultTransaction = exports.buildStarTransaction = exports.buildCreateTokenTransaction = exports.buildSellTransaction = exports.sendDirectBuy = exports.sendBuy = exports.buildDirectBuyTransaction = exports.buildBuyTransaction = exports.clearAltCache = exports.fetchAddressLookupTable = void 0;
 const web3_js_1 = require("@solana/web3.js");
 const spl_token_1 = require("@solana/spl-token");
 const anchor_1 = require("@coral-xyz/anchor");
@@ -1495,4 +1495,255 @@ const buildSwapFeesToSolTransaction = async (connection, params) => {
     };
 };
 exports.buildSwapFeesToSolTransaction = buildSwapFeesToSolTransaction;
+// ============================================================================
+// Open Short (V5)
+// ============================================================================
+/**
+ * Build an unsigned open_short transaction.
+ *
+ * Post SOL collateral and borrow tokens from treasury.
+ * Mirror of borrow: same LTV, same liquidation, opposite direction.
+ *
+ * @param connection - Solana RPC connection
+ * @param params - Open short parameters (mint, shorter, sol_collateral, tokens_to_borrow)
+ * @returns Unsigned transaction and descriptive message
+ */
+const buildOpenShortTransaction = async (connection, params) => {
+    const { mint: mintStr, shorter: shorterStr, sol_collateral, tokens_to_borrow, vault: vaultCreatorStr } = params;
+    const mint = new web3_js_1.PublicKey(mintStr);
+    const shorter = new web3_js_1.PublicKey(shorterStr);
+    // Derive PDAs
+    const [bondingCurvePda] = (0, program_1.getBondingCurvePda)(mint);
+    const [treasuryPda] = (0, program_1.getTokenTreasuryPda)(mint);
+    const [treasuryLockPda] = (0, program_1.getTreasuryLockPda)(mint);
+    const treasuryLockTokenAccount = (0, program_1.getTreasuryLockTokenAccount)(mint, treasuryLockPda);
+    const [shortConfigPda] = (0, program_1.getShortConfigPda)(mint);
+    const [shortPositionPda] = (0, program_1.getShortPositionPda)(mint, shorter);
+    const shorterTokenAccount = (0, spl_token_1.getAssociatedTokenAddressSync)(mint, shorter, false, spl_token_1.TOKEN_2022_PROGRAM_ID);
+    // Get Raydium pool accounts for price calculation
+    const raydium = (0, program_1.getRaydiumMigrationAccounts)(mint);
+    // Vault accounts (optional — SOL from vault, tokens to vault ATA)
+    const { torchVault: torchVaultAccount, walletLink: vaultWalletLinkAccount } = deriveVaultAccounts(vaultCreatorStr, shorter);
+    const vaultTokenAccount = torchVaultAccount ? getVaultTokenAta(mint, torchVaultAccount) : null;
+    const tx = new web3_js_1.Transaction();
+    // Create shorter's token ATA if needed (to receive borrowed tokens)
+    tx.add((0, spl_token_1.createAssociatedTokenAccountIdempotentInstruction)(shorter, shorterTokenAccount, shorter, mint, spl_token_1.TOKEN_2022_PROGRAM_ID, spl_token_1.ASSOCIATED_TOKEN_PROGRAM_ID));
+    if (torchVaultAccount) {
+        tx.add(createVaultTokenAtaIx(shorter, mint, torchVaultAccount));
+    }
+    const provider = makeDummyProvider(connection, shorter);
+    const program = new anchor_1.Program(torch_market_json_1.default, provider);
+    const openShortIx = await program.methods
+        .openShort({
+        solCollateral: new anchor_1.BN(sol_collateral.toString()),
+        tokensToBorrow: new anchor_1.BN(tokens_to_borrow.toString()),
+    })
+        .accounts({
+        shorter,
+        mint,
+        bondingCurve: bondingCurvePda,
+        treasury: treasuryPda,
+        treasuryLock: treasuryLockPda,
+        treasuryLockTokenAccount,
+        shortConfig: shortConfigPda,
+        shortPosition: shortPositionPda,
+        shorterTokenAccount,
+        poolState: raydium.poolState,
+        tokenVault0: raydium.token0Vault,
+        tokenVault1: raydium.token1Vault,
+        torchVault: torchVaultAccount,
+        vaultWalletLink: vaultWalletLinkAccount,
+        vaultTokenAccount,
+        tokenProgram: spl_token_1.TOKEN_2022_PROGRAM_ID,
+        systemProgram: web3_js_1.SystemProgram.programId,
+    })
+        .instruction();
+    tx.add(openShortIx);
+    const versionedTx = await finalizeTransaction(connection, tx, shorter);
+    const vaultLabel = vaultCreatorStr ? ' (via vault)' : '';
+    return {
+        transaction: versionedTx,
+        message: `Open short: ${Number(tokens_to_borrow) / 1e6} tokens with ${Number(sol_collateral) / 1e9} SOL collateral${vaultLabel}`,
+    };
+};
+exports.buildOpenShortTransaction = buildOpenShortTransaction;
+// ============================================================================
+// Close Short (V5)
+// ============================================================================
+/**
+ * Build an unsigned close_short transaction.
+ *
+ * Return tokens to close or partially repay a short position.
+ * Interest paid first (in tokens), then principal.
+ * Full close returns all SOL collateral.
+ *
+ * @param connection - Solana RPC connection
+ * @param params - Close short parameters (mint, shorter, token_amount)
+ * @returns Unsigned transaction and descriptive message
+ */
+const buildCloseShortTransaction = async (connection, params) => {
+    const { mint: mintStr, shorter: shorterStr, token_amount, vault: vaultCreatorStr } = params;
+    const mint = new web3_js_1.PublicKey(mintStr);
+    const shorter = new web3_js_1.PublicKey(shorterStr);
+    // Derive PDAs (no Raydium needed — same as repay)
+    const [bondingCurvePda] = (0, program_1.getBondingCurvePda)(mint);
+    const [treasuryPda] = (0, program_1.getTokenTreasuryPda)(mint);
+    const [treasuryLockPda] = (0, program_1.getTreasuryLockPda)(mint);
+    const treasuryLockTokenAccount = (0, program_1.getTreasuryLockTokenAccount)(mint, treasuryLockPda);
+    const [shortConfigPda] = (0, program_1.getShortConfigPda)(mint);
+    const [shortPositionPda] = (0, program_1.getShortPositionPda)(mint, shorter);
+    const shorterTokenAccount = (0, spl_token_1.getAssociatedTokenAddressSync)(mint, shorter, false, spl_token_1.TOKEN_2022_PROGRAM_ID);
+    // Vault accounts (optional — tokens from vault ATA, SOL to vault)
+    const { torchVault: torchVaultAccount, walletLink: vaultWalletLinkAccount } = deriveVaultAccounts(vaultCreatorStr, shorter);
+    const vaultTokenAccount = torchVaultAccount ? getVaultTokenAta(mint, torchVaultAccount) : null;
+    const tx = new web3_js_1.Transaction();
+    if (torchVaultAccount) {
+        tx.add(createVaultTokenAtaIx(shorter, mint, torchVaultAccount));
+    }
+    const provider = makeDummyProvider(connection, shorter);
+    const program = new anchor_1.Program(torch_market_json_1.default, provider);
+    const closeShortIx = await program.methods
+        .closeShort(new anchor_1.BN(token_amount.toString()))
+        .accounts({
+        shorter,
+        mint,
+        bondingCurve: bondingCurvePda,
+        treasury: treasuryPda,
+        treasuryLock: treasuryLockPda,
+        treasuryLockTokenAccount,
+        shortConfig: shortConfigPda,
+        shortPosition: shortPositionPda,
+        shorterTokenAccount,
+        torchVault: torchVaultAccount,
+        vaultWalletLink: vaultWalletLinkAccount,
+        vaultTokenAccount,
+        tokenProgram: spl_token_1.TOKEN_2022_PROGRAM_ID,
+        systemProgram: web3_js_1.SystemProgram.programId,
+    })
+        .instruction();
+    tx.add(closeShortIx);
+    const versionedTx = await finalizeTransaction(connection, tx, shorter);
+    const vaultLabel = vaultCreatorStr ? ' (via vault)' : '';
+    return {
+        transaction: versionedTx,
+        message: `Close short: return ${Number(token_amount) / 1e6} tokens${vaultLabel}`,
+    };
+};
+exports.buildCloseShortTransaction = buildCloseShortTransaction;
+// ============================================================================
+// Liquidate Short (V5)
+// ============================================================================
+/**
+ * Build an unsigned liquidate_short transaction.
+ *
+ * Permissionless — anyone can call when a short position's LTV exceeds the
+ * liquidation threshold (65%). Liquidator sends tokens and receives SOL + bonus.
+ *
+ * @param connection - Solana RPC connection
+ * @param params - Liquidate short parameters (mint, liquidator, borrower)
+ * @returns Unsigned transaction and descriptive message
+ */
+const buildLiquidateShortTransaction = async (connection, params) => {
+    const { mint: mintStr, liquidator: liquidatorStr, borrower: borrowerStr, vault: vaultCreatorStr } = params;
+    const mint = new web3_js_1.PublicKey(mintStr);
+    const liquidator = new web3_js_1.PublicKey(liquidatorStr);
+    const borrower = new web3_js_1.PublicKey(borrowerStr);
+    // Derive PDAs
+    const [bondingCurvePda] = (0, program_1.getBondingCurvePda)(mint);
+    const [treasuryPda] = (0, program_1.getTokenTreasuryPda)(mint);
+    const [treasuryLockPda] = (0, program_1.getTreasuryLockPda)(mint);
+    const treasuryLockTokenAccount = (0, program_1.getTreasuryLockTokenAccount)(mint, treasuryLockPda);
+    const [shortConfigPda] = (0, program_1.getShortConfigPda)(mint);
+    const [shortPositionPda] = (0, program_1.getShortPositionPda)(mint, borrower);
+    const liquidatorTokenAccount = (0, spl_token_1.getAssociatedTokenAddressSync)(mint, liquidator, false, spl_token_1.TOKEN_2022_PROGRAM_ID);
+    // Get Raydium pool accounts for price calculation
+    const raydium = (0, program_1.getRaydiumMigrationAccounts)(mint);
+    // Vault accounts (optional — tokens from vault ATA, SOL to vault)
+    const { torchVault: torchVaultAccount, walletLink: vaultWalletLinkAccount } = deriveVaultAccounts(vaultCreatorStr, liquidator);
+    const vaultTokenAccount = torchVaultAccount ? getVaultTokenAta(mint, torchVaultAccount) : null;
+    const tx = new web3_js_1.Transaction();
+    // Create liquidator's token ATA if needed (source of covering tokens)
+    tx.add((0, spl_token_1.createAssociatedTokenAccountIdempotentInstruction)(liquidator, liquidatorTokenAccount, liquidator, mint, spl_token_1.TOKEN_2022_PROGRAM_ID, spl_token_1.ASSOCIATED_TOKEN_PROGRAM_ID));
+    if (torchVaultAccount) {
+        tx.add(createVaultTokenAtaIx(liquidator, mint, torchVaultAccount));
+    }
+    const provider = makeDummyProvider(connection, liquidator);
+    const program = new anchor_1.Program(torch_market_json_1.default, provider);
+    const liquidateShortIx = await program.methods
+        .liquidateShort()
+        .accounts({
+        liquidator,
+        borrower,
+        mint,
+        bondingCurve: bondingCurvePda,
+        treasury: treasuryPda,
+        treasuryLock: treasuryLockPda,
+        treasuryLockTokenAccount,
+        shortConfig: shortConfigPda,
+        shortPosition: shortPositionPda,
+        liquidatorTokenAccount,
+        poolState: raydium.poolState,
+        tokenVault0: raydium.token0Vault,
+        tokenVault1: raydium.token1Vault,
+        torchVault: torchVaultAccount,
+        vaultWalletLink: vaultWalletLinkAccount,
+        vaultTokenAccount,
+        tokenProgram: spl_token_1.TOKEN_2022_PROGRAM_ID,
+        systemProgram: web3_js_1.SystemProgram.programId,
+    })
+        .instruction();
+    tx.add(liquidateShortIx);
+    const versionedTx = await finalizeTransaction(connection, tx, liquidator);
+    const vaultLabel = vaultCreatorStr ? ' (via vault)' : '';
+    return {
+        transaction: versionedTx,
+        message: `Liquidate short position for ${borrowerStr.slice(0, 8)}...${vaultLabel}`,
+    };
+};
+exports.buildLiquidateShortTransaction = buildLiquidateShortTransaction;
+// ============================================================================
+// Enable Short Selling (V5) — Admin / Pre-V5 Tokens
+// ============================================================================
+/**
+ * Build an unsigned enable_short_selling transaction.
+ *
+ * Admin-only. For pre-V5 tokens that weren't created with the short selling
+ * sentinel. New tokens (V5+) have shorts auto-enabled at creation.
+ *
+ * @param connection - Solana RPC connection
+ * @param params - Enable short selling parameters (authority, mint)
+ * @returns Unsigned transaction and descriptive message
+ */
+const buildEnableShortSellingTransaction = async (connection, params) => {
+    const { authority: authorityStr, mint: mintStr } = params;
+    const authority = new web3_js_1.PublicKey(authorityStr);
+    const mint = new web3_js_1.PublicKey(mintStr);
+    // Derive PDAs
+    const [globalConfigPda] = (0, program_1.getGlobalConfigPda)();
+    const [bondingCurvePda] = (0, program_1.getBondingCurvePda)(mint);
+    const [treasuryPda] = (0, program_1.getTokenTreasuryPda)(mint);
+    const [shortConfigPda] = (0, program_1.getShortConfigPda)(mint);
+    const provider = makeDummyProvider(connection, authority);
+    const program = new anchor_1.Program(torch_market_json_1.default, provider);
+    const enableIx = await program.methods
+        .enableShortSelling()
+        .accounts({
+        authority,
+        globalConfig: globalConfigPda,
+        mint,
+        bondingCurve: bondingCurvePda,
+        treasury: treasuryPda,
+        shortConfig: shortConfigPda,
+        systemProgram: web3_js_1.SystemProgram.programId,
+    })
+        .instruction();
+    const tx = new web3_js_1.Transaction();
+    tx.add(enableIx);
+    const versionedTx = await finalizeTransaction(connection, tx, authority);
+    return {
+        transaction: versionedTx,
+        message: `Enable short selling for ${mintStr.slice(0, 8)}...`,
+    };
+};
+exports.buildEnableShortSellingTransaction = buildEnableShortSellingTransaction;
 //# sourceMappingURL=transactions.js.map

@@ -41,7 +41,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.fetchTokenRaw = exports.getVaultWalletLink = exports.getVaultForWallet = exports.getVault = exports.getAllLoanPositions = exports.getLoanPosition = exports.getLendingInfo = exports.getMessages = exports.getHolders = exports.getToken = exports.getTokenMetadata = exports.getTokens = void 0;
+exports.fetchTokenRaw = exports.getVaultWalletLink = exports.getVaultForWallet = exports.getVault = exports.getAllLoanPositions = exports.getShortPosition = exports.getLoanPosition = exports.getLendingInfo = exports.getMessages = exports.getHolders = exports.getToken = exports.getTokenMetadata = exports.getTokens = void 0;
 const web3_js_1 = require("@solana/web3.js");
 const anchor_1 = require("@coral-xyz/anchor");
 const spl_token_1 = require("@solana/spl-token");
@@ -689,6 +689,103 @@ const getLoanPosition = async (connection, mintStr, walletStr) => {
     };
 };
 exports.getLoanPosition = getLoanPosition;
+/**
+ * Get a user's short position for a given token.
+ *
+ * Reads the ShortPosition PDA on-chain and computes health status
+ * using the Raydium pool price to value the token debt against SOL collateral.
+ */
+const getShortPosition = async (connection, mintStr, walletStr) => {
+    const mint = new web3_js_1.PublicKey(mintStr);
+    const wallet = new web3_js_1.PublicKey(walletStr);
+    const coder = new anchor_1.BorshCoder(torch_market_json_1.default);
+    const [shortPositionPda] = (0, program_1.getShortPositionPda)(mint, wallet);
+    const accountInfo = await connection.getAccountInfo(shortPositionPda);
+    if (!accountInfo) {
+        return {
+            sol_collateral: 0,
+            tokens_borrowed: 0,
+            accrued_interest: 0,
+            total_owed_tokens: 0,
+            debt_value_sol: 0,
+            current_ltv_bps: 0,
+            health: 'none',
+        };
+    }
+    const short = coder.accounts.decode('ShortPosition', accountInfo.data);
+    const solCollateral = Number(short.sol_collateral.toString());
+    const tokensBorrowed = Number(short.tokens_borrowed.toString());
+    const interest = Number(short.accrued_interest.toString());
+    const totalOwedTokens = tokensBorrowed + interest;
+    // Get token debt value from Raydium pool price
+    let debtValueSol = 0;
+    const warnings = [];
+    try {
+        const raydium = (0, program_1.getRaydiumMigrationAccounts)(mint);
+        const [vault0Info, vault1Info] = await Promise.all([
+            connection.getTokenAccountBalance(raydium.token0Vault),
+            connection.getTokenAccountBalance(raydium.token1Vault),
+        ]);
+        const vault0Amount = Number(vault0Info.value.amount);
+        const vault1Amount = Number(vault1Info.value.amount);
+        if (raydium.isWsolToken0) {
+            const solReserves = vault0Amount;
+            const tokenReserves = vault1Amount;
+            if (tokenReserves > 0) {
+                debtValueSol = (totalOwedTokens * solReserves) / tokenReserves;
+            }
+        }
+        else {
+            const solReserves = vault1Amount;
+            const tokenReserves = vault0Amount;
+            if (tokenReserves > 0) {
+                debtValueSol = (totalOwedTokens * solReserves) / tokenReserves;
+            }
+        }
+    }
+    catch (e) {
+        debtValueSol = null;
+        warnings.push(`Debt valuation failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    // For shorts, LTV = debt_value_sol / sol_collateral
+    let currentLtvBps;
+    if (debtValueSol === null) {
+        currentLtvBps = null;
+    }
+    else if (solCollateral > 0) {
+        currentLtvBps = Math.floor((debtValueSol / solCollateral) * 10000);
+    }
+    else {
+        currentLtvBps = totalOwedTokens > 0 ? 10000 : 0;
+    }
+    let health;
+    if (tokensBorrowed === 0 && interest === 0) {
+        health = 'none';
+    }
+    else if (currentLtvBps === null) {
+        health = 'healthy';
+    }
+    else if (currentLtvBps >= LIQUIDATION_THRESHOLD_BPS) {
+        health = 'liquidatable';
+    }
+    else if (currentLtvBps >= MAX_LTV_BPS) {
+        health = 'at_risk';
+    }
+    else {
+        health = 'healthy';
+    }
+    return {
+        sol_collateral: solCollateral,
+        tokens_borrowed: tokensBorrowed,
+        accrued_interest: interest,
+        total_owed_tokens: totalOwedTokens,
+        debt_value_sol: debtValueSol,
+        current_ltv_bps: currentLtvBps,
+        health,
+        ...(warnings.length > 0 ? { warnings } : {}),
+    };
+};
+exports.getShortPosition = getShortPosition;
 /**
  * Get all active loan positions for a given token mint.
  *

@@ -330,6 +330,34 @@ export interface ReclaimParams {
     /** Token mint to reclaim */
     mint: string;
 }
+export interface OpenShortParams {
+    mint: string;
+    shorter: string;
+    sol_collateral: number;
+    tokens_to_borrow: number;
+    /** Vault creator pubkey. SOL from vault, tokens to vault ATA. */
+    vault?: string;
+}
+export interface CloseShortParams {
+    mint: string;
+    shorter: string;
+    token_amount: number;
+    /** Vault creator pubkey. Tokens from vault ATA, SOL to vault. */
+    vault?: string;
+}
+export interface LiquidateShortParams {
+    mint: string;
+    liquidator: string;
+    borrower: string;
+    /** Vault creator pubkey. Tokens from vault ATA, SOL to vault. */
+    vault?: string;
+}
+export interface EnableShortSellingParams {
+    /** Protocol authority wallet */
+    authority: string;
+    /** Token mint to enable shorts for */
+    mint: string;
+}
 export interface LendingInfo {
     interest_rate_bps: number;
     max_ltv_bps: number;
@@ -358,6 +386,18 @@ export interface LoanPositionWithKey extends LoanPositionInfo {
 export interface AllLoanPositionsResult {
     positions: LoanPositionWithKey[];
     pool_price_sol: number | null;
+}
+export interface ShortPositionInfo {
+    sol_collateral: number;
+    tokens_borrowed: number;
+    accrued_interest: number;
+    total_owed_tokens: number;
+    /** SOL value of the token debt (null if pool price unavailable) */
+    debt_value_sol: number | null;
+    /** Current LTV in basis points: debt_value_sol / sol_collateral (null if price unavailable) */
+    current_ltv_bps: number | null;
+    health: 'healthy' | 'at_risk' | 'liquidatable' | 'none';
+    warnings?: string[];
 }
 export interface TokenMessage {
     signature: string;

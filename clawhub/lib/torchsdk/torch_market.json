@@ -2,7 +2,7 @@
     "address": "8hbUkonssSEEtkqzwM7ZcZrD9evacM92TcWSooVF4BeT",
     "metadata": {
         "name": "torch_market",
-        "version": "4.0.1",
+        "version": "10.1.1",
         "spec": "0.1.0",
         "description": "torch.market"
     },
@@ -1060,6 +1060,321 @@
             "args": []
         },
         {
+            "name": "close_short",
+            "docs": [
+                "[V5] Close or partially repay a short position.",
+                "Return tokens, receive SOL collateral back."
+            ],
+            "discriminator": [
+                159,
+                16,
+                29,
+                141,
+                209,
+                68,
+                25,
+                0
+            ],
+            "accounts": [
+                {
+                    "name": "shorter",
+                    "writable": true,
+                    "signer": true
+                },
+                {
+                    "name": "mint"
+                },
+                {
+                    "name": "bonding_curve",
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    98,
+                                    111,
+                                    110,
+                                    100,
+                                    105,
+                                    110,
+                                    103,
+                                    95,
+                                    99,
+                                    117,
+                                    114,
+                                    118,
+                                    101
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    116,
+                                    114,
+                                    101,
+                                    97,
+                                    115,
+                                    117,
+                                    114,
+                                    121
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury_lock",
+                    "docs": [
+                        "Treasury lock PDA (owns the locked token ATA)"
+                    ],
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    116,
+                                    114,
+                                    101,
+                                    97,
+                                    115,
+                                    117,
+                                    114,
+                                    121,
+                                    95,
+                                    108,
+                                    111,
+                                    99,
+                                    107
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury_lock_token_account",
+                    "docs": [
+                        "Treasury lock's token account (receives returned tokens)"
+                    ],
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "account",
+                                "path": "treasury_lock"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "token_program"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ],
+                        "program": {
+                            "kind": "const",
+                            "value": [
+                                140,
+                                151,
+                                37,
+                                143,
+                                78,
+                                36,
+                                137,
+                                241,
+                                187,
+                                61,
+                                16,
+                                41,
+                                20,
+                                142,
+                                13,
+                                131,
+                                11,
+                                90,
+                                19,
+                                153,
+                                218,
+                                255,
+                                16,
+                                132,
+                                4,
+                                142,
+                                123,
+                                216,
+                                219,
+                                233,
+                                248,
+                                89
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "short_config",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    115,
+                                    104,
+                                    111,
+                                    114,
+                                    116,
+                                    95,
+                                    99,
+                                    111,
+                                    110,
+                                    102,
+                                    105,
+                                    103
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "short_position",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    115,
+                                    104,
+                                    111,
+                                    114,
+                                    116
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "shorter"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "shorter_token_account",
+                    "docs": [
+                        "Shorter's token account (source of returned tokens)"
+                    ],
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "account",
+                                "path": "shorter"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "token_program"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ],
+                        "program": {
+                            "kind": "const",
+                            "value": [
+                                140,
+                                151,
+                                37,
+                                143,
+                                78,
+                                36,
+                                137,
+                                241,
+                                187,
+                                61,
+                                16,
+                                41,
+                                20,
+                                142,
+                                13,
+                                131,
+                                11,
+                                90,
+                                19,
+                                153,
+                                218,
+                                255,
+                                16,
+                                132,
+                                4,
+                                142,
+                                123,
+                                216,
+                                219,
+                                233,
+                                248,
+                                89
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "torch_vault",
+                    "writable": true,
+                    "optional": true
+                },
+                {
+                    "name": "vault_wallet_link",
+                    "optional": true
+                },
+                {
+                    "name": "vault_token_account",
+                    "writable": true,
+                    "optional": true
+                },
+                {
+                    "name": "token_program"
+                },
+                {
+                    "name": "system_program",
+                    "address": "11111111111111111111111111111111"
+                }
+            ],
+            "args": [
+                {
+                    "name": "token_amount",
+                    "type": "u64"
+                }
+            ]
+        },
+        {
             "name": "contribute_revival",
             "docs": [
                 "[V12] Contribute SOL to revive a reclaimed token.",
@@ -1472,6 +1787,146 @@
                     "type": "u64"
                 }
             ]
+        },
+        {
+            "name": "enable_short_selling",
+            "docs": [
+                "[V5] Enable short selling for a specific token. Admin only.",
+                "Creates ShortConfig PDA and sets Treasury sentinel flags."
+            ],
+            "discriminator": [
+                222,
+                128,
+                161,
+                13,
+                223,
+                79,
+                147,
+                208
+            ],
+            "accounts": [
+                {
+                    "name": "authority",
+                    "writable": true,
+                    "signer": true
+                },
+                {
+                    "name": "global_config",
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    103,
+                                    108,
+                                    111,
+                                    98,
+                                    97,
+                                    108,
+                                    95,
+                                    99,
+                                    111,
+                                    110,
+                                    102,
+                                    105,
+                                    103
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "mint"
+                },
+                {
+                    "name": "bonding_curve",
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    98,
+                                    111,
+                                    110,
+                                    100,
+                                    105,
+                                    110,
+                                    103,
+                                    95,
+                                    99,
+                                    117,
+                                    114,
+                                    118,
+                                    101
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    116,
+                                    114,
+                                    101,
+                                    97,
+                                    115,
+                                    117,
+                                    114,
+                                    121
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "short_config",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    115,
+                                    104,
+                                    111,
+                                    114,
+                                    116,
+                                    95,
+                                    99,
+                                    111,
+                                    110,
+                                    102,
+                                    105,
+                                    103
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "system_program",
+                    "address": "11111111111111111111111111111111"
+                }
+            ],
+            "args": []
         },
         {
             "name": "fund_migration_wsol",
@@ -2392,6 +2847,329 @@
             "args": []
         },
         {
+            "name": "liquidate_short",
+            "docs": [
+                "[V5] Liquidate an underwater short position. Permissionless.",
+                "When token price rises and LTV exceeds 65%, anyone can call this."
+            ],
+            "discriminator": [
+                197,
+                62,
+                252,
+                198,
+                25,
+                93,
+                177,
+                131
+            ],
+            "accounts": [
+                {
+                    "name": "liquidator",
+                    "writable": true,
+                    "signer": true
+                },
+                {
+                    "name": "borrower",
+                    "writable": true
+                },
+                {
+                    "name": "mint"
+                },
+                {
+                    "name": "bonding_curve",
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    98,
+                                    111,
+                                    110,
+                                    100,
+                                    105,
+                                    110,
+                                    103,
+                                    95,
+                                    99,
+                                    117,
+                                    114,
+                                    118,
+                                    101
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    116,
+                                    114,
+                                    101,
+                                    97,
+                                    115,
+                                    117,
+                                    114,
+                                    121
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury_lock",
+                    "docs": [
+                        "Treasury lock PDA (owns the locked token ATA)"
+                    ],
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    116,
+                                    114,
+                                    101,
+                                    97,
+                                    115,
+                                    117,
+                                    114,
+                                    121,
+                                    95,
+                                    108,
+                                    111,
+                                    99,
+                                    107
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury_lock_token_account",
+                    "docs": [
+                        "Treasury lock's token account (receives liquidator's tokens to cover debt)"
+                    ],
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "account",
+                                "path": "treasury_lock"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "token_program"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ],
+                        "program": {
+                            "kind": "const",
+                            "value": [
+                                140,
+                                151,
+                                37,
+                                143,
+                                78,
+                                36,
+                                137,
+                                241,
+                                187,
+                                61,
+                                16,
+                                41,
+                                20,
+                                142,
+                                13,
+                                131,
+                                11,
+                                90,
+                                19,
+                                153,
+                                218,
+                                255,
+                                16,
+                                132,
+                                4,
+                                142,
+                                123,
+                                216,
+                                219,
+                                233,
+                                248,
+                                89
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "short_config",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    115,
+                                    104,
+                                    111,
+                                    114,
+                                    116,
+                                    95,
+                                    99,
+                                    111,
+                                    110,
+                                    102,
+                                    105,
+                                    103
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "short_position",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    115,
+                                    104,
+                                    111,
+                                    114,
+                                    116
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "borrower"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "liquidator_token_account",
+                    "docs": [
+                        "Liquidator's token account (source of tokens to cover debt)"
+                    ],
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "account",
+                                "path": "liquidator"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "token_program"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ],
+                        "program": {
+                            "kind": "const",
+                            "value": [
+                                140,
+                                151,
+                                37,
+                                143,
+                                78,
+                                36,
+                                137,
+                                241,
+                                187,
+                                61,
+                                16,
+                                41,
+                                20,
+                                142,
+                                13,
+                                131,
+                                11,
+                                90,
+                                19,
+                                153,
+                                218,
+                                255,
+                                16,
+                                132,
+                                4,
+                                142,
+                                123,
+                                216,
+                                219,
+                                233,
+                                248,
+                                89
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "pool_state"
+                },
+                {
+                    "name": "token_vault_0"
+                },
+                {
+                    "name": "token_vault_1"
+                },
+                {
+                    "name": "torch_vault",
+                    "writable": true,
+                    "optional": true
+                },
+                {
+                    "name": "vault_wallet_link",
+                    "optional": true
+                },
+                {
+                    "name": "vault_token_account",
+                    "writable": true,
+                    "optional": true
+                },
+                {
+                    "name": "token_program"
+                },
+                {
+                    "name": "system_program",
+                    "address": "11111111111111111111111111111111"
+                }
+            ],
+            "args": []
+        },
+        {
             "name": "migrate_to_dex",
             "docs": [
                 "[V26] Migrate bonded token to Raydium CPMM DEX.",
@@ -2787,6 +3565,334 @@
                 }
             ],
             "args": []
+        },
+        {
+            "name": "open_short",
+            "docs": [
+                "[V5] Open or add to a short position.",
+                "Post SOL collateral, borrow tokens from treasury."
+            ],
+            "discriminator": [
+                66,
+                191,
+                209,
+                162,
+                3,
+                36,
+                159,
+                99
+            ],
+            "accounts": [
+                {
+                    "name": "shorter",
+                    "writable": true,
+                    "signer": true
+                },
+                {
+                    "name": "mint"
+                },
+                {
+                    "name": "bonding_curve",
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    98,
+                                    111,
+                                    110,
+                                    100,
+                                    105,
+                                    110,
+                                    103,
+                                    95,
+                                    99,
+                                    117,
+                                    114,
+                                    118,
+                                    101
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    116,
+                                    114,
+                                    101,
+                                    97,
+                                    115,
+                                    117,
+                                    114,
+                                    121
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury_lock",
+                    "docs": [
+                        "Treasury lock PDA (owns the 300M locked token ATA — lending pool for shorts)"
+                    ],
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    116,
+                                    114,
+                                    101,
+                                    97,
+                                    115,
+                                    117,
+                                    114,
+                                    121,
+                                    95,
+                                    108,
+                                    111,
+                                    99,
+                                    107
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "treasury_lock_token_account",
+                    "docs": [
+                        "Treasury lock's token account (source of borrowed tokens)"
+                    ],
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "account",
+                                "path": "treasury_lock"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "token_program"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ],
+                        "program": {
+                            "kind": "const",
+                            "value": [
+                                140,
+                                151,
+                                37,
+                                143,
+                                78,
+                                36,
+                                137,
+                                241,
+                                187,
+                                61,
+                                16,
+                                41,
+                                20,
+                                142,
+                                13,
+                                131,
+                                11,
+                                90,
+                                19,
+                                153,
+                                218,
+                                255,
+                                16,
+                                132,
+                                4,
+                                142,
+                                123,
+                                216,
+                                219,
+                                233,
+                                248,
+                                89
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "short_config",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    115,
+                                    104,
+                                    111,
+                                    114,
+                                    116,
+                                    95,
+                                    99,
+                                    111,
+                                    110,
+                                    102,
+                                    105,
+                                    103
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "short_position",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    115,
+                                    104,
+                                    111,
+                                    114,
+                                    116
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "shorter"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "shorter_token_account",
+                    "docs": [
+                        "Shorter's token account (receives borrowed tokens)"
+                    ],
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "account",
+                                "path": "shorter"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "token_program"
+                            },
+                            {
+                                "kind": "account",
+                                "path": "mint"
+                            }
+                        ],
+                        "program": {
+                            "kind": "const",
+                            "value": [
+                                140,
+                                151,
+                                37,
+                                143,
+                                78,
+                                36,
+                                137,
+                                241,
+                                187,
+                                61,
+                                16,
+                                41,
+                                20,
+                                142,
+                                13,
+                                131,
+                                11,
+                                90,
+                                19,
+                                153,
+                                218,
+                                255,
+                                16,
+                                132,
+                                4,
+                                142,
+                                123,
+                                216,
+                                219,
+                                233,
+                                248,
+                                89
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "pool_state"
+                },
+                {
+                    "name": "token_vault_0"
+                },
+                {
+                    "name": "token_vault_1"
+                },
+                {
+                    "name": "torch_vault",
+                    "writable": true,
+                    "optional": true
+                },
+                {
+                    "name": "vault_wallet_link",
+                    "optional": true
+                },
+                {
+                    "name": "vault_token_account",
+                    "writable": true,
+                    "optional": true
+                },
+                {
+                    "name": "token_program"
+                },
+                {
+                    "name": "system_program",
+                    "address": "11111111111111111111111111111111"
+                }
+            ],
+            "args": [
+                {
+                    "name": "args",
+                    "type": {
+                        "defined": {
+                            "name": "OpenShortArgs"
+                        }
+                    }
+                }
+            ]
         },
         {
             "name": "reclaim_failed_token",
@@ -4783,6 +5889,32 @@
             ]
         },
         {
+            "name": "ShortConfig",
+            "discriminator": [
+                222,
+                62,
+                202,
+                64,
+                31,
+                63,
+                147,
+                139
+            ]
+        },
+        {
+            "name": "ShortPosition",
+            "discriminator": [
+                110,
+                216,
+                100,
+                57,
+                75,
+                53,
+                168,
+                59
+            ]
+        },
+        {
             "name": "StarRecord",
             "discriminator": [
                 187,
@@ -4925,6 +6057,58 @@
                 122,
                 80,
                 240
+            ]
+        },
+        {
+            "name": "ShortClosed",
+            "discriminator": [
+                132,
+                24,
+                181,
+                149,
+                231,
+                50,
+                138,
+                206
+            ]
+        },
+        {
+            "name": "ShortLiquidated",
+            "discriminator": [
+                51,
+                255,
+                184,
+                119,
+                40,
+                135,
+                9,
+                32
+            ]
+        },
+        {
+            "name": "ShortOpened",
+            "discriminator": [
+                222,
+                5,
+                144,
+                66,
+                19,
+                226,
+                99,
+                233
+            ]
+        },
+        {
+            "name": "ShortSellingEnabled",
+            "discriminator": [
+                181,
+                221,
+                40,
+                37,
+                69,
+                198,
+                182,
+                171
             ]
         },
         {
@@ -5198,7 +6382,7 @@
         {
             "code": 6048,
             "name": "UserBorrowCapExceeded",
-            "msg": "Per-user borrow cap exceeded (max 3x collateral share of supply)"
+            "msg": "Per-user borrow cap exceeded (max 5x collateral share of supply)"
         },
         {
             "code": 6049,
@@ -5269,6 +6453,46 @@
             "code": 6062,
             "name": "ClaimBelowMinimum",
             "msg": "Claim amount below minimum (0.1 SOL)"
+        },
+        {
+            "code": 6063,
+            "name": "ShortNotEnabled",
+            "msg": "Short selling is not enabled for this token"
+        },
+        {
+            "code": 6064,
+            "name": "ShortTooSmall",
+            "msg": "Short position size below minimum (1,000 tokens)"
+        },
+        {
+            "code": 6065,
+            "name": "ShortCapExceeded",
+            "msg": "Token lending capacity exhausted (short utilization cap reached)"
+        },
+        {
+            "code": 6066,
+            "name": "UserShortCapExceeded",
+            "msg": "Per-user short cap exceeded"
+        },
+        {
+            "code": 6067,
+            "name": "ShortNotLiquidatable",
+            "msg": "Short position is not liquidatable (LTV below threshold)"
+        },
+        {
+            "code": 6068,
+            "name": "NoActiveShort",
+            "msg": "No active short position"
+        },
+        {
+            "code": 6069,
+            "name": "InsufficientTreasuryTokens",
+            "msg": "Treasury has insufficient tokens for short lending"
+        },
+        {
+            "code": 6070,
+            "name": "ShortAlreadyEnabled",
+            "msg": "Short selling already enabled for this token"
         }
     ],
     "types": [
@@ -5781,6 +7005,28 @@
             }
         },
         {
+            "name": "OpenShortArgs",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "sol_collateral",
+                        "docs": [
+                            "SOL to post as collateral (can be 0 if adding debt to existing position)"
+                        ],
+                        "type": "u64"
+                    },
+                    {
+                        "name": "tokens_to_borrow",
+                        "docs": [
+                            "Tokens to borrow from treasury (can be 0 if just adding collateral)"
+                        ],
+                        "type": "u64"
+                    }
+                ]
+            }
+        },
+        {
             "name": "ProtocolTreasury",
             "docs": [
                 "[V11] Protocol-level treasury for fee distribution to active traders",
@@ -5920,6 +7166,232 @@
                     {
                         "name": "min_sol_out",
                         "type": "u64"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "ShortClosed",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "mint",
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "user",
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "tokens_returned",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "interest_paid_tokens",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "sol_returned",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "fully_closed",
+                        "type": "bool"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "ShortConfig",
+            "docs": [
+                "[V5] Per-token aggregate state for short positions.",
+                "",
+                "Tracks token utilization and position counts. Holds NO SOL —",
+                "short collateral lives in the Treasury PDA, tracked via the",
+                "repurposed `total_burned_from_buyback` field.",
+                "",
+                "Seeds: [\"short_config\", mint.key()]"
+            ],
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "mint",
+                        "docs": [
+                            "Token mint"
+                        ],
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "total_tokens_lent",
+                        "docs": [
+                            "Tokens currently borrowed by all short sellers"
+                        ],
+                        "type": "u64"
+                    },
+                    {
+                        "name": "active_positions",
+                        "docs": [
+                            "Count of open short positions"
+                        ],
+                        "type": "u64"
+                    },
+                    {
+                        "name": "total_interest_collected",
+                        "docs": [
+                            "Cumulative interest collected (tokens returned to treasury)"
+                        ],
+                        "type": "u64"
+                    },
+                    {
+                        "name": "bump",
+                        "docs": [
+                            "PDA bump"
+                        ],
+                        "type": "u8"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "ShortLiquidated",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "mint",
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "borrower",
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "liquidator",
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "tokens_covered",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "sol_seized",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "bad_debt_tokens",
+                        "type": "u64"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "ShortOpened",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "mint",
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "user",
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "sol_collateral",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "tokens_borrowed",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "ltv_bps",
+                        "type": "u16"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "ShortPosition",
+            "docs": [
+                "[V5] Per-user, per-token short position for margin trading",
+                "",
+                "Created on first open_short. Tracks SOL collateral posted and tokens owed.",
+                "Closed (rent reclaimed) on full close or full liquidation.",
+                "Mirror of LoanPosition but with inverted collateral/debt assets.",
+                "",
+                "Seeds: [\"short\", mint.key(), user.key()]"
+            ],
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "user",
+                        "docs": [
+                            "Short seller wallet"
+                        ],
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "mint",
+                        "docs": [
+                            "Token mint (for PDA derivation)"
+                        ],
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "sol_collateral",
+                        "docs": [
+                            "SOL posted as collateral (lamports), held in Treasury"
+                        ],
+                        "type": "u64"
+                    },
+                    {
+                        "name": "tokens_borrowed",
+                        "docs": [
+                            "Tokens owed to treasury"
+                        ],
+                        "type": "u64"
+                    },
+                    {
+                        "name": "accrued_interest",
+                        "docs": [
+                            "Interest accumulated in token terms"
+                        ],
+                        "type": "u64"
+                    },
+                    {
+                        "name": "last_update_slot",
+                        "docs": [
+                            "Last slot when interest was calculated"
+                        ],
+                        "type": "u64"
+                    },
+                    {
+                        "name": "bump",
+                        "docs": [
+                            "PDA bump"
+                        ],
+                        "type": "u8"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "ShortSellingEnabled",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "mint",
+                        "type": "pubkey"
+                    },
+                    {
+                        "name": "authority",
+                        "type": "pubkey"
                     }
                 ]
             }

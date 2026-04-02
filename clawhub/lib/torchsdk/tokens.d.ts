@@ -5,7 +5,7 @@
  */
 import { Connection, PublicKey } from '@solana/web3.js';
 import { BondingCurve, Treasury } from './program';
-import { TokenDetail, TokenListParams, TokenListResult, HoldersResult, MessagesResult, LendingInfo, LoanPositionInfo, AllLoanPositionsResult, VaultInfo, VaultWalletLinkInfo, TokenMetadataResult } from './types';
+import { TokenDetail, TokenListParams, TokenListResult, HoldersResult, MessagesResult, LendingInfo, LoanPositionInfo, ShortPositionInfo, AllLoanPositionsResult, VaultInfo, VaultWalletLinkInfo, TokenMetadataResult } from './types';
 declare const fetchTokenRaw: (connection: Connection, mint: PublicKey) => Promise<{
     bondingCurve: BondingCurve;
     treasury: Treasury | null;
@@ -50,6 +50,13 @@ export declare const getLendingInfo: (connection: Connection, mintStr: string) =
  * Returns health="none" if no active loan exists.
  */
 export declare const getLoanPosition: (connection: Connection, mintStr: string, walletStr: string) => Promise<LoanPositionInfo>;
+/**
+ * Get a user's short position for a given token.
+ *
+ * Reads the ShortPosition PDA on-chain and computes health status
+ * using the Raydium pool price to value the token debt against SOL collateral.
+ */
+export declare const getShortPosition: (connection: Connection, mintStr: string, walletStr: string) => Promise<ShortPositionInfo>;
 /**
  * Get all active loan positions for a given token mint.
  *

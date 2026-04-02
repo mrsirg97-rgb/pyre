@@ -10,8 +10,8 @@ import type { CreateTokenResult, CreateTokenParams } from 'torchsdk';
 export declare const getBondingCurvePda: (mint: PublicKey) => [PublicKey, number];
 export declare const getTokenTreasuryPda: (mint: PublicKey) => [PublicKey, number];
 export declare const getTreasuryLockPda: (mint: PublicKey) => [PublicKey, number];
-/** Grind for a keypair whose base58 address ends with "pw" (pyreworld) */
+/** Grind for a keypair whose base58 address ends with "pr" (pyre) */
 export declare const grindPyreMint: (maxAttempts?: number) => Keypair;
-/** Check if a mint address is a pyre faction (ends with "pw") */
+/** Check if a mint address is a pyre faction (ends with "pr") */
 export declare const isPyreMint: (mint: string) => boolean;
 export declare const buildCreateFactionTransaction: (connection: Connection, params: CreateTokenParams) => Promise<CreateTokenResult>;

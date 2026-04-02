@@ -175,7 +175,6 @@ export async function createPyreAgent(config: PyreAgentConfig): Promise<PyreAgen
         hasStronghold,
         activeLoans: gameState.activeLoans,
         sentiment: gameState.sentiment,
-        voted: gameState.voted,
         rallied: gameState.rallied,
       }
       const action = chooseAction(

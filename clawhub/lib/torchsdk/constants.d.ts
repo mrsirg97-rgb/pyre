@@ -20,6 +20,8 @@ export declare const COLLATERAL_VAULT_SEED = "collateral_vault";
 export declare const TORCH_VAULT_SEED = "torch_vault";
 export declare const VAULT_WALLET_LINK_SEED = "vault_wallet";
 export declare const TREASURY_LOCK_SEED = "treasury_lock";
+export declare const SHORT_SEED = "short";
+export declare const SHORT_CONFIG_SEED = "short_config";
 export declare const TOTAL_SUPPLY: bigint;
 export declare const TOKEN_DECIMALS = 6;
 export declare const LEGACY_MINTS: string[];

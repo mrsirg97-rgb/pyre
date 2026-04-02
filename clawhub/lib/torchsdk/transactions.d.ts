@@ -5,7 +5,7 @@
  * Agents sign these locally and submit to the network.
  */
 import { Connection, AddressLookupTableAccount } from '@solana/web3.js';
-import { BuyParams, DirectBuyParams, SellParams, CreateTokenParams, StarParams, MigrateParams, BorrowParams, RepayParams, LiquidateParams, ClaimProtocolRewardsParams, HarvestFeesParams, SwapFeesToSolParams, CreateVaultParams, DepositVaultParams, WithdrawVaultParams, WithdrawTokensParams, LinkWalletParams, UnlinkWalletParams, TransferAuthorityParams, ReclaimParams, TransactionResult, BuyTransactionResult, CreateTokenResult, WalletAdapter } from './types';
+import { BuyParams, DirectBuyParams, SellParams, CreateTokenParams, StarParams, MigrateParams, BorrowParams, RepayParams, LiquidateParams, OpenShortParams, CloseShortParams, LiquidateShortParams, EnableShortSellingParams, ClaimProtocolRewardsParams, HarvestFeesParams, SwapFeesToSolParams, CreateVaultParams, DepositVaultParams, WithdrawVaultParams, WithdrawTokensParams, LinkWalletParams, UnlinkWalletParams, TransferAuthorityParams, ReclaimParams, TransactionResult, BuyTransactionResult, CreateTokenResult, WalletAdapter } from './types';
 /**
  * Fetch the Torch ALT for this network. Cached per connection instance.
  */
@@ -239,4 +239,49 @@ export declare const buildHarvestFeesTransaction: (connection: Connection, param
  * Set harvest=false to skip harvest (if already harvested separately).
  */
 export declare const buildSwapFeesToSolTransaction: (connection: Connection, params: SwapFeesToSolParams) => Promise<TransactionResult>;
+/**
+ * Build an unsigned open_short transaction.
+ *
+ * Post SOL collateral and borrow tokens from treasury.
+ * Mirror of borrow: same LTV, same liquidation, opposite direction.
+ *
+ * @param connection - Solana RPC connection
+ * @param params - Open short parameters (mint, shorter, sol_collateral, tokens_to_borrow)
+ * @returns Unsigned transaction and descriptive message
+ */
+export declare const buildOpenShortTransaction: (connection: Connection, params: OpenShortParams) => Promise<TransactionResult>;
+/**
+ * Build an unsigned close_short transaction.
+ *
+ * Return tokens to close or partially repay a short position.
+ * Interest paid first (in tokens), then principal.
+ * Full close returns all SOL collateral.
+ *
+ * @param connection - Solana RPC connection
+ * @param params - Close short parameters (mint, shorter, token_amount)
+ * @returns Unsigned transaction and descriptive message
+ */
+export declare const buildCloseShortTransaction: (connection: Connection, params: CloseShortParams) => Promise<TransactionResult>;
+/**
+ * Build an unsigned liquidate_short transaction.
+ *
+ * Permissionless — anyone can call when a short position's LTV exceeds the
+ * liquidation threshold (65%). Liquidator sends tokens and receives SOL + bonus.
+ *
+ * @param connection - Solana RPC connection
+ * @param params - Liquidate short parameters (mint, liquidator, borrower)
+ * @returns Unsigned transaction and descriptive message
+ */
+export declare const buildLiquidateShortTransaction: (connection: Connection, params: LiquidateShortParams) => Promise<TransactionResult>;
+/**
+ * Build an unsigned enable_short_selling transaction.
+ *
+ * Admin-only. For pre-V5 tokens that weren't created with the short selling
+ * sentinel. New tokens (V5+) have shorts auto-enabled at creation.
+ *
+ * @param connection - Solana RPC connection
+ * @param params - Enable short selling parameters (authority, mint)
+ * @returns Unsigned transaction and descriptive message
+ */
+export declare const buildEnableShortSellingTransaction: (connection: Connection, params: EnableShortSellingParams) => Promise<TransactionResult>;
 //# sourceMappingURL=transactions.d.ts.map

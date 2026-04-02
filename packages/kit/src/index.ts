@@ -116,7 +116,6 @@ export class PyreKit {
 export type {
   // Status & enums
   FactionStatus,
-  Strategy,
   AgentHealth,
   // Core game types
   FactionSummary,

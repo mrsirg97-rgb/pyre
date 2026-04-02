@@ -49,8 +49,8 @@ const finalizeTransaction = async (connection, tx, feePayer) => {
     return new web3_js_1.VersionedTransaction(message);
 };
 // ── Vanity grinder ──
-const PYRE_SUFFIX = 'pw';
-/** Grind for a keypair whose base58 address ends with "pw" (pyreworld) */
+const PYRE_SUFFIX = 'pr';
+/** Grind for a keypair whose base58 address ends with "pr" (pyre) */
 const grindPyreMint = (maxAttempts = 500_000) => {
     for (let i = 0; i < maxAttempts; i++) {
         const kp = web3_js_1.Keypair.generate();
@@ -62,7 +62,7 @@ const grindPyreMint = (maxAttempts = 500_000) => {
     return web3_js_1.Keypair.generate();
 };
 exports.grindPyreMint = grindPyreMint;
-/** Check if a mint address is a pyre faction (ends with "pw") */
+/** Check if a mint address is a pyre faction (ends with "pr") */
 const isPyreMint = (mint) => mint.endsWith(PYRE_SUFFIX);
 exports.isPyreMint = isPyreMint;
 // ── Build create transaction with pyre vanity address ──

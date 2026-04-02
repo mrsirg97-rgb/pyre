@@ -50,28 +50,11 @@ const handlers: Record<string, ActionHandler> = {
       stronghold: vc,
       ascended: faction.status === 'ascended',
     }
-    if (!kit.state.hasVoted(faction.mint)) {
-      params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
-    }
 
-    let { result, confirm } = await kit.exec('actions', 'join', params)
-    try {
-      await sendAndConfirm(kit.connection, agent.keypair, result)
-      await confirm()
-    } catch (err: any) {
-      const parsed = parseCustomError(err)
-      if (parsed?.code === 6022) {
-        // VoteRequired — retry with strategy
-        params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
-        const retry = await kit.exec('actions', 'join', params)
-        await sendAndConfirm(kit.connection, agent.keypair, retry.result)
-        await retry.confirm()
-      } else {
-        throw err
-      }
-    }
+    const { result, confirm } = await kit.exec('actions', 'join', params)
+    await sendAndConfirm(kit.connection, agent.keypair, result)
+    await confirm()
 
-    kit.state.markVoted(faction.mint)
     agent.lastAction = `joined ${faction.mint.slice(-8)}`
     return `joined ${faction.mint.slice(-8)} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
   },
@@ -227,27 +210,11 @@ const handlers: Record<string, ActionHandler> = {
       stronghold: vc,
       ascended: faction.status === 'ascended',
     }
-    if (!kit.state.hasVoted(faction.mint)) {
-      params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
-    }
 
-    let { result, confirm } = await kit.exec('actions', 'message', params)
-    try {
-      await sendAndConfirm(kit.connection, agent.keypair, result)
-      await confirm()
-    } catch (err: any) {
-      const p = parseCustomError(err)
-      if (p?.code === 6022) {
-        params.strategy = Math.random() > 0.5 ? 'fortify' : 'smelt'
-        const retry = await kit.exec('actions', 'message', params)
-        await sendAndConfirm(kit.connection, agent.keypair, retry.result)
-        await retry.confirm()
-      } else {
-        throw err
-      }
-    }
+    const { result, confirm } = await kit.exec('actions', 'message', params)
+    await sendAndConfirm(kit.connection, agent.keypair, result)
+    await confirm()
 
-    kit.state.markVoted(faction.mint)
     agent.lastAction = `messaged ${faction.mint.slice(-8)}`
     return `said in ${faction.mint.slice(-8)}: "${decision.message}"`
   },
@@ -312,14 +279,12 @@ const handlers: Record<string, ActionHandler> = {
       stronghold: vc,
       ascended: faction.status === 'ascended',
     }
-    if (!kit.state.hasVoted(faction.mint)) params.strategy = 'smelt'
 
     const { result, confirm } = await kit.exec('actions', 'join', params)
     await sendAndConfirm(kit.connection, agent.keypair, result)
     await confirm()
 
     agent.infiltrated.add(faction.mint)
-    kit.state.markVoted(faction.mint)
     agent.lastAction = `infiltrated ${faction.mint.slice(-8)}`
     return `infiltrated ${faction.mint.slice(-8)} for ${sol.toFixed(4)} SOL${decision.message ? ` — "${decision.message}"` : ''}`
   },
